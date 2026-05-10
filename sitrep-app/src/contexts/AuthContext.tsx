@@ -106,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             ok: false as const,
             error:
               data.error ||
-              'API or database unavailable. From repo root run: npm install && npm run dev (starts API + web), or start server/ and sitrep-app/ separately (see README).',
+              'API or database unavailable. The dev API listens on port 5530 (see server PORT env). From repo root: npm install && npm run dev — or run npm run dev in server/ and sitrep-app/. Open the app at http://localhost:5535. Check http://localhost:5530/api/health (see README).',
           }
         }
         return { ok: false as const, error: data.error || 'Invalid username or password.' }
@@ -121,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return {
         ok: false as const,
         error:
-          'Cannot reach server. From repo root: npm install && npm run dev — or run npm run dev in server/ (port 5530) and sitrep-app/ (see README).',
+          'Cannot reach the API. By default it runs on port 5530 (not 4000). From repo root: npm install && npm run dev — or run npm run dev in server/ and sitrep-app/. Use http://localhost:5535 for the web UI; verify http://localhost:5530/api/health. See README.',
       }
     }
   }, [])

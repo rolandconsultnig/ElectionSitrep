@@ -67,6 +67,8 @@ Open **`http://localhost:5535`** (or the URL Vite prints).
 
 ### `502 Bad Gateway` on `/api/auth/login` (or “Cannot reach server”)
 
+The dev API defaults to **port 5530** (`PORT` in `.env` overrides it). If something suggests port **4000**, that does not match this repo unless you changed `PORT` yourself.
+
 This usually means **nothing is listening on port 5530** — the API is not running, or it crashed on startup.
 
 1. Confirm the API terminal shows listening on **5530**.

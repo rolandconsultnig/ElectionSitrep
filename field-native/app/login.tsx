@@ -12,6 +12,7 @@ import {
 } from 'react-native'
 import { Redirect } from 'expo-router'
 
+import { SecretServerUnlock } from '@/components/SecretServerUnlock'
 import { useAuth } from '@/context/auth'
 
 export default function LoginScreen() {
@@ -40,13 +41,15 @@ export default function LoginScreen() {
     >
       <View style={styles.card}>
         {/* NPF Logo */}
-        <View style={styles.logoContainer}>
-          <Image
-            source={require('@/assets/images/police.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-        </View>
+        <SecretServerUnlock>
+          <View style={styles.logoContainer}>
+            <Image
+              source={require('@/assets/images/police.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </View>
+        </SecretServerUnlock>
         <Text style={styles.kicker}>NPF · Field agent</Text>
         <Text style={styles.title}>Sign in</Text>
         {!apiConfigured ? (

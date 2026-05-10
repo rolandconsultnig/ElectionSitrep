@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
 
+import { SecretServerUnlock } from '@/components/SecretServerUnlock'
 import { useAuth } from '@/context/auth'
 import { listQueue } from '@/lib/offline-queue'
 import type { QueueRecord } from '@/lib/offline-queue'
@@ -42,7 +43,9 @@ export default function MenuScreen() {
 
   return (
     <ScrollView style={styles.wrap} contentContainerStyle={styles.inner}>
-      <Text style={styles.title}>More</Text>
+      <SecretServerUnlock>
+        <Text style={styles.title}>More</Text>
+      </SecretServerUnlock>
 
       <Pressable style={styles.link} onPress={() => router.push('/violence')}>
         <Text style={styles.linkText}>Violence / disturbance (urgent)</Text>

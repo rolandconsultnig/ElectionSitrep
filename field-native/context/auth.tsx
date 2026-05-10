@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { apiJson } from '@/lib/api'
-import { getApiBaseUrl } from '@/lib/config'
+import { getApiBaseUrl, initApiBaseUrlFromStorage } from '@/lib/config'
 import { getToken, setToken } from '@/lib/token-storage'
 
 export type AuthUser = {
@@ -14,6 +14,8 @@ type AuthContextValue = {
   user: AuthUser | null
   bootstrapping: boolean
   apiConfigured: boolean
+  /** Re-read API base URL (e.g. after changing server in the secret settings modal). */
+  refreshApiConfig: () => void
   login: (username: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
@@ -24,7 +26,11 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [bootstrapping, setBootstrapping] = useState(true)
-  const apiConfigured = useMemo(() => Boolean(getApiBaseUrl()), [])
+  const [apiConfigured, setApiConfigured] = useState(false)
+
+  const refreshApiConfig = useCallback(() => {
+    setApiConfigured(Boolean(getApiBaseUrl()))
+  }, [])
 
   const refreshUser = useCallback(async () => {
     const t = await getToken()
@@ -47,7 +53,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
-    void refreshUser().finally(() => setBootstrapping(false))
+    void (async () => {
+      await initApiBaseUrlFromStorage()
+      setApiConfigured(Boolean(getApiBaseUrl()))
+      await refreshUser()
+      setBootstrapping(false)
+    })()
   }, [refreshUser])
 
   const login = useCallback(async (username: string, password: string) => {
@@ -84,11 +95,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       bootstrapping,
       apiConfigured,
+      refreshApiConfig,
       login,
       logout,
       refreshUser,
     }),
-    [user, bootstrapping, apiConfigured, login, logout, refreshUser],
+    [user, bootstrapping, apiConfigured, refreshApiConfig, login, logout, refreshUser],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

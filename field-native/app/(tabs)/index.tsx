@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useFocusEffect } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 
 import { getApiBaseUrl } from '@/lib/config'
@@ -19,7 +20,12 @@ type FieldContext = {
 }
 
 export default function DashboardScreen() {
-  const baseOk = Boolean(getApiBaseUrl())
+  const [baseOk, setBaseOk] = useState(() => Boolean(getApiBaseUrl()))
+  useFocusEffect(
+    useCallback(() => {
+      setBaseOk(Boolean(getApiBaseUrl()))
+    }, []),
+  )
   const q = useQuery({
     queryKey: ['field-context'],
     queryFn: () => apiJson<FieldContext>('/api/field/context'),
