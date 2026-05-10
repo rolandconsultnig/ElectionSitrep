@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Install Election SitRep nginx site (static SPA on 5535, API proxy to 5530).
 # Run on the production server: sudo ./scripts/nginx-election-sitrep.sh
+#
+# Camera / getUserMedia in the browser requires a secure context (HTTPS), except
+# http://localhost. Plain HTTP to a public IP will not show the camera prompt—use
+# TLS (e.g. Certbot with a DNS name) or another HTTPS front end.
 
 set -euo pipefail
 

@@ -77,8 +77,18 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
     let cancelled = false
 
     async function start() {
+      const md = navigator.mediaDevices
+      if (!md?.getUserMedia) {
+        setPermission('denied')
+        setError(
+          !window.isSecureContext
+            ? 'Camera is blocked: this page is not served over HTTPS. Browsers only allow camera on https:// or http://localhost. Put the app behind TLS (e.g. nginx with Let's Encrypt on a domain), then reload.'
+            : 'Camera API is not available in this browser.',
+        )
+        return
+      }
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        const stream = await md.getUserMedia({
           video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
           audio: false,
         })
@@ -93,9 +103,20 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
           await v.play()
         }
         setPermission('granted')
-      } catch {
+      } catch (e) {
         setPermission('denied')
-        setError('Camera access is required for live face verification.')
+        const name = e instanceof DOMException ? e.name : ''
+        if (!window.isSecureContext) {
+          setError(
+            'Camera requires HTTPS on this host (plain HTTP from an IP is not a “secure context”). Use TLS on nginx or open via http://localhost only for local testing.',
+          )
+        } else if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+          setError('Camera access was denied. Allow camera for this site in your browser settings and reload.')
+        } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+          setError('No camera was found. Connect a camera or try another device.')
+        } else {
+          setError('Camera access is required for live face verification.')
+        }
       }
     }
 
