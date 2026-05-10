@@ -40,3 +40,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# signed / unsigned release binaries (copy script drops APK here)
+releases/*.apk
+releases/*.aab

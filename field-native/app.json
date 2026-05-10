@@ -17,12 +17,18 @@
       "supportsTablet": true
     },
     "android": {
+      "minSdkVersion": 24,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "usesCleartextTraffic": true,
+      "package": "com.anonymous.fieldnative"
+    },
+    "extra": {
+      "apiBaseUrl": "http://13.53.33.63:5530"
     },
     "web": {
       "bundler": "metro",
@@ -31,7 +37,16 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      "./plugins/withAndroidLibraryMinSdk.js",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 24
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
