@@ -82,3 +82,19 @@ If you set **`PORT`** to something other than **5530**, update the proxy in **`s
 ### Production build
 
 For production, serve the built SPA and route **`/api`** to the same Express process or a reverse proxy that forwards to the API — do not rely on the Vite dev proxy.
+
+### Production server: HTTP and HTTPS (before you have a domain)
+
+Until you have a DNS name for Let’s Encrypt, you can still expose **both** ports:
+
+- **`http://SERVER:PORT`** — full app (live camera is blocked by browsers on plain HTTP to an IP; use photo upload or HTTPS).
+- **`https://SERVER:PORT`** — same app with a **self-signed** certificate (browser warning once), then **HTTPS counts as a secure context** so the live camera can work.
+
+From the repo on the server:
+
+```bash
+chmod +x scripts/nginx-election-sitrep.sh scripts/generate-election-sitrep-tls.sh
+sudo SITREP_PUBLIC_IP="$(curl -fsS ifconfig.me)" ./scripts/nginx-election-sitrep.sh
+```
+
+Defaults: HTTP **5535**, HTTPS **5545**, deploy root **`/election/ElectionSitrep/sitrep-app/dist`**, API **`127.0.0.1:5530`**. Override with env vars documented at the top of **`scripts/nginx-election-sitrep.sh`**. When you get a domain, replace self-signed certs with Certbot and optionally move to ports **80** / **443**.

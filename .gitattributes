@@ -1,0 +1,2 @@
+# Shell scripts must use LF so production (Linux) never sees bash^M line endings
+*.sh text eol=lf

@@ -9,8 +9,14 @@
 **/web-build/
 .expo/
 
-# Android — machine-local SDK path
+# Android — machine-local SDK path & build caches (never commit)
 **/android/local.properties
+**/android/.gradle/
+**/android/app/build/
+**/android/build/
+
+# Local scratch / tooling folders (not part of repo)
+/XNPF/
 
 # Logs & OS
 *.log

@@ -159,9 +159,19 @@ function analyzeTexture(frames: ImageData[]): { isLive: boolean; confidence: num
   return { isLive: avgVariance > 5, confidence: 0.4, reason: 'Keep face steady and well-lit' }
 }
 
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(String(r.result || ''))
+    r.onerror = () => reject(new Error('Could not read file'))
+    r.readAsDataURL(file)
+  })
+}
+
 export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const prevFrameRef = useRef<ImageData | null>(null)
   const lastSpikeRef = useRef(0)
@@ -230,6 +240,12 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
         )
         return
       }
+      // Non-localhost HTTP is never a secure context — getUserMedia will fail; skip to avoid errors and use upload.
+      if (!window.isSecureContext) {
+        setPermission('denied')
+        setError(null)
+        return
+      }
       try {
         const stream = await md.getUserMedia({
           video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
@@ -243,17 +259,24 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
         const v = videoRef.current
         if (v) {
           v.srcObject = stream
-          await v.play()
+          v.muted = true
+          v.playsInline = true
+          try {
+            await v.play()
+          } catch {
+            setError(
+              'Could not start video preview. Tap anywhere on the page and reload, or try another browser (Chrome recommended).',
+            )
+            setPermission('denied')
+            stream.getTracks().forEach((t) => t.stop())
+            return
+          }
         }
         setPermission('granted')
       } catch (e) {
         setPermission('denied')
         const name = e instanceof DOMException ? e.name : ''
-        if (!window.isSecureContext) {
-          setError(
-            'Camera requires HTTPS on this host (plain HTTP from an IP is not a “secure context”). Use TLS on nginx or open via http://localhost only for local testing.',
-          )
-        } else if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
           setError('Camera access was denied. Allow camera for this site in your browser settings and reload.')
         } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
           setError('No camera was found. Connect a camera or try another device.')
@@ -303,7 +326,7 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
       
       if (!faceCheck.hasFace) {
         setStatusMessage(faceCheck.reason || 'No face detected')
-        setLivenessStatus('spoof')
+        setLivenessStatus('checking')
         prevFrameRef.current = frame
         return
       }
@@ -373,27 +396,65 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
     return 'text-white'
   }
 
+  const insecureContext =
+    typeof window !== 'undefined' && typeof window.isSecureContext !== 'undefined' && !window.isSecureContext
+
   return (
     <div className="space-y-3">
-      <div className="relative overflow-hidden rounded-2xl border border-[color:var(--portal-border)] bg-black/80">
-        <video ref={videoRef} className="aspect-[4/3] w-full object-cover" playsInline muted />
-        {!captured ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-4 pt-12">
-            <p className={`text-center font-(--font-mono) text-[11px] font-semibold ${getStatusColor()}`}>
-              {statusMessage}
+      {insecureContext ? (
+        <div
+          role="alert"
+          className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm leading-relaxed text-amber-100"
+        >
+          <p className="font-semibold text-amber-50">Camera is blocked in this browser</p>
+          <p className="mt-1 text-amber-100/90">
+            Pages opened as <code className="rounded bg-black/30 px-1">http://your-ip:port</code> are not a secure
+            context. Use <strong>HTTPS</strong> (nginx + Let&apos;s Encrypt on a domain), or{' '}
+            <code className="rounded bg-black/30 px-1">http://localhost</code> for testing. Otherwise use{' '}
+            <strong>Upload photo</strong> below (blink checks are skipped).
+          </p>
+        </div>
+      ) : null}
+
+      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-[color:var(--portal-border)] bg-black/80">
+        {insecureContext && !captured ? (
+          <div className="flex h-full min-h-full w-full flex-col items-center justify-center gap-2 bg-black/80 px-6 text-center">
+            <p className="text-sm font-semibold text-white/95">Live camera unavailable on plain HTTP</p>
+            <p className="max-w-sm text-xs leading-relaxed text-white/70">
+              Use HTTPS (or <code className="rounded bg-black/40 px-1">http://localhost</code> for testing), or upload a
+              JPEG/PNG below — onboarding works either way.
             </p>
-            {faceDetected && livenessStatus !== 'spoof' && (
-              <p className="mt-1 text-center font-(--font-mono) text-[10px] text-white/75">
-                Detected blinks: {blinkCount} / {BLINKS_REQUIRED}
-              </p>
-            )}
           </div>
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-            <span className="rounded-full border border-[#0dccb0]/50 bg-[#0dccb0]/20 px-4 py-2 font-(--font-mono) text-xs font-semibold text-[#0dccb0]">
-              Photo captured
-            </span>
-          </div>
+          <>
+            {!(insecureContext && captured) ? (
+              <video
+                ref={videoRef}
+                className="h-full w-full object-cover"
+                playsInline
+                muted
+                autoPlay
+              />
+            ) : null}
+            {!captured ? (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-4 pt-12">
+                <p className={`text-center font-(--font-mono) text-[11px] font-semibold ${getStatusColor()}`}>
+                  {statusMessage}
+                </p>
+                {faceDetected && livenessStatus !== 'spoof' && (
+                  <p className="mt-1 text-center font-(--font-mono) text-[10px] text-white/75">
+                    Detected blinks: {blinkCount} / {BLINKS_REQUIRED}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                <span className="rounded-full border border-[#0dccb0]/50 bg-[#0dccb0]/20 px-4 py-2 font-(--font-mono) text-xs font-semibold text-[#0dccb0]">
+                  Photo captured
+                </span>
+              </div>
+            )}
+          </>
         )}
         <canvas ref={canvasRef} className="hidden" aria-hidden />
       </div>
@@ -404,11 +465,71 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
         </button>
       ) : null}
 
-      {permission === 'denied' || error ? (
+      {error ? (
         <p className="text-sm text-[#fca5a5]" role="alert">
-          {error ?? 'Allow camera access in your browser settings and reload.'}
+          {error}
+        </p>
+      ) : permission === 'denied' && !insecureContext ? (
+        <p className="text-sm text-[#fca5a5]" role="alert">
+          Allow camera access in your browser settings and reload.
         </p>
       ) : null}
+
+      <div className="rounded-xl border border-[color:var(--portal-border)] bg-[color:var(--sr-panel)]/40 p-4">
+        <p className="sr-label mb-2">Upload photo (fallback)</p>
+        <p className="mb-3 text-xs text-[var(--portal-muted)]">
+          Use when the camera preview stays blank or the browser blocks camera over HTTP. JPEG or PNG only (not WEBP).
+        </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png"
+          className="hidden"
+          onChange={async (ev) => {
+            const file = ev.target.files?.[0]
+            ev.target.value = ''
+            if (!file) return
+            const t = file.type.toLowerCase()
+            if (t !== 'image/jpeg' && t !== 'image/png') {
+              setError('Choose a JPEG or PNG image.')
+              return
+            }
+            try {
+              let dataUrl = await readFileAsDataUrl(file)
+              if (dataUrl.startsWith('data:image/png')) {
+                const img = new Image()
+                await new Promise<void>((resolve, reject) => {
+                  img.onload = () => resolve()
+                  img.onerror = () => reject(new Error('Invalid image'))
+                  img.src = dataUrl
+                })
+                const c = document.createElement('canvas')
+                c.width = img.naturalWidth
+                c.height = img.naturalHeight
+                const cx = c.getContext('2d')
+                if (!cx) throw new Error('Canvas error')
+                cx.drawImage(img, 0, 0)
+                dataUrl = c.toDataURL('image/jpeg', 0.92)
+              }
+              stopStream()
+              if (videoRef.current?.srcObject) videoRef.current.srcObject = null
+              setCaptured(true)
+              setPermission('granted')
+              setError(null)
+              onVerified(dataUrl)
+            } catch {
+              setError('Could not use that image. Try another JPEG or PNG.')
+            }
+          }}
+        />
+        <button
+          type="button"
+          className="sr-btn-ghost w-full justify-center border border-[color:var(--portal-border)] py-2.5 text-sm"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          Upload photo (JPEG / PNG)
+        </button>
+      </div>
 
       <div className="space-y-1 text-xs leading-relaxed text-[var(--portal-muted)]">
         <p className="flex items-center gap-2">
