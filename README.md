@@ -4,7 +4,7 @@ Offline-first field reporting for Nigeria Police Force election operations.
 
 ## Local development (required: API + web app)
 
-The browser talks to **`/api`** on the Vite dev server; Vite **proxies** those requests to **`http://localhost:4000`**. You must run the API and the frontend **at the same time**.
+The browser talks to **`/api`** on the Vite dev server; Vite **proxies** those requests to **`http://localhost:5530`**. You must run the API and the frontend **at the same time**.
 
 ### One command (recommended)
 
@@ -15,7 +15,7 @@ npm install
 npm run dev
 ```
 
-This starts **both** the API (`server/`, port 4000) and the web app (`sitrep-app/`, Vite). Then sign in with seeded accounts (e.g. `admin.demo` / `demo` after `npm run seed` in `server/`).
+This starts **both** the API (`server/`, port 5530) and the web app (`sitrep-app/`, Vite on 5535). Then sign in with seeded accounts (e.g. `admin.demo` / `demo` after `npm run seed` in `server/`).
 
 ### Manual setup (two terminals)
 
@@ -45,9 +45,9 @@ cd server
 npm run dev
 ```
 
-You should see: `[election-sitrep-api] http://localhost:4000`
+You should see: `[election-sitrep-api] http://localhost:5530`
 
-Quick check: open `http://localhost:4000/api/health` — expect `{"ok":true}`.
+Quick check: open `http://localhost:5530/api/health` — expect `{"ok":true}`.
 
 ### 4. Start the web app (Vite)
 
@@ -59,7 +59,7 @@ npm install
 npm run dev
 ```
 
-Open the URL Vite prints (usually `http://localhost:5173`).
+Open **`http://localhost:5535`** (or the URL Vite prints).
 
 ---
 
@@ -67,15 +67,15 @@ Open the URL Vite prints (usually `http://localhost:5173`).
 
 ### `502 Bad Gateway` on `/api/auth/login` (or “Cannot reach server”)
 
-This usually means **nothing is listening on port 4000** — the API is not running, or it crashed on startup.
+This usually means **nothing is listening on port 5530** — the API is not running, or it crashed on startup.
 
-1. Confirm terminal 3 shows the API listening on **4000**.
+1. Confirm the API terminal shows listening on **5530**.
 2. Confirm **`DATABASE_URL`** is set in **`.env.local` at the repo root** (not only inside `server/`). The API loads env from `../../.env.local` relative to `server/src`.
-3. Visit **`http://localhost:4000/api/health`**. If it fails, fix Postgres / migrations before retrying login.
+3. Visit **`http://localhost:5530/api/health`**. If it fails, fix Postgres / migrations before retrying login.
 
 ### Changed API port
 
-If you set **`PORT`** to something other than **4000**, update the proxy in **`sitrep-app/vite.config.ts`** (`server.proxy['/api'].target`) to match.
+If you set **`PORT`** to something other than **5530**, update the proxy in **`sitrep-app/vite.config.ts`** (`server.proxy['/api'].target`) to match.
 
 ### Production build
 

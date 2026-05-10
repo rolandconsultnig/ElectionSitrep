@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!getApiBaseUrl()) {
       return {
         ok: false as const,
-        error: 'Set EXPO_PUBLIC_API_BASE_URL (e.g. http://10.0.2.2:4000 for Android emulator).',
+        error: 'Set EXPO_PUBLIC_API_BASE_URL (e.g. http://10.0.2.2:5530 for Android emulator).',
       }
     }
     try {

@@ -1,7 +1,7 @@
 /**
  * Apply database/migration_*.sql files in lexical order (003 → 004 → 005 …).
  * Requires DATABASE_URL in repo-root .env.local or .env (same as the API).
- * Baseline schema: apply database/schema.sql once before first migration if needed.
+ * If baseline tables are missing, applies database/schema.sql first automatically.
  */
 import fs from 'fs'
 import path from 'path'
@@ -28,6 +28,21 @@ const files = fs
 async function main() {
   const pool = new pg.Pool({ connectionString: databaseUrl })
   try {
+    const baseline = await pool.query(
+      `SELECT 1 FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name = 'app_users'`,
+    )
+    if (baseline.rows.length === 0) {
+      const schemaPath = path.join(dbDir, 'schema.sql')
+      if (!fs.existsSync(schemaPath)) {
+        console.error('[migrate] Baseline table app_users missing and database/schema.sql not found.')
+        process.exit(1)
+      }
+      const schemaSql = fs.readFileSync(schemaPath, 'utf8')
+      console.log('[migrate] Applying baseline database/schema.sql…')
+      await pool.query(schemaSql)
+      console.log('[migrate] database/schema.sql — ok')
+    }
     if (files.length === 0) {
       console.log('[migrate] No migration_*.sql files found.')
       return

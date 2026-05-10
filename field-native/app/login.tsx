@@ -42,7 +42,7 @@ export default function LoginScreen() {
         <Text style={styles.title}>Sign in</Text>
         {!apiConfigured ? (
           <Text style={styles.warn}>
-            Set EXPO_PUBLIC_API_BASE_URL before building (e.g. http://10.0.2.2:4000 for Android emulator pointing at your PC API).
+            Set EXPO_PUBLIC_API_BASE_URL before building (e.g. http://10.0.2.2:5530 for Android emulator pointing at your PC API).
           </Text>
         ) : null}
         {error ? <Text style={styles.err}>{error}</Text> : null}

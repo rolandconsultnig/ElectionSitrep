@@ -13,7 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(__dirname, '../../.env.local') })
 dotenv.config({ path: path.join(__dirname, '../../.env') })
 
-const PORT = Number(process.env.PORT || 4000)
+const PORT = Number(process.env.PORT || 5530)
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-change-JWT_SECRET-in-production'
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -22,7 +22,7 @@ const upload = multer({
 
 const app = express()
 
-/** Allow any localhost / 127.0.0.1 dev port (Vite on 5173, 5174, preview on 4173, etc.). */
+/** Allow any localhost / 127.0.0.1 dev port (Vite default 5535, preview on 4173, etc.). */
 const localhostOrigin =
   /^https?:\/\/(localhost|127\.0\.0\.1|::1)(:\d+)?$/i
 app.use(

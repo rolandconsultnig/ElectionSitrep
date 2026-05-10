@@ -120,7 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return {
         ok: false as const,
         error:
-          'Cannot reach server. From repo root: npm install && npm run dev — or run npm run dev in server/ (port 4000) and sitrep-app/ (see README).',
+          'Cannot reach server. From repo root: npm install && npm run dev — or run npm run dev in server/ (port 5530) and sitrep-app/ (see README).',
       }
     }
   }, [])

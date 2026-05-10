@@ -7,7 +7,7 @@ export function getApiBaseUrl(): string {
   return String(raw).trim().replace(/\/$/, '')
 }
 
-/** Resolve `/api/...` against optional base (e.g. `http://10.0.2.2:4000` on Android emulator). */
+/** Resolve `/api/...` against optional base (e.g. `http://10.0.2.2:5530` on Android emulator). */
 export function apiUrl(path: string): string {
   const p = path.startsWith('/') ? path : `/${path}`
   const base = getApiBaseUrl()
