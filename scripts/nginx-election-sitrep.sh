@@ -28,7 +28,7 @@ ENABLED_PATH="/etc/nginx/sites-enabled/${SITE}"
 
 HTTP_PORT="${SITREP_HTTP_PORT:-5535}"
 HTTPS_PORT="${SITREP_HTTPS_PORT:-5545}"
-DEPLOY_ROOT="${SITREP_DEPLOY_ROOT:-/election/ElectionSitrep/sitrep-app/dist}"
+DEPLOY_ROOT="${SITREP_DEPLOY_ROOT:-/election/sitrep-app/dist}"
 API_UPSTREAM="${SITREP_API_UPSTREAM:-127.0.0.1:5530}"
 TLS_CERT="${SITREP_TLS_CERT:-/etc/nginx/ssl/election-sitrep.crt}"
 TLS_KEY="${SITREP_TLS_KEY:-/etc/nginx/ssl/election-sitrep.key}"
