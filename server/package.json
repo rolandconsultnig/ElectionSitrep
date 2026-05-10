@@ -1,0 +1,29 @@
+{
+  "name": "election-sitrep-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "migrate": "node scripts/migrate.js",
+    "build-migration-011": "node scripts/build-migration-011-lgas.mjs",
+    "build-migration-012": "node scripts/build-migration-012-wards.mjs",
+    "build-migration-013": "node scripts/build-migration-013-polling-units.mjs",
+    "build-migration-014": "node scripts/build-migration-014-pu-gps.mjs",
+    "seed": "node scripts/seed.js",
+    "import-party-logos": "node scripts/import-party-logos.mjs",
+    "build-parties": "python ../scripts/build_parties_annex.py"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.2",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "csv-parse": "^6.2.1"
+  }
+}

@@ -1,0 +1,19 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Dependencies & builds
+**/node_modules/
+**/dist/
+**/web-build/
+.expo/
+
+# Android — machine-local SDK path
+**/android/local.properties
+
+# Logs & OS
+*.log
+npm-debug.*
+.DS_Store
+Thumbs.db

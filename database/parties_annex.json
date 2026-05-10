@@ -1,0 +1,639 @@
+[
+  {
+    "annexSn": 1,
+    "inecRegisterCode": "INEC-ANNEX-001",
+    "name": "ACCORD",
+    "abbreviation": "A",
+    "presidentialCandidate": "OSITELU ISAAC BABATUNDE"
+  },
+  {
+    "annexSn": 2,
+    "inecRegisterCode": "INEC-ANNEX-002",
+    "name": "ACTION ALLIANCE",
+    "abbreviation": "AA",
+    "presidentialCandidate": "ABDULRASHID HASSAN BABA"
+  },
+  {
+    "annexSn": 3,
+    "inecRegisterCode": "INEC-ANNEX-003",
+    "name": "AFRICAN ACTION CONGRESS",
+    "abbreviation": "AAC",
+    "presidentialCandidate": "OMOYELE SOWORE"
+  },
+  {
+    "annexSn": 4,
+    "inecRegisterCode": "INEC-ANNEX-004",
+    "name": "ADVANCED ALLIED PARTY",
+    "abbreviation": "AAP",
+    "presidentialCandidate": "CHIKE UKAEGBU"
+  },
+  {
+    "annexSn": 5,
+    "inecRegisterCode": "INEC-ANNEX-005",
+    "name": "ALL BLENDING PARTY",
+    "abbreviation": "ABP",
+    "presidentialCandidate": "SHIPI MOSES GODIA"
+  },
+  {
+    "annexSn": 6,
+    "inecRegisterCode": "INEC-ANNEX-006",
+    "name": "ADVANCED CONGRESS OF DEMOCRATS",
+    "abbreviation": "ACD",
+    "presidentialCandidate": "NWOKEAFOR IKECHUKWU NDUBUISI"
+  },
+  {
+    "annexSn": 7,
+    "inecRegisterCode": "INEC-ANNEX-007",
+    "name": "ALLIED CONGRESS PARTY OF NIGERIA",
+    "abbreviation": "ACPN",
+    "presidentialCandidate": "EZEKWESILI OBIAGELI KATRYN"
+  },
+  {
+    "annexSn": 8,
+    "inecRegisterCode": "INEC-ANNEX-008",
+    "name": "ALLIANCE FOR DEMOCRACY",
+    "abbreviation": "AD",
+    "presidentialCandidate": null
+  },
+  {
+    "annexSn": 9,
+    "inecRegisterCode": "INEC-ANNEX-009",
+    "name": "AFRICAN DEMOCRATIC CONGRESS",
+    "abbreviation": "ADC",
+    "presidentialCandidate": "MAILAFIA OBADIAH"
+  },
+  {
+    "annexSn": 10,
+    "inecRegisterCode": "INEC-ANNEX-010",
+    "name": "ACTION DEMOCRATIC PARTY",
+    "abbreviation": "ADP",
+    "presidentialCandidate": "YABAG SANI YUSUF"
+  },
+  {
+    "annexSn": 11,
+    "inecRegisterCode": "INEC-ANNEX-011",
+    "name": "ALL GRASSROOTS ALLIANCE",
+    "abbreviation": "AGA",
+    "presidentialCandidate": "NWACHUKWU CHUKS NWABUIKWU"
+  },
+  {
+    "annexSn": 12,
+    "inecRegisterCode": "INEC-ANNEX-012",
+    "name": "ALL GRAND ALLIANCE PARTY",
+    "abbreviation": "AGAP",
+    "presidentialCandidate": "CHIEF UMENWA GODWIN"
+  },
+  {
+    "annexSn": 13,
+    "inecRegisterCode": "INEC-ANNEX-013",
+    "name": "ADVANCED NIGERIA DEMOCRATIC PARTY",
+    "abbreviation": "ANDP",
+    "presidentialCandidate": "OBAJE YUSUFU AMEH"
+  },
+  {
+    "annexSn": 14,
+    "inecRegisterCode": "INEC-ANNEX-014",
+    "name": "ALLIANCE FOR NEW NIGERIA",
+    "abbreviation": "ANN",
+    "presidentialCandidate": "DUROTOYE ADETOKUNBO OLUFELA"
+  },
+  {
+    "annexSn": 15,
+    "inecRegisterCode": "INEC-ANNEX-015",
+    "name": "ALLIANCE NATIONAL PARTY",
+    "abbreviation": "ANP",
+    "presidentialCandidate": "SHITTU MOSHOOD"
+  },
+  {
+    "annexSn": 16,
+    "inecRegisterCode": "INEC-ANNEX-016",
+    "name": "ABUNDANT NIGERIA RENEWAL PARTY",
+    "abbreviation": "ANRP",
+    "presidentialCandidate": "FASUA TOPE KOLADE"
+  },
+  {
+    "annexSn": 17,
+    "inecRegisterCode": "INEC-ANNEX-017",
+    "name": "AFRICAN PEOPLE ALLIANCE",
+    "abbreviation": "APA",
+    "presidentialCandidate": "IBRAHIM ALIYU HASSAN"
+  },
+  {
+    "annexSn": 18,
+    "inecRegisterCode": "INEC-ANNEX-018",
+    "name": "ALL PROGRESSIVES CONGRESS",
+    "abbreviation": "APC",
+    "presidentialCandidate": "BUHARI MUHAMMADU"
+  },
+  {
+    "annexSn": 19,
+    "inecRegisterCode": "INEC-ANNEX-019",
+    "name": "ADVANCED PEOPLES DEMOCRATIC ALLIANCE",
+    "abbreviation": "APDA",
+    "presidentialCandidate": "SHITU MOHAMMED KABIR"
+  },
+  {
+    "annexSn": 20,
+    "inecRegisterCode": "INEC-ANNEX-020",
+    "name": "ALL PROGRESSIVES GRAND ALLIANCE",
+    "abbreviation": "APGA",
+    "presidentialCandidate": "GBOR JOHN WILSON TERWASE"
+  },
+  {
+    "annexSn": 21,
+    "inecRegisterCode": "INEC-ANNEX-021",
+    "name": "ALLIED PEOPLES' MOVEMENT",
+    "abbreviation": "APM",
+    "presidentialCandidate": "YUSUF MAMMAN DANTALLE"
+  },
+  {
+    "annexSn": 22,
+    "inecRegisterCode": "INEC-ANNEX-022",
+    "name": "ALTERNATIVE PARTY OF NIGERIA",
+    "abbreviation": "APN",
+    "presidentialCandidate": null
+  },
+  {
+    "annexSn": 23,
+    "inecRegisterCode": "INEC-ANNEX-023",
+    "name": "ACTION PEOPLES PARTY",
+    "abbreviation": "APP",
+    "presidentialCandidate": "OBINNA UCHECHUKWU IKEAGWUONU"
+  },
+  {
+    "annexSn": 24,
+    "inecRegisterCode": "INEC-ANNEX-024",
+    "name": "ALLIANCE OF SOCIAL DEMOCRATS",
+    "abbreviation": "ASD",
+    "presidentialCandidate": "DARA JOHN"
+  },
+  {
+    "annexSn": 25,
+    "inecRegisterCode": "INEC-ANNEX-025",
+    "name": "ALLIANCE FOR A UNITED NIGERIA",
+    "abbreviation": "AUN",
+    "presidentialCandidate": "ANGELA JOHNSON"
+  },
+  {
+    "annexSn": 26,
+    "inecRegisterCode": "INEC-ANNEX-026",
+    "name": "BETTER NIGERIA PROGRESSIVE PARTY",
+    "abbreviation": "BNPP",
+    "presidentialCandidate": "REV. DAVID ESOSA IZE-IYAMU"
+  },
+  {
+    "annexSn": 27,
+    "inecRegisterCode": "INEC-ANNEX-027",
+    "name": "CHANGE ADVOCACY PARTY",
+    "abbreviation": "CAP",
+    "presidentialCandidate": "ABAH LEWIS ELAIGWU"
+  },
+  {
+    "annexSn": 28,
+    "inecRegisterCode": "INEC-ANNEX-028",
+    "name": "COALITION FOR CHANGE",
+    "abbreviation": "CC",
+    "presidentialCandidate": "OJINIKA GEFF CHIZEE"
+  },
+  {
+    "annexSn": 29,
+    "inecRegisterCode": "INEC-ANNEX-029",
+    "name": "CHANGE NIGERIA PARTY",
+    "abbreviation": "CNP",
+    "presidentialCandidate": "ETIM EMMANUEL ISHIE"
+  },
+  {
+    "annexSn": 30,
+    "inecRegisterCode": "INEC-ANNEX-030",
+    "name": "CONGRESS OF PATRIOTS",
+    "abbreviation": "COP",
+    "presidentialCandidate": null
+  },
+  {
+    "annexSn": 31,
+    "inecRegisterCode": "INEC-ANNEX-031",
+    "name": "DEMOCRATIC ALTERNATIVE",
+    "abbreviation": "DA",
+    "presidentialCandidate": "UKONGA FRANK"
+  },
+  {
+    "annexSn": 32,
+    "inecRegisterCode": "INEC-ANNEX-032",
+    "name": "DEMOCRATIC PEOPLES CONGRESS",
+    "abbreviation": "DPC",
+    "presidentialCandidate": "AWOSOLA WILLIAMS OLUSOLA"
+  },
+  {
+    "annexSn": 33,
+    "inecRegisterCode": "INEC-ANNEX-033",
+    "name": "DEMOCRATIC PEOPLES PARTY",
+    "abbreviation": "DPP",
+    "presidentialCandidate": "OSAKWE FELIX JOHNSON"
+  },
+  {
+    "annexSn": 34,
+    "inecRegisterCode": "INEC-ANNEX-034",
+    "name": "FRESH DEMOCRATIC PARTY",
+    "abbreviation": "FDP",
+    "presidentialCandidate": "OKOTIE CHRISTOPHER OGHENEBRORIE"
+  },
+  {
+    "annexSn": 35,
+    "inecRegisterCode": "INEC-ANNEX-035",
+    "name": "FREEDOM AND JUSTICE PARTY",
+    "abbreviation": "FJP",
+    "presidentialCandidate": "REV. (DR) ONWUBUYA"
+  },
+  {
+    "annexSn": 36,
+    "inecRegisterCode": "INEC-ANNEX-036",
+    "name": "GRASSROOTS DEVELOPMENT PARTY OF NIGERIA",
+    "abbreviation": "GDPN",
+    "presidentialCandidate": "AKHIMIEN DAVIDSON ISIBOR"
+  },
+  {
+    "annexSn": 37,
+    "inecRegisterCode": "INEC-ANNEX-037",
+    "name": "GREEN PARTY OF NIGERIA",
+    "abbreviation": "GPN",
+    "presidentialCandidate": "EKE SAMUEL CHUKWUMA"
+  },
+  {
+    "annexSn": 38,
+    "inecRegisterCode": "INEC-ANNEX-038",
+    "name": "HOPE DEMOCRATIC PARTY",
+    "abbreviation": "HDP",
+    "presidentialCandidate": "ALBERT OWURU AMBROSE"
+  },
+  {
+    "annexSn": 39,
+    "inecRegisterCode": "INEC-ANNEX-039",
+    "name": "INDEPENDENT DEMOCRATS",
+    "abbreviation": "ID",
+    "presidentialCandidate": "MADU NNAMDI EDOZIE"
+  },
+  {
+    "annexSn": 40,
+    "inecRegisterCode": "INEC-ANNEX-040",
+    "name": "JUSTICE MUST PREVAIL PARTY",
+    "abbreviation": "JMPP",
+    "presidentialCandidate": "CHUKWU-EGUZOLUGO SUNDAY CHIKENDU"
+  },
+  {
+    "annexSn": 41,
+    "inecRegisterCode": "INEC-ANNEX-041",
+    "name": "KOWA PARTY",
+    "abbreviation": "KP",
+    "presidentialCandidate": "FAGBENRO-BYRON SAMUEL ADESINA"
+  },
+  {
+    "annexSn": 42,
+    "inecRegisterCode": "INEC-ANNEX-042",
+    "name": "LIBERATION MOVEMENT",
+    "abbreviation": "LM",
+    "presidentialCandidate": "KRIZ DAVID"
+  },
+  {
+    "annexSn": 43,
+    "inecRegisterCode": "INEC-ANNEX-043",
+    "name": "LABOUR PARTY",
+    "abbreviation": "LP",
+    "presidentialCandidate": "MUHAMMED USMAN ZAKI"
+  },
+  {
+    "annexSn": 44,
+    "inecRegisterCode": "INEC-ANNEX-044",
+    "name": "LEGACY PARTY OF NIGERIA",
+    "abbreviation": "LPN",
+    "presidentialCandidate": null
+  },
+  {
+    "annexSn": 45,
+    "inecRegisterCode": "INEC-ANNEX-045",
+    "name": "MASS ACTION JOINT ALLIANCE",
+    "abbreviation": "MAJA",
+    "presidentialCandidate": "ADESANYA-DAVIES MERCY OLUFUNMILAYO"
+  },
+  {
+    "annexSn": 46,
+    "inecRegisterCode": "INEC-ANNEX-046",
+    "name": "MODERN DEMOCRATIC PARTY",
+    "abbreviation": "MDP",
+    "presidentialCandidate": null
+  },
+  {
+    "annexSn": 47,
+    "inecRegisterCode": "INEC-ANNEX-047",
+    "name": "MASSES MOVEMENT OF NIGERIA",
+    "abbreviation": "MMN",
+    "presidentialCandidate": "BASHAYI ISA DANSARKI"
+  },
+  {
+    "annexSn": 48,
+    "inecRegisterCode": "INEC-ANNEX-048",
+    "name": "MEGA PARTY OF NIGERIA",
+    "abbreviation": "MPN",
+    "presidentialCandidate": "SANTURAKI HAMISU"
+  },
+  {
+    "annexSn": 49,
+    "inecRegisterCode": "INEC-ANNEX-049",
+    "name": "MOVEMENT FOR THE RESTORATION AND DEFENCE OF DEMOCRACY",
+    "abbreviation": "MRDD",
+    "presidentialCandidate": null
+  },
+  {
+    "annexSn": 50,
+    "inecRegisterCode": "INEC-ANNEX-050",
+    "name": "NATIONAL ACTION COUNCIL",
+    "abbreviation": "NAC",
+    "presidentialCandidate": "RABIA YASAI HASSAN CENGIZ"
+  },
+  {
+    "annexSn": 51,
+    "inecRegisterCode": "INEC-ANNEX-051",
+    "name": "NIGERIA COMMUNITY MOVEMENT PARTY",
+    "abbreviation": "NCMP",
+    "presidentialCandidate": "ADEMOLA BABATUNDE ABIDEMI"
+  },
+  {
+    "annexSn": 52,
+    "inecRegisterCode": "INEC-ANNEX-052",
+    "name": "NATIONAL CONSCIENCE PARTY",
+    "abbreviation": "NCP",
+    "presidentialCandidate": "SALISU YUNUSA TANKO"
+  },
+  {
+    "annexSn": 53,
+    "inecRegisterCode": "INEC-ANNEX-053",
+    "name": "NIGERIA DEMOCRATIC CONGRESS PARTY",
+    "abbreviation": "NDCP",
+    "presidentialCandidate": "A. EDOSOMWAN JOHNSON"
+  },
+  {
+    "annexSn": 54,
+    "inecRegisterCode": "INEC-ANNEX-054",
+    "name": "NATIONAL DEMOCRATIC LIBERTY PARTY",
+    "abbreviation": "NDLP",
+    "presidentialCandidate": "AKPUA ROBINSON"
+  },
+  {
+    "annexSn": 55,
+    "inecRegisterCode": "INEC-ANNEX-055",
+    "name": "NIGERIA ELEMENTS PROGRESSIVE PARTY",
+    "abbreviation": "NEPP",
+    "presidentialCandidate": "COM. ISHAKA PAUL OFEMILE"
+  },
+  {
+    "annexSn": 56,
+    "inecRegisterCode": "INEC-ANNEX-056",
+    "name": "NIGERIA FOR DEMOCRACY",
+    "abbreviation": "NFD",
+    "presidentialCandidate": "DR ASUKWO MENDIE ARCHIBONG"
+  },
+  {
+    "annexSn": 57,
+    "inecRegisterCode": "INEC-ANNEX-057",
+    "name": "NEW GENERATION PARTY OF NIGERIA",
+    "abbreviation": "NGP",
+    "presidentialCandidate": null
+  },
+  {
+    "annexSn": 58,
+    "inecRegisterCode": "INEC-ANNEX-058",
+    "name": "NATIONAL INTEREST PARTY",
+    "abbreviation": "NIP",
+    "presidentialCandidate": "ATUEJIDE EUNICE UCHE JULIAN"
+  },
+  {
+    "annexSn": 59,
+    "inecRegisterCode": "INEC-ANNEX-059",
+    "name": "NEW NIGERIA POEPLES PARTY",
+    "abbreviation": "NNPP",
+    "presidentialCandidate": "IKE KEKE"
+  },
+  {
+    "annexSn": 60,
+    "inecRegisterCode": "INEC-ANNEX-060",
+    "name": "NIGERIA PEOPLES CONGRESS",
+    "abbreviation": "NPC",
+    "presidentialCandidate": "MAINA MAIMUNA KYARI"
+  },
+  {
+    "annexSn": 61,
+    "inecRegisterCode": "INEC-ANNEX-061",
+    "name": "NEW PROGRESSIVE MOVEMENT",
+    "abbreviation": "NPM",
+    "presidentialCandidate": null
+  },
+  {
+    "annexSn": 62,
+    "inecRegisterCode": "INEC-ANNEX-062",
+    "name": "NATIONAL RESCUE MOVEMENT",
+    "abbreviation": "NRM",
+    "presidentialCandidate": "IBRAHIM USMAN ALHAJI"
+  },
+  {
+    "annexSn": 63,
+    "inecRegisterCode": "INEC-ANNEX-063",
+    "name": "NATIONAL UNITY PARTY",
+    "abbreviation": "NUP",
+    "presidentialCandidate": "MOSES AYIBIOWU"
+  },
+  {
+    "annexSn": 64,
+    "inecRegisterCode": "INEC-ANNEX-064",
+    "name": "PEOPLES COALITION PARTY",
+    "abbreviation": "PCP",
+    "presidentialCandidate": "FELIX NICOLAS"
+  },
+  {
+    "annexSn": 65,
+    "inecRegisterCode": "INEC-ANNEX-065",
+    "name": "PEOPLE FOR DEMOCRATIC CHANGE",
+    "abbreviation": "PDC",
+    "presidentialCandidate": null
+  },
+  {
+    "annexSn": 66,
+    "inecRegisterCode": "INEC-ANNEX-066",
+    "name": "PEOPLES DEMOCRATIC MOVEMENT",
+    "abbreviation": "PDM",
+    "presidentialCandidate": null
+  },
+  {
+    "annexSn": 67,
+    "inecRegisterCode": "INEC-ANNEX-067",
+    "name": "PEOPLES DEMOCRATIC PARTY",
+    "abbreviation": "PDP",
+    "presidentialCandidate": "ABUBAKAR ATIKU"
+  },
+  {
+    "annexSn": 68,
+    "inecRegisterCode": "INEC-ANNEX-068",
+    "name": "PROGRESSIVE PEOPLES ALLIANCE",
+    "abbreviation": "PPA",
+    "presidentialCandidate": "AMEH PETER OJONUGWA"
+  },
+  {
+    "annexSn": 69,
+    "inecRegisterCode": "INEC-ANNEX-069",
+    "name": "PROVIDENCE PEOPLE'S CONGRESS",
+    "abbreviation": "PPC",
+    "presidentialCandidate": "VICTOR OKHAI"
+  },
+  {
+    "annexSn": 70,
+    "inecRegisterCode": "INEC-ANNEX-070",
+    "name": "PEOPLES PARTY OF NIGERIA",
+    "abbreviation": "PPN",
+    "presidentialCandidate": "MAJOR HAMZA AL MUSTAFA"
+  },
+  {
+    "annexSn": 71,
+    "inecRegisterCode": "INEC-ANNEX-071",
+    "name": "PEOPLES PROGRESSIVE PARTY",
+    "abbreviation": "PPP",
+    "presidentialCandidate": null
+  },
+  {
+    "annexSn": 72,
+    "inecRegisterCode": "INEC-ANNEX-072",
+    "name": "PEOPLES REDEMPTION PARTY",
+    "abbreviation": "PRP",
+    "presidentialCandidate": null
+  },
+  {
+    "annexSn": 73,
+    "inecRegisterCode": "INEC-ANNEX-073",
+    "name": "PEOPLE'S TRUST",
+    "abbreviation": "PT",
+    "presidentialCandidate": "GBENGA OLAWEPO-HASHIM"
+  },
+  {
+    "annexSn": 74,
+    "inecRegisterCode": "INEC-ANNEX-074",
+    "name": "REFORM AND ADVANCEMENT PARTY",
+    "abbreviation": "RAP",
+    "presidentialCandidate": "ISRAEL NONYEREM DAVIDSON, DR."
+  },
+  {
+    "annexSn": 75,
+    "inecRegisterCode": "INEC-ANNEX-075",
+    "name": "RE-BUILD NIGERIA PARTY",
+    "abbreviation": "RBNP",
+    "presidentialCandidate": "OSUALA CHUKWUDI JOHN KENNEDY"
+  },
+  {
+    "annexSn": 76,
+    "inecRegisterCode": "INEC-ANNEX-076",
+    "name": "RESTORATION PARTY OF NIGERIA",
+    "abbreviation": "RP",
+    "presidentialCandidate": "NSEHE NSEOBONG"
+  },
+  {
+    "annexSn": 77,
+    "inecRegisterCode": "INEC-ANNEX-077",
+    "name": "SOCIAL DEMOCRATIC PARTY",
+    "abbreviation": "SDP",
+    "presidentialCandidate": "DONALD DUKE"
+  },
+  {
+    "annexSn": 78,
+    "inecRegisterCode": "INEC-ANNEX-078",
+    "name": "SAVE NIGERIA CONGRESS",
+    "abbreviation": "SNC",
+    "presidentialCandidate": "DA-SILVA THOMAS AYO"
+  },
+  {
+    "annexSn": 79,
+    "inecRegisterCode": "INEC-ANNEX-079",
+    "name": "SUSTAINABLE NATIONAL PARTY",
+    "abbreviation": "SNP",
+    "presidentialCandidate": "AHMED BUHARI"
+  },
+  {
+    "annexSn": 80,
+    "inecRegisterCode": "INEC-ANNEX-080",
+    "name": "SOCIALIST PARTY OF NIGERIA",
+    "abbreviation": "SPN",
+    "presidentialCandidate": null
+  },
+  {
+    "annexSn": 81,
+    "inecRegisterCode": "INEC-ANNEX-081",
+    "name": "UNITED DEMOCRATIC PARTY",
+    "abbreviation": "UDP",
+    "presidentialCandidate": "BALOGUN ISIAKA ISHOLA"
+  },
+  {
+    "annexSn": 82,
+    "inecRegisterCode": "INEC-ANNEX-082",
+    "name": "UNITED PATRIOTS",
+    "abbreviation": "UP",
+    "presidentialCandidate": "MARK EMMANUEL AUDU"
+  },
+  {
+    "annexSn": 83,
+    "inecRegisterCode": "INEC-ANNEX-083",
+    "name": "UNITED PEOPLES CONGRESS",
+    "abbreviation": "UPC",
+    "presidentialCandidate": null
+  },
+  {
+    "annexSn": 84,
+    "inecRegisterCode": "INEC-ANNEX-084",
+    "name": "UNITY PARTY OF NIGERIA",
+    "abbreviation": "UPN",
+    "presidentialCandidate": "INWA AHMED SAKIL"
+  },
+  {
+    "annexSn": 85,
+    "inecRegisterCode": "INEC-ANNEX-085",
+    "name": "UNITED PROGRESSIVE PARTY",
+    "abbreviation": "UPP",
+    "presidentialCandidate": null
+  },
+  {
+    "annexSn": 86,
+    "inecRegisterCode": "INEC-ANNEX-086",
+    "name": "WE THE PEOPLE NIGERIA",
+    "abbreviation": "WTPN",
+    "presidentialCandidate": "NWANGWU UCHENNA PETER"
+  },
+  {
+    "annexSn": 87,
+    "inecRegisterCode": "INEC-ANNEX-087",
+    "name": "YOUNG DEMOCRATIC PARTY",
+    "abbreviation": "YDP",
+    "presidentialCandidate": null
+  },
+  {
+    "annexSn": 88,
+    "inecRegisterCode": "INEC-ANNEX-088",
+    "name": "YES ELECTORATES SOLIDARITY",
+    "abbreviation": "YES",
+    "presidentialCandidate": "ALI SOYODE M"
+  },
+  {
+    "annexSn": 89,
+    "inecRegisterCode": "INEC-ANNEX-089",
+    "name": "YOUTH PARTY",
+    "abbreviation": "YP",
+    "presidentialCandidate": null
+  },
+  {
+    "annexSn": 90,
+    "inecRegisterCode": "INEC-ANNEX-090",
+    "name": "YOUNG PROGRESSIVE PARTY",
+    "abbreviation": "YPP",
+    "presidentialCandidate": "MOGHALU KINGSLEY BOSAH CHIEDU"
+  },
+  {
+    "annexSn": 91,
+    "inecRegisterCode": "INEC-ANNEX-091",
+    "name": "ZENITH LABOUR PARTY",
+    "abbreviation": "ZLP",
+    "presidentialCandidate": null
+  }
+]

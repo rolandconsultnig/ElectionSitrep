@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Nigeria Election SitRep System</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --navy: #0A1628;
+  --navy2: #0F2040;
+  --navy3: #162B52;
+  --green: #00C896;
+  --green2: #00A87C;
+  --amber: #F59E0B;
+  --red: #EF4444;
+  --blue: #3B82F6;
+  --purple: #8B5CF6;
+  --text: #E8EDF5;
+  --text2: #8A9AB8;
+  --text3: #4A5A78;
+  --border: rgba(255,255,255,0.07);
+  --card: rgba(255,255,255,0.04);
+  --card2: rgba(255,255,255,0.08);
+  --glow: 0 0 40px rgba(0,200,150,0.15);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;font-family:'DM Sans',sans-serif;background:var(--navy);color:var(--text)}
+
+/* ─── LANDING PORTAL SELECTOR ─────────────────────────────── */
+#landing{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--navy);transition:opacity .5s,transform .5s}
+#landing.hidden{opacity:0;pointer-events:none;transform:scale(1.03)}
+.land-bg{position:absolute;inset:0;overflow:hidden}
+.land-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,200,150,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,150,.04) 1px,transparent 1px);background-size:60px 60px}
+.land-glow{position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(0,200,150,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%)}
+.land-content{position:relative;z-index:1;text-align:center;max-width:900px;padding:2rem}
+.land-badge{display:inline-block;padding:.3rem 1rem;border:1px solid rgba(0,200,150,.4);border-radius:2rem;font-size:.7rem;font-family:'DM Mono',monospace;color:var(--green);letter-spacing:.15em;text-transform:uppercase;margin-bottom:2rem}
+.land-title{font-family:'Syne',sans-serif;font-size:clamp(2.2rem,5vw,4rem);font-weight:800;line-height:1.1;margin-bottom:.8rem}
+.land-title span{color:var(--green)}
+.land-sub{color:var(--text2);font-size:1rem;margin-bottom:3rem;line-height:1.6}
+.portal-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;width:100%}
+.portal-card{position:relative;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1.5rem;cursor:pointer;transition:all .3s;text-align:left;overflow:hidden}
+.portal-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,transparent,rgba(0,200,150,.05));opacity:0;transition:.3s}
+.portal-card:hover{border-color:rgba(0,200,150,.35);transform:translateY(-3px);box-shadow:0 20px 40px rgba(0,0,0,.3)}
+.portal-card:hover::before{opacity:1}
+.portal-num{font-family:'DM Mono',monospace;font-size:.65rem;color:var(--text3);letter-spacing:.12em;margin-bottom:.8rem}
+.portal-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:1rem;font-size:1.2rem}
+.portal-card h3{font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;margin-bottom:.4rem}
+.portal-card p{font-size:.8rem;color:var(--text2);line-height:1.5}
+.portal-arrow{position:absolute;top:1.5rem;right:1.5rem;color:var(--text3);transition:.3s}
+.portal-card:hover .portal-arrow{color:var(--green);transform:translateX(3px)}
+.p1 .portal-icon{background:rgba(239,68,68,.15);color:#EF4444}
+.p2 .portal-icon{background:rgba(245,158,11,.15);color:#F59E0B}
+.p3 .portal-icon{background:rgba(59,130,246,.15);color:#3B82F6}
+.p4 .portal-icon{background:rgba(0,200,150,.15);color:#00C896}
+
+/* ─── APP SHELL ───────────────────────────────────────────── */
+#app{display:none;height:100vh;flex-direction:column}
+#app.show{display:flex}
+.topbar{height:56px;background:var(--navy2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.5rem;gap:1rem;flex-shrink:0}
+.topbar-logo{font-family:'Syne',sans-serif;font-weight:800;font-size:1rem;display:flex;align-items:center;gap:.5rem}
+.topbar-logo-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+.topbar-portal-badge{padding:.2rem .8rem;border-radius:2rem;font-size:.65rem;font-family:'DM Mono',monospace;font-weight:500;letter-spacing:.1em;text-transform:uppercase}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:1rem}
+.back-btn{padding:.35rem .9rem;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text2);font-size:.75rem;cursor:pointer;transition:.2s;font-family:'DM Sans',sans-serif}
+.back-btn:hover{border-color:var(--green);color:var(--green)}
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(0,200,150,.4)}50%{opacity:.8;box-shadow:0 0 0 5px rgba(0,200,150,0)}}
+.topbar-time{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--text2)}
+
+.main-layout{display:flex;flex:1;overflow:hidden}
+
+/* ─── SIDEBAR ─────────────────────────────────────────────── */
+.sidebar{width:220px;flex-shrink:0;background:var(--navy2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;transition:.25s}
+.sidebar.collapsed{width:60px}
+.sb-section{padding:.75rem .75rem .25rem;font-family:'DM Mono',monospace;font-size:.58rem;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;overflow:hidden}
+.sidebar.collapsed .sb-section{opacity:0}
+.sb-item{display:flex;align-items:center;gap:.75rem;padding:.55rem .75rem;border-radius:8px;margin:.1rem .5rem;cursor:pointer;transition:.2s;white-space:nowrap;overflow:hidden;position:relative}
+.sb-item:hover{background:var(--card2)}
+.sb-item.active{background:rgba(0,200,150,.1);color:var(--green)}
+.sb-item.active::before{content:'';position:absolute;left:0;top:15%;bottom:15%;width:3px;border-radius:0 2px 2px 0;background:var(--green)}
+.sb-icon{width:18px;height:18px;flex-shrink:0;opacity:.7}
+.sb-item.active .sb-icon{opacity:1}
+.sb-label{font-size:.78rem;font-weight:500;overflow:hidden;transition:.25s}
+.sidebar.collapsed .sb-label{opacity:0;width:0}
+
+/* ─── CONTENT ─────────────────────────────────────────────── */
+.content{flex:1;overflow-y:auto;padding:1.5rem}
+.page{display:none}
+.page.active{display:block}
+
+/* ─── CARDS / GRID ────────────────────────────────────────── */
+.page-header{margin-bottom:1.5rem}
+.page-title{font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:700}
+.page-sub{font-size:.8rem;color:var(--text2);margin-top:.3rem}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:1.5rem}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.2rem;position:relative;overflow:hidden}
+.stat-card::after{content:'';position:absolute;top:0;right:0;width:60px;height:60px;border-radius:50%;opacity:.12;transform:translate(20px,-20px)}
+.stat-card.green::after{background:var(--green)}
+.stat-card.amber::after{background:var(--amber)}
+.stat-card.red::after{background:var(--red)}
+.stat-card.blue::after{background:var(--blue)}
+.stat-label{font-size:.7rem;color:var(--text2);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.5rem}
+.stat-val{font-family:'Syne',sans-serif;font-size:1.8rem;font-weight:700}
+.stat-val.green{color:var(--green)}
+.stat-val.amber{color:var(--amber)}
+.stat-val.red{color:var(--red)}
+.stat-val.blue{color:var(--blue)}
+.stat-change{font-size:.7rem;color:var(--text3);margin-top:.3rem}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1rem}
+.grid-60-40{display:grid;grid-template-columns:1.5fr 1fr;gap:1rem;margin-bottom:1rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.2rem}
+.card-title{font-family:'Syne',sans-serif;font-size:.85rem;font-weight:600;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between}
+.card-title span{font-size:.65rem;font-family:'DM Mono',monospace;color:var(--text3)}
+
+/* ─── TABLE ────────────────────────────────────────────────── */
+table{width:100%;border-collapse:collapse;font-size:.78rem}
+th{text-align:left;padding:.6rem .8rem;font-family:'DM Mono',monospace;font-size:.62rem;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border)}
+td{padding:.6rem .8rem;border-bottom:1px solid var(--border);color:var(--text2)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--card2);color:var(--text)}
+
+/* ─── BADGES ───────────────────────────────────────────────── */
+.badge{display:inline-block;padding:.15rem .55rem;border-radius:4px;font-size:.65rem;font-weight:600;font-family:'DM Mono',monospace}
+.badge-green{background:rgba(0,200,150,.15);color:var(--green)}
+.badge-amber{background:rgba(245,158,11,.15);color:var(--amber)}
+.badge-red{background:rgba(239,68,68,.15);color:var(--red)}
+.badge-blue{background:rgba(59,130,246,.15);color:var(--blue)}
+.badge-purple{background:rgba(139,92,246,.15);color:var(--purple)}
+
+/* ─── FORMS ────────────────────────────────────────────────── */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.form-group{margin-bottom:1rem}
+.form-group label{display:block;font-size:.72rem;color:var(--text2);margin-bottom:.4rem;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.06em}
+.form-group input,.form-group select,.form-group textarea{width:100%;background:var(--navy3);border:1px solid var(--border);border-radius:8px;padding:.6rem .8rem;color:var(--text);font-size:.82rem;font-family:'DM Sans',sans-serif;outline:none;transition:.2s}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:rgba(0,200,150,.4);box-shadow:0 0 0 3px rgba(0,200,150,.08)}
+.form-group select option{background:var(--navy2)}
+.form-group textarea{resize:vertical;min-height:80px}
+.btn{padding:.55rem 1.2rem;border-radius:8px;font-size:.8rem;font-weight:600;cursor:pointer;transition:.2s;border:none;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:.4rem}
+.btn-primary{background:var(--green);color:var(--navy)}
+.btn-primary:hover{background:var(--green2)}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text2)}
+.btn-outline:hover{border-color:var(--green);color:var(--green)}
+.btn-danger{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+
+/* ─── INCIDENT FEED ───────────────────────────────────────── */
+.incident-item{display:flex;gap:.8rem;padding:.75rem 0;border-bottom:1px solid var(--border)}
+.incident-item:last-child{border-bottom:none}
+.inc-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.inc-body{flex:1}
+.inc-title{font-size:.8rem;font-weight:500;margin-bottom:.2rem}
+.inc-meta{font-size:.68rem;color:var(--text3);font-family:'DM Mono',monospace}
+
+/* ─── PROGRESS BAR ────────────────────────────────────────── */
+.progress-row{display:flex;align-items:center;gap.8rem;margin-bottom:.7rem}
+.progress-label{font-size:.75rem;width:120px;flex-shrink:0;color:var(--text2)}
+.progress-bar{flex:1;height:6px;background:var(--navy3);border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;border-radius:3px;transition:width .8s ease}
+.progress-val{font-size:.7rem;font-family:'DM Mono',monospace;width:35px;text-align:right;flex-shrink:0}
+
+/* ─── IGP INFOGRAPHIC STYLES ──────────────────────────────── */
+.igp-metric{background:linear-gradient(135deg,var(--card),rgba(0,200,150,.04));border:1px solid rgba(0,200,150,.15);border-radius:16px;padding:1.5rem;text-align:center}
+.igp-big{font-family:'Syne',sans-serif;font-size:3rem;font-weight:800;line-height:1}
+.igp-label{font-size:.75rem;color:var(--text2);margin-top:.4rem}
+.map-placeholder{background:var(--navy3);border-radius:12px;padding:1.5rem;position:relative;overflow:hidden;min-height:200px;display:flex;align-items:center;justify-content:center}
+.map-pulse{position:absolute;width:12px;height:12px;border-radius:50%}
+.map-pulse::before,.map-pulse::after{content:'';position:absolute;inset:-6px;border-radius:50%;border:2px solid currentColor;animation:ripple 2s ease-out infinite}
+.map-pulse::after{animation-delay:.7s}
+@keyframes ripple{0%{transform:scale(.4);opacity:1}100%{transform:scale(2);opacity:0}}
+.donut-container{display:flex;align-items:center;gap:1.5rem}
+.donut-legend{flex:1}
+.legend-item{display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem;font-size:.75rem;color:var(--text2)}
+.legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.alert-ribbon{display:flex;align-items:center;gap.8rem;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:10px;padding:.8rem 1rem;margin-bottom:.7rem}
+.alert-icon{font-size:1rem;flex-shrink:0;margin-right:.6rem}
+.alert-text{font-size:.78rem;flex:1}
+.alert-time{font-size:.65rem;color:var(--text3);font-family:'DM Mono',monospace;white-space:nowrap}
+.timeline-item{display:flex;gap:.8rem;padding:.6rem 0}
+.tl-line{display:flex;flex-direction:column;align-items:center;gap:0}
+.tl-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.tl-connector{width:2px;flex:1;background:var(--border);min-height:20px}
+.tl-content{flex:1;padding-bottom:.4rem}
+.tl-title{font-size:.78rem;font-weight:500;margin-bottom:.2rem}
+.tl-sub{font-size:.67rem;color:var(--text3);font-family:'DM Mono',monospace}
+
+/* charts */
+canvas{max-width:100%}
+
+/* scrollbar */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--text3);border-radius:2px}
+
+/* toast */
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--navy2);border:1px solid var(--green);border-radius:10px;padding:.75rem 1.2rem;font-size:.8rem;color:var(--text);z-index:10000;transform:translateY(100px);opacity:0;transition:.3s;max-width:300px}
+.toast.show{transform:translateY(0);opacity:1}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════ LANDING ══════════════════════ -->
+<div id="landing">
+  <div class="land-bg"><div class="land-grid"></div><div class="land-glow"></div></div>
+  <div class="land-content">
+    <div class="land-badge">🇳🇬 &nbsp;Nigeria &nbsp;·&nbsp; INEC-Aligned &nbsp;·&nbsp; Secure</div>
+    <h1 class="land-title">Election <span>SitRep</span><br/>& Collation System</h1>
+    <p class="land-sub">Select your access portal to continue. Each portal provides<br/>a role-appropriate interface for election operations.</p>
+    <div class="portal-grid">
+      <div class="portal-card p1" onclick="enterPortal('admin')">
+        <div class="portal-num">Portal 01</div>
+        <div class="portal-icon">⚙️</div>
+        <h3>Admin Portal</h3>
+        <p>Election setup, political parties, user management and system configuration</p>
+        <svg class="portal-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </div>
+      <div class="portal-card p2" onclick="enterPortal('field')">
+        <div class="portal-num">Portal 02</div>
+        <div class="portal-icon">📍</div>
+        <h3>Field Portal</h3>
+        <p>Report voting status, turnout, incidents, violence and election disturbances</p>
+        <svg class="portal-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </div>
+      <div class="portal-card p3" onclick="enterPortal('management')">
+        <div class="portal-num">Portal 03</div>
+        <div class="portal-icon">🏛️</div>
+        <h3>Management Portal</h3>
+        <p>Command & operational oversight from CP through DIG level</p>
+        <svg class="portal-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </div>
+      <div class="portal-card p4" onclick="enterPortal('igp')">
+        <div class="portal-num">Portal 04</div>
+        <div class="portal-icon">📊</div>
+        <h3>IGP Portal</h3>
+        <p>Executive infographic dashboard — clean national election intelligence for the IGP</p>
+        <svg class="portal-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ APP ══════════════════════ -->
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-logo"><div class="topbar-logo-dot"></div>SitRep NG</div>
+    <div class="topbar-portal-badge" id="portal-badge"></div>
+    <div class="topbar-right">
+      <div class="status-dot"></div>
+      <div class="topbar-time" id="clock"></div>
+      <button class="back-btn" onclick="goBack()">← Portals</button>
+    </div>
+  </div>
+  <div class="main-layout">
+    <div class="sidebar" id="sidebar"></div>
+    <div class="content" id="content"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════
+let currentPortal = null;
+let currentPage = null;
+let chartInstances = {};
+
+// ── Clock ────────────────────────────────────────────────
+function updateClock(){
+  const n=new Date();
+  document.getElementById('clock').textContent=
+    n.toLocaleTimeString('en-NG',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+' WAT';
+}
+setInterval(updateClock,1000);updateClock();
+
+// ── Toast ────────────────────────────────────────────────
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+// ── Destroy charts ───────────────────────────────────────
+function destroyCharts(){
+  Object.values(chartInstances).forEach(c=>{try{c.destroy()}catch(e){}});
+  chartInstances={};
+}
+
+// ══════════════════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════════════════
+const PORTALS = {
+  admin:{
+    label:'Admin Portal',color:'#EF4444',
+    nav:[
+      {section:'Overview',items:[{id:'a-dashboard',icon:'◈',label:'Dashboard'}]},
+      {section:'Election Config',items:[
+        {id:'a-elections',icon:'🗳',label:'Elections'},
+        {id:'a-parties',icon:'⚑',label:'Political Parties'},
+        {id:'a-candidates',icon:'👤',label:'Candidates'},
+        {id:'a-lgas',icon:'📍',label:'LGAs & Units'},
+      ]},
+      {section:'Users',items:[
+        {id:'a-users',icon:'👥',label:'User Management'},
+        {id:'a-roles',icon:'🔐',label:'Roles & Access'},
+      ]},
+      {section:'System',items:[
+        {id:'a-logs',icon:'📋',label:'Audit Logs'},
+        {id:'a-settings',icon:'⚙',label:'Settings'},
+      ]},
+    ]
+  },
+  field:{
+    label:'Field Portal',color:'#F59E0B',
+    nav:[
+      {section:'Reporting',items:[
+        {id:'f-dashboard',icon:'◈',label:'My Dashboard'},
+        {id:'f-sitrep',icon:'📝',label:'Submit SitRep'},
+        {id:'f-voting',icon:'✓',label:'Voting Status'},
+        {id:'f-turnout',icon:'📊',label:'Voter Turnout'},
+      ]},
+      {section:'Incidents',items:[
+        {id:'f-incidents',icon:'⚠',label:'Report Incident'},
+        {id:'f-violence',icon:'🚨',label:'Violence/Disturbance'},
+      ]},
+      {section:'Reference',items:[
+        {id:'f-parties',icon:'⚑',label:'Parties & Candidates'},
+        {id:'f-history',icon:'🕐',label:'My Submissions'},
+      ]},
+    ]
+  },
+  management:{
+    label:'Management Portal',color:'#3B82F6',
+    nav:[
+      {section:'Command View',items:[
+        {id:'m-dashboard',icon:'◈',label:'Command Dashboard'},
+        {id:'m-map',icon:'🗺',label:'Ops Map'},
+        {id:'m-sitrep',icon:'📋',label:'SitRep Feed'},
+      ]},
+      {section:'Analysis',items:[
+        {id:'m-results',icon:'📊',label:'Live Results'},
+        {id:'m-incidents',icon:'⚠',label:'Incident Tracker'},
+        {id:'m-turnout',icon:'📈',label:'Turnout Analysis'},
+      ]},
+      {section:'Command',items:[
+        {id:'m-orders',icon:'📣',label:'Issue Orders'},
+        {id:'m-units',icon:'🏛',label:'Field Units'},
+      ]},
+    ]
+  },
+  igp:{
+    label:'IGP Portal',color:'#00C896',
+    nav:[
+      {section:'Executive View',items:[
+        {id:'i-dashboard',icon:'◈',label:'National Overview'},
+        {id:'i-security',icon:'🛡',label:'Security Status'},
+        {id:'i-results',icon:'📊',label:'Election Results'},
+      ]},
+      {section:'Intelligence',items:[
+        {id:'i-hotspots',icon:'🔥',label:'Hotspot Map'},
+        {id:'i-timeline',icon:'⏱',label:'Event Timeline'},
+      ]},
+      {section:'Reports',items:[
+        {id:'i-briefing',icon:'📄',label:'Executive Briefing'},
+      ]},
+    ]
+  }
+};
+
+function enterPortal(id){
+  currentPortal=id;
+  const p=PORTALS[id];
+  document.getElementById('landing').classList.add('hidden');
+  const app=document.getElementById('app');
+  app.classList.add('show');
+  // Badge
+  const badge=document.getElementById('portal-badge');
+  badge.textContent=p.label;
+  badge.style.background=p.color+'22';
+  badge.style.color=p.color;
+  badge.style.border=`1px solid ${p.color}44`;
+  // Build sidebar
+  buildSidebar(p);
+  // Navigate to first item
+  const firstItem=p.nav[0].items[0];
+  navigate(firstItem.id);
+}
+
+function goBack(){
+  destroyCharts();
+  document.getElementById('app').classList.remove('show');
+  document.getElementById('landing').classList.remove('hidden');
+  currentPortal=null;currentPage=null;
+}
+
+function buildSidebar(portal){
+  const sb=document.getElementById('sidebar');
+  let html='';
+  portal.nav.forEach(group=>{
+    html+=`<div class="sb-section">${group.section}</div>`;
+    group.items.forEach(item=>{
+      html+=`<div class="sb-item" id="sb-${item.id}" onclick="navigate('${item.id}')">
+        <span class="sb-icon">${item.icon}</span>
+        <span class="sb-label">${item.label}</span>
+      </div>`;
+    });
+  });
+  sb.innerHTML=html;
+}
+
+function navigate(pageId){
+  currentPage=pageId;
+  // Update sidebar active
+  document.querySelectorAll('.sb-item').forEach(el=>el.classList.remove('active'));
+  const el=document.getElementById('sb-'+pageId);
+  if(el)el.classList.add('active');
+  // Render page
+  destroyCharts();
+  renderPage(pageId);
+}
+
+// ══════════════════════════════════════════════════════════
+// PAGE RENDERER
+// ══════════════════════════════════════════════════════════
+function renderPage(id){
+  const content=document.getElementById('content');
+  const pages={
+    'a-dashboard':pageAdminDashboard,
+    'a-elections':pageAdminElections,
+    'a-parties':pageAdminParties,
+    'a-candidates':pageAdminCandidates,
+    'a-lgas':pageAdminLGAs,
+    'a-users':pageAdminUsers,
+    'a-roles':pageAdminRoles,
+    'a-logs':pageAdminLogs,
+    'a-settings':pageAdminSettings,
+    'f-dashboard':pageFieldDashboard,
+    'f-sitrep':pageFieldSitRep,
+    'f-voting':pageFieldVoting,
+    'f-turnout':pageFieldTurnout,
+    'f-incidents':pageFieldIncidents,
+    'f-violence':pageFieldViolence,
+    'f-parties':pageFieldParties,
+    'f-history':pageFieldHistory,
+    'm-dashboard':pageMgtDashboard,
+    'm-map':pageMgtMap,
+    'm-sitrep':pageMgtSitRep,
+    'm-results':pageMgtResults,
+    'm-incidents':pageMgtIncidents,
+    'm-turnout':pageMgtTurnout,
+    'm-orders':pageMgtOrders,
+    'm-units':pageMgtUnits,
+    'i-dashboard':pageIGPDashboard,
+    'i-security':pageIGPSecurity,
+    'i-results':pageIGPResults,
+    'i-hotspots':pageIGPHotspots,
+    'i-timeline':pageIGPTimeline,
+    'i-briefing':pageIGPBriefing,
+  };
+  if(pages[id]){
+    content.innerHTML=pages[id]();
+    setTimeout(()=>initCharts(id),80);
+  } else {
+    content.innerHTML=`<div class="page-header"><h1 class="page-title">${id}</h1><p class="page-sub">Page coming soon</p></div>`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// ██ ADMIN PORTAL PAGES
+// ══════════════════════════════════════════════════════════
+function pageAdminDashboard(){return`
+<div class="page-header"><h1 class="page-title">Admin Dashboard</h1><p class="page-sub">System overview — 2025 Presidential Election</p></div>
+<div class="stat-grid">
+  <div class="stat-card green"><div class="stat-label">Registered PUs</div><div class="stat-val green">176,846</div><div class="stat-change">↑ 4.2% from 2023</div></div>
+  <div class="stat-card blue"><div class="stat-label">Active Field Agents</div><div class="stat-val blue">52,314</div><div class="stat-change">Online now</div></div>
+  <div class="stat-card amber"><div class="stat-label">Political Parties</div><div class="stat-val amber">18</div><div class="stat-change">INEC accredited</div></div>
+  <div class="stat-card red"><div class="stat-label">Pending Approvals</div><div class="stat-val red">7</div><div class="stat-change">Requires action</div></div>
+</div>
+<div class="grid-60-40">
+  <div class="card"><div class="card-title">System Activity <span>Last 24h</span></div><canvas id="actChart" height="140"></canvas></div>
+  <div class="card"><div class="card-title">Election Status</div>
+    <div style="margin-bottom:.8rem">
+      <div style="display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:.3rem"><span>Setup & Config</span><span class="badge badge-green">Done</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:.3rem"><span>Party Registration</span><span class="badge badge-green">Done</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:.3rem"><span>Agent Provisioning</span><span class="badge badge-amber">In Progress</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:.3rem"><span>PU Assignment</span><span class="badge badge-amber">In Progress</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:.75rem"><span>System Audit</span><span class="badge badge-red">Pending</span></div>
+    </div>
+    <div style="background:var(--navy3);border-radius:6px;height:6px;overflow:hidden"><div style="width:72%;height:100%;background:linear-gradient(90deg,var(--green),var(--green2))"></div></div>
+    <div style="font-size:.67rem;color:var(--text3);margin-top:.4rem;font-family:'DM Mono',monospace">72% election readiness</div>
+  </div>
+</div>
+<div class="grid-2">
+  <div class="card"><div class="card-title">Recent User Registrations</div>
+    <table><thead><tr><th>Name</th><th>Role</th><th>State</th><th>Status</th></tr></thead><tbody>
+      <tr><td>Amara Okafor</td><td>Field Agent</td><td>Lagos</td><td><span class="badge badge-green">Active</span></td></tr>
+      <tr><td>Bello Musa</td><td>Ward Officer</td><td>Kano</td><td><span class="badge badge-green">Active</span></td></tr>
+      <tr><td>Chioma Eze</td><td>LGA RO</td><td>Enugu</td><td><span class="badge badge-amber">Pending</span></td></tr>
+      <tr><td>Danladi Sule</td><td>Field Agent</td><td>Kaduna</td><td><span class="badge badge-green">Active</span></td></tr>
+      <tr><td>Emeka Nwosu</td><td>State RO</td><td>Anambra</td><td><span class="badge badge-amber">Pending</span></td></tr>
+    </tbody></table>
+  </div>
+  <div class="card"><div class="card-title">Quick Actions</div>
+    <div style="display:flex;flex-direction:column;gap:.6rem">
+      <button class="btn btn-primary" onclick="toast('Election configuration opened')">🗳 Configure Active Election</button>
+      <button class="btn btn-outline" onclick="navigate('a-users')">👥 Manage Users</button>
+      <button class="btn btn-outline" onclick="navigate('a-parties')">⚑ View Parties</button>
+      <button class="btn btn-outline" onclick="navigate('a-logs')">📋 Audit Log</button>
+      <button class="btn btn-danger" onclick="toast('System broadcast sent')">📣 Broadcast to Agents</button>
+    </div>
+  </div>
+</div>`;}
+
+function pageAdminElections(){return`
+<div class="page-header"><div style="display:flex;align-items:center;justify-content:space-between"><div><h1 class="page-title">Elections</h1><p class="page-sub">Configure and manage election events</p></div><button class="btn btn-primary" onclick="toast('New election form opened')">+ New Election</button></div></div>
+<div class="card" style="margin-bottom:1rem">
+  <div class="card-title">Active Elections</div>
+  <table><thead><tr><th>Election</th><th>Type</th><th>Date</th><th>States</th><th>PUs</th><th>Status</th><th>Action</th></tr></thead><tbody>
+    <tr><td><strong>2025 Presidential</strong></td><td>Presidential</td><td>Feb 22, 2025</td><td>37</td><td>176,846</td><td><span class="badge badge-green">Active</span></td><td><button class="btn btn-outline" style="padding:.25rem .6rem;font-size:.7rem" onclick="toast('Election details opened')">View</button></td></tr>
+    <tr><td><strong>2025 Senate</strong></td><td>NASS</td><td>Feb 22, 2025</td><td>37</td><td>176,846</td><td><span class="badge badge-green">Active</span></td><td><button class="btn btn-outline" style="padding:.25rem .6rem;font-size:.7rem" onclick="toast('Election details opened')">View</button></td></tr>
+    <tr><td><strong>2025 House of Reps</strong></td><td>NASS</td><td>Feb 22, 2025</td><td>37</td><td>176,846</td><td><span class="badge badge-amber">Setup</span></td><td><button class="btn btn-outline" style="padding:.25rem .6rem;font-size:.7rem" onclick="toast('Election details opened')">View</button></td></tr>
+    <tr><td><strong>2025 Gubernatorial — Lagos</strong></td><td>Governorship</td><td>Mar 15, 2025</td><td>1</td><td>13,427</td><td><span class="badge badge-blue">Scheduled</span></td><td><button class="btn btn-outline" style="padding:.25rem .6rem;font-size:.7rem" onclick="toast('Election details opened')">View</button></td></tr>
+  </tbody></table>
+</div>
+<div class="card">
+  <div class="card-title">Create New Election</div>
+  <div class="form-grid">
+    <div class="form-group"><label>Election Name</label><input type="text" placeholder="e.g. 2025 Presidential Election"/></div>
+    <div class="form-group"><label>Election Type</label><select><option>Presidential</option><option>Senatorial</option><option>House of Reps</option><option>Governorship</option><option>State Assembly</option><option>LGA Chairmanship</option></select></div>
+    <div class="form-group"><label>Election Date</label><input type="date"/></div>
+    <div class="form-group"><label>Accreditation Start</label><input type="time" value="08:00"/></div>
+    <div class="form-group"><label>Voting Start</label><input type="time" value="08:30"/></div>
+    <div class="form-group"><label>Voting Close</label><input type="time" value="14:30"/></div>
+  </div>
+  <div class="form-group"><label>Scope (States)</label><select><option>All States (Federal)</option><option>Select States</option></select></div>
+  <div style="display:flex;gap:.6rem;margin-top:.5rem"><button class="btn btn-primary" onclick="toast('Election saved successfully')">Save Election</button><button class="btn btn-outline">Cancel</button></div>
+</div>`;}
+
+function pageAdminParties(){return`
+<div class="page-header"><div style="display:flex;align-items:center;justify-content:space-between"><div><h1 class="page-title">Political Parties</h1><p class="page-sub">INEC-registered parties for active elections</p></div><button class="btn btn-primary" onclick="toast('Add party form opened')">+ Add Party</button></div></div>
+<div class="card">
+  <table><thead><tr><th>Party</th><th>Abbreviation</th><th>INEC Code</th><th>Chairman</th><th>Presidential Candidate</th><th>Status</th></tr></thead><tbody>
+    <tr><td><strong>All Progressives Congress</strong></td><td>APC</td><td>APC-001</td><td>Abdullahi Ganduje</td><td>Bola Ahmed Tinubu</td><td><span class="badge badge-green">Active</span></td></tr>
+    <tr><td><strong>Peoples Democratic Party</strong></td><td>PDP</td><td>PDP-002</td><td>Umar Damagum</td><td>Atiku Abubakar</td><td><span class="badge badge-green">Active</span></td></tr>
+    <tr><td><strong>Labour Party</strong></td><td>LP</td><td>LP-003</td><td>Julius Abure</td><td>Peter Obi</td><td><span class="badge badge-green">Active</span></td></tr>
+    <tr><td><strong>New Nigeria Peoples Party</strong></td><td>NNPP</td><td>NNPP-004</td><td>Rufai Alkali</td><td>Rabiu Kwankwaso</td><td><span class="badge badge-green">Active</span></td></tr>
+    <tr><td><strong>Social Democratic Party</strong></td><td>SDP</td><td>SDP-005</td><td>–</td><td>Prince Adewole Adebayo</td><td><span class="badge badge-amber">Review</span></td></tr>
+    <tr><td><strong>Action Democratic Party</strong></td><td>ADP</td><td>ADP-006</td><td>–</td><td>–</td><td><span class="badge badge-amber">Review</span></td></tr>
+  </tbody></table>
+</div>`;}
+
+function pageAdminCandidates(){return`
+<div class="page-header"><div style="display:flex;align-items:center;justify-content:space-between"><div><h1 class="page-title">Candidates</h1><p class="page-sub">Registered candidates per election and constituency</p></div><button class="btn btn-primary" onclick="toast('Add candidate form opened')">+ Add Candidate</button></div></div>
+<div class="card" style="margin-bottom:1rem">
+  <div class="card-title">Filter Candidates</div>
+  <div class="form-grid" style="gap:.7rem">
+    <div class="form-group" style="margin:0"><label>Election</label><select><option>2025 Presidential</option><option>2025 Senate</option><option>2025 House of Reps</option></select></div>
+    <div class="form-group" style="margin:0"><label>Party</label><select><option>All Parties</option><option>APC</option><option>PDP</option><option>LP</option><option>NNPP</option></select></div>
+  </div>
+</div>
+<div class="card">
+  <table><thead><tr><th>Candidate</th><th>Party</th><th>Election</th><th>State</th><th>Running Mate</th><th>Status</th></tr></thead><tbody>
+    <tr><td><strong>Bola Ahmed Tinubu</strong></td><td><span class="badge badge-red">APC</span></td><td>Presidential</td><td>Federal</td><td>Kashim Shettima</td><td><span class="badge badge-green">Confirmed</span></td></tr>
+    <tr><td><strong>Atiku Abubakar</strong></td><td><span class="badge badge-amber">PDP</span></td><td>Presidential</td><td>Federal</td><td>Ifeanyi Okowa</td><td><span class="badge badge-green">Confirmed</span></td></tr>
+    <tr><td><strong>Peter Obi</strong></td><td><span class="badge badge-blue">LP</span></td><td>Presidential</td><td>Federal</td><td>Yusuf Datti Baba-Ahmed</td><td><span class="badge badge-green">Confirmed</span></td></tr>
+    <tr><td><strong>Rabiu Kwankwaso</strong></td><td><span class="badge badge-purple">NNPP</span></td><td>Presidential</td><td>Federal</td><td>Isaac Idahosa</td><td><span class="badge badge-green">Confirmed</span></td></tr>
+  </tbody></table>
+</div>`;}
+
+function pageAdminLGAs(){return`
+<div class="page-header"><h1 class="page-title">LGAs & Polling Units</h1><p class="page-sub">Geographic configuration — 774 LGAs, 176,846 PUs</p></div>
+<div class="stat-grid">
+  <div class="stat-card green"><div class="stat-label">Total States</div><div class="stat-val green">37</div></div>
+  <div class="stat-card blue"><div class="stat-label">Total LGAs</div><div class="stat-val blue">774</div></div>
+  <div class="stat-card amber"><div class="stat-label">Total Wards</div><div class="stat-val amber">8,809</div></div>
+  <div class="stat-card red"><div class="stat-label">Polling Units</div><div class="stat-val red">176,846</div></div>
+</div>
+<div class="card">
+  <div class="card-title">States Configuration</div>
+  <table><thead><tr><th>State</th><th>Zone</th><th>LGAs</th><th>Wards</th><th>PUs</th><th>Reg. Voters</th><th>Status</th></tr></thead><tbody>
+    <tr><td>Lagos</td><td>South West</td><td>20</td><td>245</td><td>13,427</td><td>7,060,195</td><td><span class="badge badge-green">Configured</span></td></tr>
+    <tr><td>Kano</td><td>North West</td><td>44</td><td>484</td><td>14,526</td><td>5,921,018</td><td><span class="badge badge-green">Configured</span></td></tr>
+    <tr><td>Rivers</td><td>South South</td><td>23</td><td>319</td><td>8,608</td><td>3,449,419</td><td><span class="badge badge-green">Configured</span></td></tr>
+    <tr><td>Kaduna</td><td>North West</td><td>23</td><td>255</td><td>9,010</td><td>3,919,274</td><td><span class="badge badge-green">Configured</span></td></tr>
+    <tr><td>Anambra</td><td>South East</td><td>21</td><td>181</td><td>5,720</td><td>2,282,584</td><td><span class="badge badge-amber">In Review</span></td></tr>
+  </tbody></table>
+</div>`;}
+
+function pageAdminUsers(){return`
+<div class="page-header"><div style="display:flex;align-items:center;justify-content:space-between"><div><h1 class="page-title">User Management</h1><p class="page-sub">All system users — 52,314 active accounts</p></div><button class="btn btn-primary" onclick="toast('User creation form opened')">+ Add User</button></div></div>
+<div class="stat-grid">
+  <div class="stat-card green"><div class="stat-label">Field Agents</div><div class="stat-val green">48,210</div></div>
+  <div class="stat-card blue"><div class="stat-label">Ward Officers</div><div class="stat-val blue">2,840</div></div>
+  <div class="stat-card amber"><div class="stat-label">LGA ROs</div><div class="stat-val amber">774</div></div>
+  <div class="stat-card red"><div class="stat-label">State ROs</div><div class="stat-val red">37</div></div>
+</div>
+<div class="card">
+  <div class="card-title">User Directory <span style="margin-left:auto;display:flex;gap:.5rem"><input style="background:var(--navy3);border:1px solid var(--border);border-radius:6px;padding:.3rem .7rem;color:var(--text);font-size:.75rem;outline:none" placeholder="Search users..."/></span></div>
+  <table><thead><tr><th>Name</th><th>Role</th><th>Jurisdiction</th><th>Last Active</th><th>2FA</th><th>Status</th><th></th></tr></thead><tbody>
+    <tr><td><strong>Fatima Al-Hassan</strong></td><td>State RO</td><td>Kano State</td><td>2 min ago</td><td><span class="badge badge-green">On</span></td><td><span class="badge badge-green">Active</span></td><td><button class="btn btn-outline" style="padding:.2rem .5rem;font-size:.65rem" onclick="toast('User edited')">Edit</button></td></tr>
+    <tr><td><strong>Chukwuemeka Ike</strong></td><td>LGA RO</td><td>Onitsha LGA</td><td>15 min ago</td><td><span class="badge badge-green">On</span></td><td><span class="badge badge-green">Active</span></td><td><button class="btn btn-outline" style="padding:.2rem .5rem;font-size:.65rem" onclick="toast('User edited')">Edit</button></td></tr>
+    <tr><td><strong>Mariam Yusuf</strong></td><td>Field Agent</td><td>PU-KN-0042</td><td>1 hr ago</td><td><span class="badge badge-amber">Off</span></td><td><span class="badge badge-green">Active</span></td><td><button class="btn btn-outline" style="padding:.2rem .5rem;font-size:.65rem" onclick="toast('User edited')">Edit</button></td></tr>
+    <tr><td><strong>Sunday Adeyemi</strong></td><td>Ward Officer</td><td>Surulere Ward 3</td><td>3 hr ago</td><td><span class="badge badge-green">On</span></td><td><span class="badge badge-amber">Suspended</span></td><td><button class="btn btn-outline" style="padding:.2rem .5rem;font-size:.65rem" onclick="toast('User edited')">Edit</button></td></tr>
+  </tbody></table>
+</div>`;}
+
+function pageAdminRoles(){return`
+<div class="page-header"><h1 class="page-title">Roles & Access</h1><p class="page-sub">Permission matrix by role</p></div>
+<div class="card">
+  <table><thead><tr><th>Role</th><th>Submit Results</th><th>View Live</th><th>Declare</th><th>Manage Users</th><th>Audit Log</th></tr></thead><tbody>
+    <tr><td><strong>National Admin</strong></td><td><span class="badge badge-green">✓</span></td><td><span class="badge badge-green">✓</span></td><td><span class="badge badge-green">✓</span></td><td><span class="badge badge-green">✓</span></td><td><span class="badge badge-green">✓</span></td></tr>
+    <tr><td><strong>State RO</strong></td><td><span class="badge badge-green">✓</span></td><td><span class="badge badge-green">✓</span></td><td><span class="badge badge-green">State only</span></td><td><span class="badge badge-amber">Limited</span></td><td><span class="badge badge-amber">Read only</span></td></tr>
+    <tr><td><strong>LGA RO</strong></td><td><span class="badge badge-green">✓</span></td><td><span class="badge badge-green">✓</span></td><td><span class="badge badge-red">✗</span></td><td><span class="badge badge-red">✗</span></td><td><span class="badge badge-red">✗</span></td></tr>
+    <tr><td><strong>Field Agent</strong></td><td><span class="badge badge-green">PU only</span></td><td><span class="badge badge-red">✗</span></td><td><span class="badge badge-red">✗</span></td><td><span class="badge badge-red">✗</span></td><td><span class="badge badge-red">✗</span></td></tr>
+    <tr><td><strong>Party Agent</strong></td><td><span class="badge badge-red">✗</span></td><td><span class="badge badge-amber">Declared</span></td><td><span class="badge badge-red">✗</span></td><td><span class="badge badge-red">✗</span></td><td><span class="badge badge-red">✗</span></td></tr>
+    <tr><td><strong>Observer</strong></td><td><span class="badge badge-amber">PVT only</span></td><td><span class="badge badge-amber">Read only</span></td><td><span class="badge badge-red">✗</span></td><td><span class="badge badge-red">✗</span></td><td><span class="badge badge-red">✗</span></td></tr>
+  </tbody></table>
+</div>`;}
+
+function pageAdminLogs(){return`
+<div class="page-header"><h1 class="page-title">Audit Logs</h1><p class="page-sub">Immutable system activity log</p></div>
+<div class="card">
+  <table><thead><tr><th>Timestamp (WAT)</th><th>User</th><th>Action</th><th>Entity</th><th>IP Address</th></tr></thead><tbody>
+    <tr><td class="badge-mono">2025-02-22 14:32:07</td><td>Fatima Al-Hassan</td><td><span class="badge badge-blue">LOCK_RESULT</span></td><td>State: Kano</td><td>197.210.x.x</td></tr>
+    <tr><td class="badge-mono">2025-02-22 14:28:43</td><td>Chukwuemeka Ike</td><td><span class="badge badge-green">SUBMIT_EC8C</span></td><td>LGA: Onitsha</td><td>197.211.x.x</td></tr>
+    <tr><td class="badge-mono">2025-02-22 14:15:02</td><td>admin@inec.gov.ng</td><td><span class="badge badge-amber">USER_CREATE</span></td><td>User: Mariam Yusuf</td><td>196.52.x.x</td></tr>
+    <tr><td class="badge-mono">2025-02-22 13:59:18</td><td>Sunday Adeyemi</td><td><span class="badge badge-red">LOGIN_FAIL</span></td><td>Auth</td><td>41.203.x.x</td></tr>
+    <tr><td class="badge-mono">2025-02-22 13:47:55</td><td>system</td><td><span class="badge badge-blue">BACKUP_OK</span></td><td>Database</td><td>internal</td></tr>
+    <tr><td class="badge-mono">2025-02-22 13:31:02</td><td>Fatima Al-Hassan</td><td><span class="badge badge-green">SUBMIT_EC8D</span></td><td>State: Kano</td><td>197.210.x.x</td></tr>
+  </tbody></table>
+</div>`;}
+
+function pageAdminSettings(){return`
+<div class="page-header"><h1 class="page-title">System Settings</h1><p class="page-sub">Global configuration and preferences</p></div>
+<div class="grid-2">
+  <div class="card"><div class="card-title">Election Parameters</div>
+    <div class="form-group"><label>Active Election</label><select><option>2025 Presidential Election</option></select></div>
+    <div class="form-group"><label>Anomaly Detection Threshold</label><input type="number" value="3" min="1" max="10"/></div>
+    <div class="form-group"><label>OCR Mismatch Alert (%)</label><input type="number" value="5"/></div>
+    <button class="btn btn-primary" onclick="toast('Settings saved')">Save Changes</button>
+  </div>
+  <div class="card"><div class="card-title">Notifications</div>
+    <div class="form-group"><label>SMS Gateway</label><select><option>Africa's Talking</option><option>NIGCOMSAT</option></select></div>
+    <div class="form-group"><label>Red Alert Recipients</label><input type="text" value="security@inec.gov.ng, cp@npf.gov.ng"/></div>
+    <div class="form-group"><label>Broadcast Language</label><select><option>English</option><option>Hausa</option><option>Yoruba</option><option>Igbo</option></select></div>
+    <button class="btn btn-primary" onclick="toast('Notification settings saved')">Save</button>
+  </div>
+</div>`;}
+
+// ══════════════════════════════════════════════════════════
+// ██ FIELD PORTAL PAGES
+// ══════════════════════════════════════════════════════════
+function pageFieldDashboard(){return`
+<div class="page-header"><h1 class="page-title">Field Dashboard</h1><p class="page-sub">PU-LA-00842 · Surulere Ward 4 · Lagos</p></div>
+<div class="stat-grid">
+  <div class="stat-card green"><div class="stat-label">Accredited Voters</div><div class="stat-val green">1,248</div><div class="stat-change">of 1,820 registered</div></div>
+  <div class="stat-card blue"><div class="stat-label">Votes Cast</div><div class="stat-val blue">1,187</div><div class="stat-change">95.1% of accredited</div></div>
+  <div class="stat-card amber"><div class="stat-label">My Submissions</div><div class="stat-val amber">3</div><div class="stat-change">Today</div></div>
+  <div class="stat-card red"><div class="stat-label">Pending Sync</div><div class="stat-val red">0</div><div class="stat-change">All synced ✓</div></div>
+</div>
+<div class="grid-60-40">
+  <div class="card"><div class="card-title">Today's Timeline</div>
+    <div class="timeline-item"><div class="tl-line"><div class="tl-dot" style="background:var(--green)"></div><div class="tl-connector"></div></div><div class="tl-content"><div class="tl-title">Voting opened on schedule</div><div class="tl-sub">08:31 WAT · BAV reader online</div></div></div>
+    <div class="timeline-item"><div class="tl-line"><div class="tl-dot" style="background:var(--blue)"></div><div class="tl-connector"></div></div><div class="tl-content"><div class="tl-title">Accreditation completed — 1,248 accredited</div><div class="tl-sub">10:15 WAT · 68.6% of registered</div></div></div>
+    <div class="timeline-item"><div class="tl-line"><div class="tl-dot" style="background:var(--amber)"></div><div class="tl-connector"></div></div><div class="tl-content"><div class="tl-title">Minor disturbance reported — resolved</div><div class="tl-sub">12:44 WAT · Amber → Green</div></div></div>
+    <div class="timeline-item"><div class="tl-line"><div class="tl-dot" style="background:var(--green)"></div></div><div class="tl-content"><div class="tl-title">Voting closed — EC8A submitted</div><div class="tl-sub">14:32 WAT · All party agents signed</div></div></div>
+  </div>
+  <div class="card"><div class="card-title">Current Status</div>
+    <div style="text-align:center;padding:1rem 0">
+      <div style="font-family:'Syne',sans-serif;font-size:.75rem;color:var(--text3);margin-bottom:.5rem">PU STATUS</div>
+      <div style="display:inline-block;padding:.5rem 1.5rem;border-radius:2rem;background:rgba(0,200,150,.15);border:1px solid rgba(0,200,150,.3);color:var(--green);font-weight:700;font-family:'DM Mono',monospace;font-size:.85rem">✓ VOTING CLOSED</div>
+      <div style="margin-top:1.2rem;font-size:.75rem;color:var(--text2)">EC8A submitted at 14:32 WAT<br/>Synced to ward server</div>
+    </div>
+    <div style="margin-top:1rem;display:flex;flex-direction:column;gap:.5rem">
+      <button class="btn btn-primary" onclick="navigate('f-sitrep')">📝 Submit New SitRep</button>
+      <button class="btn btn-outline" onclick="navigate('f-incidents')">⚠ Report Incident</button>
+    </div>
+  </div>
+</div>`;}
+
+function pageFieldSitRep(){return`
+<div class="page-header"><h1 class="page-title">Submit SitRep</h1><p class="page-sub">Situation report for PU-LA-00842</p></div>
+<div class="card">
+  <div class="card-title">Situation Report Form</div>
+  <div class="form-grid">
+    <div class="form-group"><label>Report Type</label><select><option>Routine Update</option><option>Voting Status</option><option>Incident</option><option>Collation Update</option><option>Final Report</option></select></div>
+    <div class="form-group"><label>Status</label><select><option style="color:green">🟢 Green — Normal</option><option style="color:orange">🟡 Amber — Disruption</option><option style="color:red">🔴 Red — Emergency</option></select></div>
+    <div class="form-group"><label>Accredited Voters</label><input type="number" value="1248"/></div>
+    <div class="form-group"><label>Votes Cast (so far)</label><input type="number" value="1187"/></div>
+    <div class="form-group"><label>Rejected Ballots</label><input type="number" value="12"/></div>
+    <div class="form-group"><label>Spoilt Ballots</label><input type="number" value="4"/></div>
+  </div>
+  <div class="form-group"><label>Situation Narrative</label><textarea placeholder="Describe the current situation at your polling unit...">Voting concluded peacefully. All party agents present and signed EC8A. Card reader functioned throughout. No security incidents recorded. Result sheet uploaded.</textarea></div>
+  <div class="form-group"><label>EC8A Photo Upload</label><input type="file" accept="image/*"/></div>
+  <div style="display:flex;gap:.6rem;margin-top:.5rem">
+    <button class="btn btn-primary" onclick="toast('SitRep submitted and synced ✓')">📤 Submit SitRep</button>
+    <button class="btn btn-outline">Save Draft</button>
+  </div>
+</div>`;}
+
+function pageFieldVoting(){return`
+<div class="page-header"><h1 class="page-title">Voting Status</h1><p class="page-sub">Record voting data for PU-LA-00842</p></div>
+<div class="card" style="margin-bottom:1rem">
+  <div class="card-title">Vote Tally by Party</div>
+  <table><thead><tr><th>Party</th><th>Candidate</th><th>Votes</th><th>%</th></tr></thead><tbody>
+    <tr><td><span class="badge badge-red">APC</span></td><td>Bola Ahmed Tinubu</td><td><input type="number" value="512" style="background:var(--navy3);border:1px solid var(--border);border-radius:6px;padding:.2rem .5rem;color:var(--text);width:80px"/></td><td>43.1%</td></tr>
+    <tr><td><span class="badge badge-blue">LP</span></td><td>Peter Obi</td><td><input type="number" value="432" style="background:var(--navy3);border:1px solid var(--border);border-radius:6px;padding:.2rem .5rem;color:var(--text);width:80px"/></td><td>36.4%</td></tr>
+    <tr><td><span class="badge badge-amber">PDP</span></td><td>Atiku Abubakar</td><td><input type="number" value="198" style="background:var(--navy3);border:1px solid var(--border);border-radius:6px;padding:.2rem .5rem;color:var(--text);width:80px"/></td><td>16.7%</td></tr>
+    <tr><td><span class="badge badge-purple">NNPP</span></td><td>Rabiu Kwankwaso</td><td><input type="number" value="45" style="background:var(--navy3);border:1px solid var(--border);border-radius:6px;padding:.2rem .5rem;color:var(--text);width:80px"/></td><td>3.8%</td></tr>
+  </tbody></table>
+  <div style="margin-top:1rem;padding-top:.8rem;border-top:1px solid var(--border);font-size:.8rem;display:flex;gap:2rem">
+    <span>Total Valid: <strong style="color:var(--green)">1,187</strong></span>
+    <span>Rejected: <strong style="color:var(--red)">12</strong></span>
+    <span>Spoilt: <strong style="color:var(--amber)">4</strong></span>
+    <span>Total: <strong>1,203</strong></span>
+  </div>
+  <div style="margin-top:1rem;display:flex;gap:.6rem">
+    <button class="btn btn-primary" onclick="toast('Vote tally saved')">💾 Save Tally</button>
+    <button class="btn btn-outline" onclick="toast('EC8A generated for upload')">📋 Generate EC8A</button>
+  </div>
+</div>`;}
+
+function pageFieldTurnout(){return`
+<div class="page-header"><h1 class="page-title">Voter Turnout</h1><p class="page-sub">Turnout data for your assigned unit</p></div>
+<div class="card">
+  <div class="card-title">Turnout by Hour</div>
+  <canvas id="turnoutChart" height="120"></canvas>
+</div>
+<div class="grid-2" style="margin-top:1rem">
+  <div class="card">
+    <div class="card-title">Demographic Breakdown</div>
+    <div class="progress-row"><span class="progress-label">Male voters</span><div class="progress-bar"><div class="progress-fill" style="width:58%;background:var(--blue)"></div></div><span class="progress-val" style="color:var(--blue)">58%</span></div>
+    <div class="progress-row"><span class="progress-label">Female voters</span><div class="progress-bar"><div class="progress-fill" style="width:42%;background:var(--purple)"></div></div><span class="progress-val" style="color:var(--purple)">42%</span></div>
+    <div class="progress-row"><span class="progress-label">First-time voters</span><div class="progress-bar"><div class="progress-fill" style="width:31%;background:var(--green)"></div></div><span class="progress-val" style="color:var(--green)">31%</span></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Turnout Summary</div>
+    <div style="font-size:.8rem;display:flex;flex-direction:column;gap:.6rem;color:var(--text2)">
+      <div style="display:flex;justify-content:space-between"><span>Registered voters</span><strong style="color:var(--text)">1,820</strong></div>
+      <div style="display:flex;justify-content:space-between"><span>Accredited</span><strong style="color:var(--green)">1,248</strong></div>
+      <div style="display:flex;justify-content:space-between"><span>Voted</span><strong style="color:var(--blue)">1,187</strong></div>
+      <div style="display:flex;justify-content:space-between"><span>Accreditation rate</span><strong style="color:var(--amber)">68.6%</strong></div>
+      <div style="display:flex;justify-content:space-between"><span>Voter turnout</span><strong style="color:var(--green)">65.2%</strong></div>
+    </div>
+  </div>
+</div>`;}
+
+function pageFieldIncidents(){return`
+<div class="page-header"><h1 class="page-title">Report Incident</h1><p class="page-sub">Log and escalate election incidents</p></div>
+<div class="card">
+  <div class="card-title">New Incident Report</div>
+  <div class="form-grid">
+    <div class="form-group"><label>Incident Category</label><select><option>Card reader failure</option><option>Voter intimidation</option><option>Result sheet snatching</option><option>Ballot stuffing</option><option>Unlawful exclusion</option><option>Violence/gunfire</option><option>Military interference</option><option>Over-voting detected</option><option>Other</option></select></div>
+    <div class="form-group"><label>Severity</label><select><option>🟢 Green — Minor</option><option>🟡 Amber — Moderate</option><option>🔴 Red — Emergency</option></select></div>
+    <div class="form-group"><label>Location</label><input type="text" value="PU-LA-00842, Surulere Ward 4"/></div>
+    <div class="form-group"><label>Time of Incident</label><input type="time" value="12:44"/></div>
+  </div>
+  <div class="form-group"><label>Description</label><textarea placeholder="Describe what happened, who was involved, and current status...">A group of youths briefly disrupted the queue at approximately 12:44. Police presence was requested. Situation resolved within 10 minutes. No injuries. Voting resumed normally.</textarea></div>
+  <div class="form-group"><label>Evidence (Photo/Video)</label><input type="file" accept="image/*,video/*"/></div>
+  <div style="display:flex;gap:.6rem;margin-top:.5rem">
+    <button class="btn btn-primary" onclick="toast('Incident reported and escalated ✓')">🚨 Submit Incident</button>
+    <button class="btn btn-danger" onclick="toast('RED alert sent to state coordinator')">🔴 Send Red Alert</button>
+  </div>
+</div>`;}
+
+function pageFieldViolence(){return`
+<div class="page-header"><h1 class="page-title">Violence & Disturbance Log</h1><p class="page-sub">Serious security incidents — escalated automatically</p></div>
+<div class="card" style="margin-bottom:1rem">
+  <div class="card-title">My Violence Reports</div>
+  <table><thead><tr><th>Time</th><th>Type</th><th>Severity</th><th>Status</th><th>Escalated To</th></tr></thead><tbody>
+    <tr><td>12:44 WAT</td><td>Queue disruption by youths</td><td><span class="badge badge-amber">Amber</span></td><td><span class="badge badge-green">Resolved</span></td><td>Ward Supervisor</td></tr>
+  </tbody></table>
+</div>
+<div class="card">
+  <div class="card-title">Quick Violence Report</div>
+  <div class="form-group"><label>Type of Violence</label><select><option>Physical assault on voter</option><option>Gunshot/gunfire</option><option>Result sheet snatching</option><option>Ballot box snatching</option><option>Thuggery/intimidation</option><option>Police/military brutality</option></select></div>
+  <div class="form-group"><label>Casualties</label><select><option>None</option><option>Injuries reported</option><option>Fatality reported</option></select></div>
+  <div class="form-group"><label>Narrative</label><textarea placeholder="Describe the violent incident in detail..."></textarea></div>
+  <button class="btn btn-danger" style="margin-top:.4rem" onclick="toast('URGENT: Violence report sent to NPF and INEC state coordinator')">🔴 Submit Violence Report</button>
+</div>`;}
+
+function pageFieldParties(){return`
+<div class="page-header"><h1 class="page-title">Parties & Candidates</h1><p class="page-sub">Quick reference — active parties in your election</p></div>
+<div class="card">
+  <table><thead><tr><th>Party</th><th>Code</th><th>Presidential Candidate</th><th>Running Mate</th><th>Agent at Your PU</th><th>Signed EC8A</th></tr></thead><tbody>
+    <tr><td><span class="badge badge-red">APC</span></td><td>APC-001</td><td>Bola Ahmed Tinubu</td><td>Kashim Shettima</td><td>Ibrahim Musa</td><td><span class="badge badge-green">✓ Yes</span></td></tr>
+    <tr><td><span class="badge badge-blue">LP</span></td><td>LP-003</td><td>Peter Obi</td><td>Yusuf Datti</td><td>Ngozi Okonkwo</td><td><span class="badge badge-green">✓ Yes</span></td></tr>
+    <tr><td><span class="badge badge-amber">PDP</span></td><td>PDP-002</td><td>Atiku Abubakar</td><td>Ifeanyi Okowa</td><td>Tunde Adeniyi</td><td><span class="badge badge-green">✓ Yes</span></td></tr>
+    <tr><td><span class="badge badge-purple">NNPP</span></td><td>NNPP-004</td><td>Rabiu Kwankwaso</td><td>Isaac Idahosa</td><td>–</td><td><span class="badge badge-amber">Absent</span></td></tr>
+  </tbody></table>
+</div>`;}
+
+function pageFieldHistory(){return`
+<div class="page-header"><h1 class="page-title">My Submissions</h1><p class="page-sub">All reports submitted from this device today</p></div>
+<div class="card">
+  <table><thead><tr><th>Time</th><th>Type</th><th>Summary</th><th>Sync</th></tr></thead><tbody>
+    <tr><td>08:31 WAT</td><td><span class="badge badge-blue">Voting Open</span></td><td>BAV online, 0 voters accredited at open</td><td><span class="badge badge-green">Synced</span></td></tr>
+    <tr><td>12:44 WAT</td><td><span class="badge badge-amber">Incident</span></td><td>Queue disruption — Amber — resolved</td><td><span class="badge badge-green">Synced</span></td></tr>
+    <tr><td>14:32 WAT</td><td><span class="badge badge-green">EC8A Final</span></td><td>1187 valid votes, all parties signed</td><td><span class="badge badge-green">Synced</span></td></tr>
+  </tbody></table>
+</div>`;}
+
+// ══════════════════════════════════════════════════════════
+// ██ MANAGEMENT PORTAL PAGES
+// ══════════════════════════════════════════════════════════
+function pageMgtDashboard(){return`
+<div class="page-header"><h1 class="page-title">Command Dashboard</h1><p class="page-sub">National operational overview — CP to DIG view</p></div>
+<div class="stat-grid">
+  <div class="stat-card green"><div class="stat-label">PUs Reporting</div><div class="stat-val green">142,180</div><div class="stat-change">80.4% of total PUs</div></div>
+  <div class="stat-card blue"><div class="stat-label">Votes Counted</div><div class="stat-val blue">58.2M</div><div class="stat-change">Nationwide</div></div>
+  <div class="stat-card amber"><div class="stat-label">Active Incidents</div><div class="stat-val amber">47</div><div class="stat-change">12 Red, 35 Amber</div></div>
+  <div class="stat-card red"><div class="stat-label">PUs Under Alert</div><div class="stat-val red">89</div><div class="stat-change">Awaiting clearance</div></div>
+</div>
+<div class="grid-60-40">
+  <div class="card"><div class="card-title">Live Vote Tallies — Presidential <span>Live</span></div><canvas id="mgtTallyChart" height="140"></canvas></div>
+  <div class="card"><div class="card-title">Active Red Alerts</div>
+    <div class="alert-ribbon"><span class="alert-icon">🔴</span><div class="alert-text"><strong>Kogi State — Lokoja LGA:</strong> Ballot box snatching reported at 3 PUs</div><span class="alert-time">14:22</span></div>
+    <div class="alert-ribbon"><span class="alert-icon">🔴</span><div class="alert-text"><strong>Rivers — Port Harcourt:</strong> Gunshots reported near collation centre</div><span class="alert-time">13:58</span></div>
+    <div class="alert-ribbon"><span class="alert-icon">🔴</span><div class="alert-text"><strong>Imo State — Owerri:</strong> Thuggery — police deployment requested</div><span class="alert-time">13:44</span></div>
+    <div class="alert-ribbon" style="background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.2)"><span class="alert-icon">🟡</span><div class="alert-text"><strong>Kaduna — Zaria LGA:</strong> Card reader failure — 6 PUs affected</div><span class="alert-time">13:31</span></div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-title">State Progress <span>% PUs Submitted</span></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.4rem 1.5rem">
+    ${[['Lagos','94','green'],['Kano','88','green'],['Rivers','71','amber'],['Kaduna','85','green'],['Anambra','78','amber'],['Kogi','52','red'],['FCT','97','green'],['Oyo','83','green'],['Delta','75','amber'],['Imo','62','red'],['Borno','89','green'],['Sokoto','81','amber']].map(([s,v,c])=>`
+    <div class="progress-row"><span class="progress-label">${s}</span><div class="progress-bar"><div class="progress-fill" style="width:${v}%;background:var(--${c})"></div></div><span class="progress-val" style="color:var(--${c})">${v}%</span></div>`).join('')}
+  </div>
+</div>`;}
+
+function pageMgtMap(){return`
+<div class="page-header"><h1 class="page-title">Operations Map</h1><p class="page-sub">Real-time incident and reporting coverage map</p></div>
+<div class="map-placeholder" style="min-height:360px;flex-direction:column;gap:1rem">
+  <div style="font-size:.75rem;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:.5rem">NIGERIA — ELECTION OPERATIONS MAP</div>
+  <div style="position:relative;width:100%;max-width:440px;height:280px;background:var(--navy2);border-radius:10px;border:1px solid var(--border)">
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:.75rem;color:var(--text3);text-align:center">Interactive map loads with<br/>Leaflet.js in production</div>
+    ${[['28%','40%','red','Kogi'],['22%','58%','amber','Rivers'],['55%','25%','green','Kano'],['40%','72%','green','Lagos'],['68%','38%','amber','Kaduna'],['78%','60%','green','FCT']].map(([x,y,c,l])=>`
+    <div class="map-pulse" style="left:${x};top:${y};background:var(--${c});color:var(--${c})">
+      <span style="position:absolute;top:14px;left:14px;font-size:.55rem;color:var(--text2);white-space:nowrap">${l}</span>
+    </div>`).join('')}
+  </div>
+  <div style="display:flex;gap:1.5rem;font-size:.72rem;color:var(--text2)">
+    <span>🔴 Red alert</span><span>🟡 Amber alert</span><span>🟢 Normal ops</span>
+  </div>
+</div>`;}
+
+function pageMgtSitRep(){return`
+<div class="page-header"><h1 class="page-title">SitRep Feed</h1><p class="page-sub">Live situation reports from field agents</p></div>
+<div class="card">
+  <div class="card-title">Incoming SitReps <span>Last 30 minutes</span></div>
+  ${[
+    ['14:38','PU-KG-00221','Kogi','red','Ballot box snatched. Armed men. Police called.','Ibrahim Salami'],
+    ['14:35','PU-RV-01140','Rivers','red','Gunshots heard 200m from collation centre. Voting suspended.','Chidinma Obi'],
+    ['14:31','PU-LA-00842','Lagos','green','Voting concluded peacefully. EC8A submitted. 1,187 valid votes.','Kemi Adeyemi'],
+    ['14:28','PU-KD-00588','Kaduna','amber','Card reader failure at 3 PUs. Manual accreditation authorized by RO.','Abdullahi Sani'],
+    ['14:22','PU-AN-00334','Anambra','green','Smooth collation. All party agents signed. No incidents.','Nneka Chukwu'],
+    ['14:17','PU-IM-00771','Imo','amber','Crowd of youths blocking entrance. NPF called. Awaiting response.','Chukwuebuka Eze'],
+  ].map(([t,pu,st,sev,msg,agent])=>`
+  <div class="incident-item">
+    <div class="inc-dot" style="background:var(--${sev})"></div>
+    <div class="inc-body">
+      <div class="inc-title">${msg}</div>
+      <div class="inc-meta">${t} WAT · ${pu} · ${st} · Agent: ${agent}</div>
+    </div>
+    <span class="badge badge-${sev==='green'?'green':sev==='amber'?'amber':'red'}">${sev.toUpperCase()}</span>
+  </div>`).join('')}
+</div>`;}
+
+function pageMgtResults(){return`
+<div class="page-header"><h1 class="page-title">Live Results</h1><p class="page-sub">Aggregated from 142,180 of 176,846 PUs</p></div>
+<div class="grid-2">
+  <div class="card"><div class="card-title">Presidential — Running Totals</div><canvas id="mgtResChart" height="160"></canvas></div>
+  <div class="card"><div class="card-title">Votes by Region</div><canvas id="mgtRegChart" height="160"></canvas></div>
+</div>
+<div class="card">
+  <div class="card-title">State-by-State Leaders</div>
+  <table><thead><tr><th>State</th><th>Leading Party</th><th>Margin</th><th>% Reported</th><th>Status</th></tr></thead><tbody>
+    <tr><td>Lagos</td><td><span class="badge badge-red">APC</span></td><td>+148,302</td><td>94%</td><td><span class="badge badge-green">Collating</span></td></tr>
+    <tr><td>Kano</td><td><span class="badge badge-purple">NNPP</span></td><td>+302,411</td><td>88%</td><td><span class="badge badge-green">Collating</span></td></tr>
+    <tr><td>Rivers</td><td><span class="badge badge-blue">LP</span></td><td>+98,771</td><td>71%</td><td><span class="badge badge-amber">Alert</span></td></tr>
+    <tr><td>Anambra</td><td><span class="badge badge-blue">LP</span></td><td>+187,442</td><td>78%</td><td><span class="badge badge-green">Collating</span></td></tr>
+    <tr><td>Kaduna</td><td><span class="badge badge-red">APC</span></td><td>+71,208</td><td>85%</td><td><span class="badge badge-green">Collating</span></td></tr>
+  </tbody></table>
+</div>`;}
+
+function pageMgtIncidents(){return`
+<div class="page-header"><h1 class="page-title">Incident Tracker</h1><p class="page-sub">47 active incidents nationwide</p></div>
+<div class="stat-grid">
+  <div class="stat-card red"><div class="stat-label">Red — Emergency</div><div class="stat-val red">12</div></div>
+  <div class="stat-card amber"><div class="stat-label">Amber — Disruption</div><div class="stat-val amber">35</div></div>
+  <div class="stat-card green"><div class="stat-label">Resolved Today</div><div class="stat-val green">124</div></div>
+  <div class="stat-card blue"><div class="stat-label">PUs Affected</div><div class="stat-val blue">89</div></div>
+</div>
+<div class="card">
+  <div class="card-title">Incident Categories</div>
+  <canvas id="incidentChart" height="120"></canvas>
+</div>`;}
+
+function pageMgtTurnout(){return`
+<div class="page-header"><h1 class="page-title">Turnout Analysis</h1><p class="page-sub">National voter participation</p></div>
+<div class="card" style="margin-bottom:1rem">
+  <div class="card-title">National Turnout by Zone</div>
+  <canvas id="turnoutZoneChart" height="120"></canvas>
+</div>
+<div class="grid-2">
+  <div class="card">
+    <div class="card-title">Top Turnout States</div>
+    <div class="progress-row"><span class="progress-label">Anambra</span><div class="progress-bar"><div class="progress-fill" style="width:89%;background:var(--green)"></div></div><span class="progress-val" style="color:var(--green)">89%</span></div>
+    <div class="progress-row"><span class="progress-label">Lagos</span><div class="progress-bar"><div class="progress-fill" style="width:81%;background:var(--green)"></div></div><span class="progress-val" style="color:var(--green)">81%</span></div>
+    <div class="progress-row"><span class="progress-label">FCT</span><div class="progress-bar"><div class="progress-fill" style="width:78%;background:var(--green)"></div></div><span class="progress-val" style="color:var(--green)">78%</span></div>
+    <div class="progress-row"><span class="progress-label">Enugu</span><div class="progress-bar"><div class="progress-fill" style="width:75%;background:var(--amber)"></div></div><span class="progress-val" style="color:var(--amber)">75%</span></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Lowest Turnout States</div>
+    <div class="progress-row"><span class="progress-label">Kogi</span><div class="progress-bar"><div class="progress-fill" style="width:28%;background:var(--red)"></div></div><span class="progress-val" style="color:var(--red)">28%</span></div>
+    <div class="progress-row"><span class="progress-label">Imo</span><div class="progress-bar"><div class="progress-fill" style="width:35%;background:var(--red)"></div></div><span class="progress-val" style="color:var(--red)">35%</span></div>
+    <div class="progress-row"><span class="progress-label">Zamfara</span><div class="progress-bar"><div class="progress-fill" style="width:41%;background:var(--amber)"></div></div><span class="progress-val" style="color:var(--amber)">41%</span></div>
+    <div class="progress-row"><span class="progress-label">Borno</span><div class="progress-bar"><div class="progress-fill" style="width:44%;background:var(--amber)"></div></div><span class="progress-val" style="color:var(--amber)">44%</span></div>
+  </div>
+</div>`;}
+
+function pageMgtOrders(){return`
+<div class="page-header"><h1 class="page-title">Issue Orders</h1><p class="page-sub">Command communications to field units</p></div>
+<div class="card">
+  <div class="card-title">Broadcast Order / Directive</div>
+  <div class="form-grid">
+    <div class="form-group"><label>Priority Level</label><select><option>Routine</option><option>Urgent</option><option>Emergency</option></select></div>
+    <div class="form-group"><label>Target Audience</label><select><option>All Field Agents</option><option>By State</option><option>By LGA</option><option>By Role</option></select></div>
+    <div class="form-group"><label>Target State (if applicable)</label><select><option>All States</option><option>Lagos</option><option>Kogi</option><option>Rivers</option><option>Kaduna</option></select></div>
+    <div class="form-group"><label>Delivery Channel</label><select><option>In-App + SMS</option><option>In-App only</option><option>SMS only</option></select></div>
+  </div>
+  <div class="form-group"><label>Order / Message</label><textarea placeholder="Type your operational order here..."></textarea></div>
+  <button class="btn btn-primary" onclick="toast('Order broadcast to all field agents')">📣 Broadcast Order</button>
+</div>`;}
+
+function pageMgtUnits(){return`
+<div class="page-header"><h1 class="page-title">Field Units</h1><p class="page-sub">Status of all reporting units</p></div>
+<div class="card">
+  <table><thead><tr><th>Unit / Officer</th><th>Rank/Role</th><th>State</th><th>Status</th><th>Last Report</th><th>Incidents</th></tr></thead><tbody>
+    <tr><td><strong>Fatima Al-Hassan</strong></td><td>State RO</td><td>Kano</td><td><span class="badge badge-green">Active</span></td><td>14:35 WAT</td><td>0</td></tr>
+    <tr><td><strong>Chidi Ezenwachi</strong></td><td>CP Lagos</td><td>Lagos</td><td><span class="badge badge-green">Active</span></td><td>14:31 WAT</td><td>1 Amber</td></tr>
+    <tr><td><strong>Musa Bello</strong></td><td>DIG NW</td><td>Northwest</td><td><span class="badge badge-green">Active</span></td><td>14:28 WAT</td><td>0</td></tr>
+    <tr><td><strong>Emeka Okafor</strong></td><td>CP Rivers</td><td>Rivers</td><td><span class="badge badge-red">Alert</span></td><td>13:58 WAT</td><td>2 Red</td></tr>
+    <tr><td><strong>Aisha Danladi</strong></td><td>LGA RO</td><td>Kogi</td><td><span class="badge badge-red">Alert</span></td><td>14:22 WAT</td><td>3 Red</td></tr>
+  </tbody></table>
+</div>`;}
+
+// ══════════════════════════════════════════════════════════
+// ██ IGP PORTAL PAGES
+// ══════════════════════════════════════════════════════════
+function pageIGPDashboard(){return`
+<div class="page-header"><h1 class="page-title">National Overview</h1><p class="page-sub">IGP Executive Intelligence Dashboard — 2025 Presidential Election</p></div>
+<div class="stat-grid" style="grid-template-columns:repeat(4,1fr)">
+  <div class="igp-metric"><div class="igp-big" style="color:var(--green)">80.4%</div><div class="igp-label">PUs Reporting</div></div>
+  <div class="igp-metric"><div class="igp-big" style="color:var(--blue)">58.2M</div><div class="igp-label">Total Votes Counted</div></div>
+  <div class="igp-metric"><div class="igp-big" style="color:var(--amber)">47</div><div class="igp-label">Active Incidents</div></div>
+  <div class="igp-metric"><div class="igp-big" style="color:var(--red)">12</div><div class="igp-label">Emergency (Red) Alerts</div></div>
+</div>
+<div class="grid-60-40">
+  <div class="card"><div class="card-title">Presidential — National Vote Share <span>Live</span></div><canvas id="igpDonut" height="200"></canvas></div>
+  <div class="card">
+    <div class="card-title">Security Status</div>
+    <div style="text-align:center;margin:1rem 0">
+      <div style="font-size:.7rem;color:var(--text3);margin-bottom:.5rem;font-family:'DM Mono',monospace">NATIONAL SECURITY LEVEL</div>
+      <div style="display:inline-block;padding:.7rem 2rem;border-radius:2rem;background:rgba(245,158,11,.15);border:2px solid var(--amber);color:var(--amber);font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800">AMBER</div>
+      <div style="font-size:.72rem;color:var(--text3);margin-top:.6rem">Elevated — 12 red incidents active</div>
+    </div>
+    <div style="margin-top:.8rem">
+      <div class="progress-row"><span class="progress-label">Peaceful PUs</span><div class="progress-bar"><div class="progress-fill" style="width:94.5%;background:var(--green)"></div></div><span class="progress-val" style="color:var(--green)">94.5%</span></div>
+      <div class="progress-row"><span class="progress-label">Amber incidents</span><div class="progress-bar"><div class="progress-fill" style="width:5%;background:var(--amber)"></div></div><span class="progress-val" style="color:var(--amber)">5%</span></div>
+      <div class="progress-row"><span class="progress-label">Red incidents</span><div class="progress-bar"><div class="progress-fill" style="width:.5%;background:var(--red)"></div></div><span class="progress-val" style="color:var(--red)">0.5%</span></div>
+    </div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-title">Geopolitical Zone Snapshot</div>
+  <table><thead><tr><th>Zone</th><th>States</th><th>PUs Reporting</th><th>Turnout</th><th>Leading Party</th><th>Incidents</th><th>Overall</th></tr></thead><tbody>
+    <tr><td><strong>South West</strong></td><td>6</td><td>89%</td><td>72%</td><td><span class="badge badge-red">APC</span></td><td>8 Amber</td><td><span class="badge badge-green">Stable</span></td></tr>
+    <tr><td><strong>North West</strong></td><td>7</td><td>82%</td><td>58%</td><td><span class="badge badge-red">APC</span></td><td>5 Amber</td><td><span class="badge badge-green">Stable</span></td></tr>
+    <tr><td><strong>South East</strong></td><td>5</td><td>85%</td><td>84%</td><td><span class="badge badge-blue">LP</span></td><td>3 Amber</td><td><span class="badge badge-green">Stable</span></td></tr>
+    <tr><td><strong>South South</strong></td><td>6</td><td>71%</td><td>65%</td><td><span class="badge badge-blue">LP</span></td><td>2 Red, 9 Amber</td><td><span class="badge badge-amber">Elevated</span></td></tr>
+    <tr><td><strong>North Central</strong></td><td>7</td><td>74%</td><td>49%</td><td><span class="badge badge-red">APC</span></td><td>7 Red, 12 Amber</td><td><span class="badge badge-red">Critical</span></td></tr>
+    <tr><td><strong>North East</strong></td><td>6</td><td>78%</td><td>55%</td><td><span class="badge badge-red">APC</span></td><td>3 Red, 6 Amber</td><td><span class="badge badge-amber">Elevated</span></td></tr>
+  </tbody></table>
+</div>`;}
+
+function pageIGPSecurity(){return`
+<div class="page-header"><h1 class="page-title">Security Status</h1><p class="page-sub">National security intelligence — executive summary</p></div>
+<div class="grid-2">
+  <div class="card"><div class="card-title">Incident Breakdown</div><canvas id="igpIncChart" height="180"></canvas></div>
+  <div class="card"><div class="card-title">Severity Timeline</div><canvas id="igpSevChart" height="180"></canvas></div>
+</div>
+<div class="card" style="margin-top:1rem">
+  <div class="card-title">🔴 Critical Situations Requiring IGP Attention</div>
+  <div class="alert-ribbon"><span class="alert-icon">🔴</span><div class="alert-text"><strong>Kogi — Lokoja:</strong> 3 ballot boxes snatched. 2 agents assaulted. Military reinforcement deployed.</div><span class="alert-time">14:22</span></div>
+  <div class="alert-ribbon"><span class="alert-icon">🔴</span><div class="alert-text"><strong>Rivers — PHC:</strong> Gunfire near collation centre. Voting suspended at 4 PUs. Commissioner notified.</div><span class="alert-time">13:58</span></div>
+  <div class="alert-ribbon"><span class="alert-icon">🔴</span><div class="alert-text"><strong>Imo — Owerri:</strong> Organised disruption by thugs. INEC RO evacuated. Police cordon established.</div><span class="alert-time">13:44</span></div>
+</div>`;}
+
+function pageIGPResults(){return`
+<div class="page-header"><h1 class="page-title">Election Results</h1><p class="page-sub">Executive-level results infographic</p></div>
+<div class="grid-2">
+  <div class="card"><div class="card-title">Vote Share — All Parties</div><canvas id="igpBarChart" height="200"></canvas></div>
+  <div class="card"><div class="card-title">Swing States vs 2023</div><canvas id="igpSwingChart" height="200"></canvas></div>
+</div>
+<div class="card" style="margin-top:1rem">
+  <div class="card-title">Presidential Race Snapshot</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-top:.5rem">
+    ${[['APC','Tinubu','22.1M','38%','red'],['LP','Peter Obi','19.4M','33%','blue'],['PDP','Atiku','13.8M','24%','amber'],['NNPP','Kwankwaso','3.1M','5%','purple']].map(([p,n,v,pct,c])=>`
+    <div style="background:var(--navy3);border:1px solid var(--border);border-radius:12px;padding:1rem;text-align:center">
+      <div class="badge badge-${c}" style="margin-bottom:.5rem">${p}</div>
+      <div style="font-size:.72rem;color:var(--text3);margin-bottom:.3rem">${n}</div>
+      <div style="font-family:'Syne',sans-serif;font-size:1.5rem;font-weight:700;color:var(--text)">${v}</div>
+      <div style="font-size:.7rem;color:var(--text2)">${pct} of votes</div>
+    </div>`).join('')}
+  </div>
+</div>`;}
+
+function pageIGPHotspots(){return`
+<div class="page-header"><h1 class="page-title">Hotspot Map</h1><p class="page-sub">Security incident concentration — Nigeria</p></div>
+<div class="map-placeholder" style="min-height:400px;flex-direction:column;gap:1.5rem">
+  <div style="font-size:.72rem;color:var(--text3);font-family:'DM Mono',monospace">NIGERIA ELECTION SECURITY HOTSPOT MAP</div>
+  <div style="position:relative;width:100%;max-width:520px;height:320px;background:linear-gradient(135deg,var(--navy2),var(--navy3));border-radius:12px;border:1px solid var(--border)">
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:.7rem;color:var(--text3);text-align:center;pointer-events:none">Choropleth security map<br/>rendered via Leaflet.js in production</div>
+    ${[
+      ['25%','55%','red','18px','Kogi — Critical'],
+      ['22%','70%','red','15px','Rivers — High'],
+      ['28%','65%','red','13px','Imo — High'],
+      ['55%','25%','amber','12px','Kano — Moderate'],
+      ['68%','32%','amber','10px','Kaduna — Moderate'],
+      ['40%','72%','green','8px','Lagos — Low'],
+      ['50%','60%','green','8px','FCT — Low'],
+      ['30%','40%','amber','10px','Benue — Moderate'],
+    ].map(([x,y,c,sz,label])=>`
+    <div style="position:absolute;left:${x};top:${y};transform:translate(-50%,-50%)">
+      <div style="width:${sz};height:${sz};border-radius:50%;background:var(--${c});opacity:.7;box-shadow:0 0 ${sz} var(--${c})"></div>
+      <div style="font-size:.5rem;color:var(--text3);white-space:nowrap;margin-top:2px">${label}</div>
+    </div>`).join('')}
+  </div>
+  <div style="display:flex;gap:2rem;font-size:.72rem;color:var(--text2)">
+    <span>🔴 Critical (3+)</span><span>🟡 Moderate (1-2)</span><span>🟢 Secure (0)</span>
+  </div>
+</div>`;}
+
+function pageIGPTimeline(){return`
+<div class="page-header"><h1 class="page-title">Event Timeline</h1><p class="page-sub">Chronological election day events — national</p></div>
+<div class="card">
+  <div class="card-title">Key Events — February 22, 2025</div>
+  ${[
+    ['green','08:00','Polls open nationwide','176,846 polling units activated. BAV machines operational in 99.2% of PUs.'],
+    ['blue','08:31','Accreditation peaks','First-hour accreditation rate 42% — highest in election history.'],
+    ['amber','10:15','First incident logged','Voter intimidation reported in Kogi — Amber alert issued.'],
+    ['amber','11:44','Card reader failures','6 PUs in Kaduna experience BAV failure. Manual accreditation authorized.'],
+    ['red','13:44','First Red alert','Thuggery in Imo — INEC RO evacuated. Police deployed.'],
+    ['red','13:58','Gunfire — Rivers','Shooting near PHC collation centre. 4 PUs suspended.'],
+    ['red','14:22','Ballot snatching — Kogi','3 ballot boxes seized. Military reinforcement deployed.'],
+    ['blue','14:30','Polls close','Voting closes in majority of PUs. Collation process begins.'],
+    ['green','16:00','Collation underway','80.4% of PUs have submitted EC8A. Collation at 43% completion.'],
+  ].map(([c,t,title,desc])=>`
+  <div class="timeline-item">
+    <div class="tl-line"><div class="tl-dot" style="background:var(--${c})"></div><div class="tl-connector"></div></div>
+    <div class="tl-content">
+      <div class="tl-title">${title}</div>
+      <div class="tl-sub">${t} WAT · ${desc}</div>
+    </div>
+  </div>`).join('')}
+</div>`;}
+
+function pageIGPBriefing(){return`
+<div class="page-header"><div style="display:flex;align-items:center;justify-content:space-between"><div><h1 class="page-title">Executive Briefing</h1><p class="page-sub">Auto-generated intelligence brief — For IGP Eyes Only</p></div><button class="btn btn-primary" onclick="toast('Executive brief downloaded as PDF')">⬇ Download PDF</button></div></div>
+<div class="card">
+  <div style="border-left:3px solid var(--green);padding-left:1rem;margin-bottom:1.5rem">
+    <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--text3);margin-bottom:.3rem">CLASSIFICATION: RESTRICTED · IGP USE ONLY</div>
+    <div style="font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:700">2025 Presidential Election — Situation Brief</div>
+    <div style="font-size:.75rem;color:var(--text2);margin-top:.2rem">As of 16:00 WAT, 22 February 2025</div>
+  </div>
+  <div style="font-size:.8rem;line-height:1.8;color:var(--text2)">
+    <p style="margin-bottom:.8rem"><strong style="color:var(--text)">OVERALL STATUS:</strong> Election proceeding with localised disruptions. 80.4% of polling units have submitted results. National security level assessed as AMBER.</p>
+    <p style="margin-bottom:.8rem"><strong style="color:var(--text)">CRITICAL SITUATIONS:</strong> Three active Red-level security incidents in Kogi (ballot snatching), Rivers (gunfire), and Imo (organised thuggery). All three states have additional NPF/military assets deployed. INEC State Directors have been briefed.</p>
+    <p style="margin-bottom:.8rem"><strong style="color:var(--text)">VOTER TURNOUT:</strong> National preliminary turnout estimated at 63.8% — higher than 2023 (56.2%). Southeast records highest regional turnout at 84%. North Central records lowest at 49%, partly attributable to security incidents in Kogi and Benue.</p>
+    <p style="margin-bottom:.8rem"><strong style="color:var(--text)">ELECTORAL CONTEST:</strong> APC leading with approximately 38% of counted votes (22.1M). LP second with 33% (19.4M). PDP third with 24% (13.8M). Contest remains competitive — final result not projectable until minimum 95% of PUs report.</p>
+    <p><strong style="color:var(--text)">RECOMMENDED ACTIONS:</strong> (1) Maintain military cordon in Lokoja, Kogi until result sheets are secured. (2) Authorise additional NPF deployment to Rivers collation centre. (3) Consider supplementary election declaration for affected Imo PUs pending investigation.</p>
+  </div>
+</div>`;}
+
+// ══════════════════════════════════════════════════════════
+// CHARTS
+// ══════════════════════════════════════════════════════════
+const CH = {
+  nav: '#0A1628',
+  green: '#00C896', amber: '#F59E0B', red: '#EF4444', blue: '#3B82F6', purple: '#8B5CF6',
+  text2: '#8A9AB8', border: 'rgba(255,255,255,0.07)'
+};
+function chartDefaults(){
+  return {
+    responsive:true, maintainAspectRatio:true,
+    plugins:{legend:{labels:{color:CH.text2,font:{family:'DM Mono',size:11},boxWidth:10}},tooltip:{backgroundColor:CH.nav,titleColor:CH.text2,bodyColor:'#E8EDF5',borderColor:CH.border,borderWidth:1}},
+    scales:{x:{grid:{color:CH.border},ticks:{color:CH.text2,font:{family:'DM Mono',size:10}}},y:{grid:{color:CH.border},ticks:{color:CH.text2,font:{family:'DM Mono',size:10}}}}
+  };
+}
+function mk(id,type,data,opts={}){
+  const el=document.getElementById(id);
+  if(!el)return;
+  const ctx=el.getContext('2d');
+  chartInstances[id]=new Chart(ctx,{type,data,...chartDefaults(),...opts,plugins:{...chartDefaults().plugins,...(opts.plugins||{})}});
+}
+
+function initCharts(id){
+  if(id==='a-dashboard'){
+    mk('actChart','line',{labels:['00','02','04','06','08','10','12','14','16','18','20','22'],datasets:[{label:'Submissions',data:[0,0,0,0,2140,8820,12400,15200,9800,4200,1200,300],borderColor:CH.green,backgroundColor:'rgba(0,200,150,.08)',fill:true,tension:.4,pointRadius:3},{label:'Incidents',data:[0,0,0,0,12,48,92,134,78,31,8,2],borderColor:CH.red,backgroundColor:'rgba(239,68,68,.08)',fill:true,tension:.4,pointRadius:3}]});
+  }
+  if(id==='f-turnout'){
+    mk('turnoutChart','bar',{labels:['08:00','09:00','10:00','11:00','12:00','13:00','14:00','14:30'],datasets:[{label:'Voters Accredited',data:[124,312,488,621,778,912,1102,1248],backgroundColor:'rgba(0,200,150,.5)',borderColor:CH.green,borderWidth:1.5}]});
+  }
+  if(id==='m-dashboard'){
+    mk('mgtTallyChart','bar',{labels:['APC','LP','PDP','NNPP','SDP','Others'],datasets:[{label:'Votes (millions)',data:[22.1,19.4,13.8,3.1,0.9,0.4],backgroundColor:[CH.red,CH.blue,CH.amber,CH.purple,'rgba(255,255,255,.2)','rgba(255,255,255,.1)'],borderRadius:6}]},{plugins:{legend:{display:false}}});
+  }
+  if(id==='m-results'){
+    mk('mgtResChart','doughnut',{labels:['APC','LP','PDP','NNPP','Others'],datasets:[{data:[38,33,24,5,0],backgroundColor:[CH.red,CH.blue,CH.amber,CH.purple,CH.border],borderColor:CH.nav,borderWidth:3}]},{scales:{x:{display:false},y:{display:false}}});
+    mk('mgtRegChart','radar',{labels:['SW','NW','SE','SS','NC','NE'],datasets:[{label:'APC',data:[48,61,12,22,44,55],borderColor:CH.red,backgroundColor:'rgba(239,68,68,.12)',pointBackgroundColor:CH.red},{label:'LP',data:[28,8,72,58,18,14],borderColor:CH.blue,backgroundColor:'rgba(59,130,246,.12)',pointBackgroundColor:CH.blue}]},{scales:{r:{grid:{color:CH.border},pointLabels:{color:CH.text2,font:{size:10}},ticks:{color:'transparent',backdropColor:'transparent'}}}});
+  }
+  if(id==='m-incidents'){
+    mk('incidentChart','bar',{labels:['Violence','Card Reader','Intimidation','Snatching','Exclusion','Stuffing'],datasets:[{label:'Incidents',data:[12,28,18,9,6,4],backgroundColor:[CH.red,CH.amber,CH.amber,CH.red,CH.amber,CH.red],borderRadius:6}]},{plugins:{legend:{display:false}}});
+  }
+  if(id==='m-turnout'){
+    mk('turnoutZoneChart','bar',{labels:['South West','North West','South East','South South','North Central','North East'],datasets:[{label:'Turnout %',data:[72,58,84,65,49,55],backgroundColor:[CH.green,CH.amber,CH.green,CH.green,CH.red,CH.amber],borderRadius:6}]},{plugins:{legend:{display:false}}});
+  }
+  if(id==='i-dashboard'){
+    mk('igpDonut','doughnut',{labels:['APC — 38%','LP — 33%','PDP — 24%','NNPP — 5%'],datasets:[{data:[38,33,24,5],backgroundColor:[CH.red,CH.blue,CH.amber,CH.purple],borderColor:CH.nav,borderWidth:4,hoverOffset:8}]},{cutout:'65%',scales:{x:{display:false},y:{display:false}},plugins:{legend:{position:'right',labels:{color:CH.text2,font:{family:'DM Mono',size:11},boxWidth:10,padding:10}}}});
+  }
+  if(id==='i-security'){
+    mk('igpIncChart','doughnut',{labels:['Peaceful PUs','Amber incidents','Red incidents'],datasets:[{data:[94.5,5,0.5],backgroundColor:[CH.green,CH.amber,CH.red],borderColor:CH.nav,borderWidth:3}]},{cutout:'60%',scales:{x:{display:false},y:{display:false}}});
+    mk('igpSevChart','line',{labels:['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00'],datasets:[{label:'Red',data:[0,0,1,2,5,10,12,12],borderColor:CH.red,backgroundColor:'rgba(239,68,68,.08)',fill:true,tension:.4},{label:'Amber',data:[0,3,8,18,28,35,38,35],borderColor:CH.amber,backgroundColor:'rgba(245,158,11,.08)',fill:true,tension:.4},{label:'Resolved',data:[0,2,6,14,22,40,80,124],borderColor:CH.green,backgroundColor:'rgba(0,200,150,.06)',fill:true,tension:.4}]});
+  }
+  if(id==='i-results'){
+    mk('igpBarChart','bar',{labels:['APC','LP','PDP','NNPP','SDP','ADP','Others'],datasets:[{label:'Votes (millions)',data:[22.1,19.4,13.8,3.1,0.9,0.4,0.2],backgroundColor:[CH.red,CH.blue,CH.amber,CH.purple,CH.green,'rgba(255,255,255,.2)','rgba(255,255,255,.1)'],borderRadius:8}]},{plugins:{legend:{display:false}}});
+    mk('igpSwingChart','bar',{labels:['Lagos','Kano','Rivers','Anambra','Kaduna','FCT','Oyo'],datasets:[{label:'2025',data:[48,31,38,72,44,52,41],backgroundColor:'rgba(0,200,150,.6)',borderRadius:6},{label:'2023',data:[52,28,31,68,42,48,38],backgroundColor:'rgba(59,130,246,.4)',borderRadius:6}]});
+  }
+}
+</script>
+</body>
+</html>
