@@ -82,7 +82,7 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
         setPermission('denied')
         setError(
           !window.isSecureContext
-            ? 'Camera is blocked: this page is not served over HTTPS. Browsers only allow camera on https:// or http://localhost. Put the app behind TLS (e.g. nginx with Let's Encrypt on a domain), then reload.'
+            ? "Camera is blocked: this page is not served over HTTPS. Browsers only allow camera on https:// or http://localhost. Put the app behind TLS (e.g. nginx with Let's Encrypt on a domain), then reload."
             : 'Camera API is not available in this browser.',
         )
         return
