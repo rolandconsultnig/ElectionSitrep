@@ -589,6 +589,15 @@ app.put('/api/me/onboarding', authMiddleware, async (req, res) => {
     if (!parsed?.buffer?.length) {
       return res.status(400).json({ error: 'Valid profile picture (data URL) required' })
     }
+    const picMime = String(parsed.mime || '')
+      .toLowerCase()
+      .split(';')[0]
+      .trim()
+    if (picMime !== 'image/jpeg' && picMime !== 'image/png') {
+      return res.status(400).json({
+        error: 'Profile picture must be JPEG or PNG (WEBP is not accepted)',
+      })
+    }
 
     await client.query('BEGIN')
     const ucheck = await client.query(
@@ -696,7 +705,7 @@ app.put(
       if (!req.file?.buffer) return res.status(400).json({ error: 'Missing file' })
 
       const mime = req.file.mimetype || 'application/octet-stream'
-      const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']
+      const allowed = ['image/png', 'image/jpeg', 'image/svg+xml']
       if (!allowed.includes(mime)) return res.status(400).json({ error: 'Unsupported image type' })
 
       const r = await pool.query(

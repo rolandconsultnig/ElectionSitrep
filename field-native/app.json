@@ -11,16 +11,16 @@
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0a1628"
+      "backgroundColor": "#f4f6f9"
     },
     "ios": {
       "supportsTablet": true
     },
     "android": {
-      "minSdkVersion": 24,
+      "minSdkVersion": 26,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#0a1628"
+        "backgroundColor": "#f4f6f9"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -41,18 +41,17 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow NPF SitRep to access your camera for live photo verification.",
-          "microphonePermission": "Allow NPF SitRep to access your microphone for voice messages."
+          "cameraPermission": "Allow NPF SitRep to capture a profile photo during officer onboarding.",
+          "microphonePermission": "Allow NPF SitRep to use the microphone when recording verification media."
         }
       ],
-      "./plugins/withAndroidLibraryMinSdk.js",
       [
         "expo-build-properties",
         {
           "android": {
-            "minSdkVersion": 24,
+            "minSdkVersion": 26,
             "compileSdkVersion": 35,
-            "targetSdkVersion": 34,
+            "targetSdkVersion": 35,
             "kotlinVersion": "2.0.21"
           }
         }

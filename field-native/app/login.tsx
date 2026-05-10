@@ -1,7 +1,9 @@
+import { ApiError } from '../lib/api'
+import { useAuth } from '../lib/auth-context'
+import { colors, radii, space } from '../lib/theme'
+import { Redirect } from 'expo-router'
 import { useState } from 'react'
 import {
-  ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,127 +12,127 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { Redirect } from 'expo-router'
-
-import { SecretServerUnlock } from '@/components/SecretServerUnlock'
-import { useAuth } from '@/context/auth'
+import { SafeAreaView } from 'react-native-safe-area-context'
 
 export default function LoginScreen() {
-  const { bootstrapping, user, apiConfigured, login } = useAuth()
-  const [username, setUsername] = useState('')
+  const { token, user, ready, signIn } = useAuth()
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  if (bootstrapping) return null
-  if (user?.onboardingComplete) return <Redirect href="/(tabs)" />
-  if (user && !user.onboardingComplete) return <Redirect href="/needs-onboarding" />
+  if (!ready) return null
+  if (token && user?.portalId === 'field') {
+    if (!user.onboardingComplete || user.passwordMustChange) return <Redirect href="/onboarding" />
+    return <Redirect href="/" />
+  }
+  if (token && user?.portalId !== 'field') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.card}>
+          <Text style={styles.title}>Wrong portal</Text>
+          <Text style={styles.body}>Use the Field officer account issued by Command.</Text>
+        </View>
+      </SafeAreaView>
+    )
+  }
 
   async function onSubmit() {
     setError(null)
     setBusy(true)
-    const r = await login(username, password)
-    setBusy(false)
-    if (!r.ok) setError(r.error)
+    try {
+      await signIn(identifier, password)
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : 'Could not sign in.'
+      setError(msg)
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.wrap}
-    >
-      <View style={styles.card}>
-        {/* NPF Logo */}
-        <SecretServerUnlock>
-          <View style={styles.logoContainer}>
-            <Image
-              source={require('@/assets/images/police.png')}
-              style={styles.logo}
-              resizeMode="contain"
+    <SafeAreaView style={styles.safe}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <View style={styles.wrap}>
+          <Text style={styles.kicker}>NPF Election SitRep</Text>
+          <Text style={styles.title}>Field officer sign-in</Text>
+          <Text style={styles.sub}>Use your issued username or service number.</Text>
+
+          <View style={styles.card}>
+            <Text style={styles.label}>Username or service number</Text>
+            <TextInput
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!busy}
+              value={identifier}
+              onChangeText={setIdentifier}
+              placeholder="e.g. field.rank.ab12cd"
+              placeholderTextColor={colors.muted}
+              style={styles.input}
             />
+
+            <Text style={[styles.label, { marginTop: space.md }]}>Password</Text>
+            <TextInput
+              secureTextEntry
+              editable={!busy}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="••••••••"
+              placeholderTextColor={colors.muted}
+              style={styles.input}
+            />
+
+            {error ? <Text style={styles.err}>{error}</Text> : null}
+
+            <Pressable
+              onPress={onSubmit}
+              disabled={busy || !identifier.trim() || !password}
+              style={({ pressed }) => [styles.btn, (pressed || busy) && { opacity: 0.85 }]}
+            >
+              <Text style={styles.btnText}>{busy ? 'Signing in…' : 'Sign in'}</Text>
+            </Pressable>
           </View>
-        </SecretServerUnlock>
-        <Text style={styles.kicker}>NPF · Field agent</Text>
-        <Text style={styles.title}>Sign in</Text>
-        {!apiConfigured ? (
-          <Text style={styles.warn}>
-            Set EXPO_PUBLIC_API_BASE_URL before building (e.g. http://10.0.2.2:5530 for Android emulator pointing at your PC API).
-          </Text>
-        ) : null}
-        {error ? <Text style={styles.err}>{error}</Text> : null}
-        <Text style={styles.label}>Username</Text>
-        <TextInput
-          autoCapitalize="none"
-          autoCorrect={false}
-          value={username}
-          onChangeText={setUsername}
-          placeholder="Assigned username"
-          placeholderTextColor="#6b7a96"
-          style={styles.input}
-        />
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-          placeholder="Password"
-          placeholderTextColor="#6b7a96"
-          style={styles.input}
-        />
-        <Pressable style={[styles.btn, busy && styles.btnDisabled]} disabled={busy} onPress={onSubmit}>
-          {busy ? <ActivityIndicator color="#0a1628" /> : <Text style={styles.btnText}>Continue</Text>}
-        </Pressable>
-      </View>
-    </KeyboardAvoidingView>
+
+          <Text style={styles.foot}>Need help? Contact your system administrator.</Text>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    flex: 1,
-    backgroundColor: '#0a1628',
-    justifyContent: 'center',
-    padding: 24,
+  safe: { flex: 1, backgroundColor: colors.bg },
+  wrap: { flex: 1, padding: space.lg, justifyContent: 'center' },
+  kicker: { fontSize: 13, color: colors.muted, marginBottom: space.xs, fontWeight: '600' },
+  title: { fontSize: 26, fontWeight: '700', color: colors.text, marginBottom: space.sm },
+  body: { fontSize: 15, color: colors.muted, lineHeight: 22 },
+  sub: { fontSize: 15, color: colors.muted, marginBottom: space.xl, lineHeight: 22 },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    padding: space.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  card: { maxWidth: 420, width: '100%', alignSelf: 'center' },
-  kicker: {
-    fontSize: 11,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    color: '#0dccb0',
-    marginBottom: 8,
-  },
-  title: { fontSize: 26, fontWeight: '700', color: '#e8edf5', marginBottom: 16 },
-  label: { fontSize: 12, color: '#8a9ab8', marginBottom: 6 },
+  label: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: space.xs },
   input: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: '#e8edf5',
-    marginBottom: 14,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderColor: colors.border,
+    borderRadius: radii.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: Platform.OS === 'ios' ? 14 : 10,
+    fontSize: 16,
+    color: colors.text,
+    backgroundColor: '#fafbfc',
   },
+  err: { color: colors.danger, marginTop: space.md, fontSize: 14 },
   btn: {
-    marginTop: 8,
-    backgroundColor: '#0dccb0',
+    marginTop: space.lg,
+    backgroundColor: colors.primary,
+    borderRadius: radii.md,
     paddingVertical: 14,
-    borderRadius: 10,
     alignItems: 'center',
   },
-  btnDisabled: { opacity: 0.6 },
-  btnText: { color: '#0a1628', fontWeight: '700', fontSize: 16 },
-  err: { color: '#f87171', marginBottom: 12, fontSize: 14 },
-  warn: { color: '#fbbf24', marginBottom: 14, fontSize: 13, lineHeight: 18 },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  logo: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
+  btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  foot: { marginTop: space.xl, fontSize: 12, color: colors.muted, textAlign: 'center', lineHeight: 18 },
 })
