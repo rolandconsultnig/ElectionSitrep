@@ -109,6 +109,21 @@ That runs `sitrep-app`’s build after you have run `npm ci` inside **`sitrep-ap
 
 If `cd server` fails, you are not at the repo root — `cd` to the directory that contains both **`server`** and **`sitrep-app`** subdirectories (your clone may live at e.g. `/opt/election`, not inside `server/`).
 
+### Production: `.env.local`, port already in use
+
+The API reads **`DATABASE_URL`** (and optional **`JWT_SECRET`**, **`FRONTEND_ORIGIN`**) from **`.env.local` or `.env` at the repository root** — for a clone at `/opt/election`, create **`/opt/election/.env.local`** (copy from `.env.example`). Deploy scripts under **`server/`** must not rely on a `.env` file only inside `server/`.
+
+If **`npm start`** fails with **`EADDRINUSE`** on port **5530**, something is already listening (often a **systemd** service or an older Node process). That is normal if the API is managed by systemd: **do not** start a second copy with `npm start`. Check what holds the port:
+
+```bash
+sudo ss -tlnp | grep 5530
+# or: sudo lsof -i :5530
+```
+
+After changing `.env.local`, **restart** the API service you use (for example `sudo systemctl restart election-sitrep-api`) instead of running `npm start` again unless you stopped the service first.
+
+The **`npm warn EBADENGINE`** from Capacitor during **`sitrep-app`** install means Node is older than the CLI’s preferred range; the **Vite build can still succeed** on Node 20. Upgrade Node when convenient.
+
 ### Production server: HTTP and HTTPS (before you have a domain)
 
 Until you have a DNS name for Let’s Encrypt, you can still expose **both** ports:
