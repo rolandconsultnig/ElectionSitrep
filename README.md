@@ -113,16 +113,18 @@ If `cd server` fails, you are not at the repo root — `cd` to the directory tha
 
 The API reads **`DATABASE_URL`**, **`JWT_SECRET`**, **`PORT`**, and optional **`FRONTEND_ORIGIN`** from **`.env.local` then `.env` at the repository root** (same folder as **`package.json`**). Example layout: **`/election/ElectionSitrep/.env`**. Either filename works; **`.env.local`** is preferred if you keep both. Set **`FRONTEND_ORIGIN`** to the exact browser URL of the SPA (e.g. `https://YOUR_PUBLIC_IP:5545`) so CORS allows login from nginx — without it, only same-origin or localhost-style origins may work depending on config.
 
+If **`ls /election`** shows **`ElectionSitrep`** but no **`server`** folder there, the repo root is **`/election/ElectionSitrep`** — put **`.env` only there**, not in **`/election`** alone (the API does not read parent directories).
+
 Deploy scripts under **`server/`** must not rely on a `.env` file only inside `server/`.
 
-If **`npm start`** fails with **`EADDRINUSE`** on port **5530**, something is already listening (often a **systemd** service or an older Node process). That is normal if the API is managed by systemd: **do not** start a second copy with `npm start`. Check what holds the port:
+If **`npm start`** fails with **`EADDRINUSE`** on port **5530**, the API is **already running** (usually **systemd**). Your deploy/build steps can still succeed; **do not** start a second Node process on **5530**. Check what holds the port:
 
 ```bash
 sudo ss -tlnp | grep 5530
 # or: sudo lsof -i :5530
 ```
 
-After changing `.env.local`, **restart** the API service you use (for example `sudo systemctl restart election-sitrep-api`) instead of running `npm start` again unless you stopped the service first.
+After changing **`.env`**, **restart** the process that owns port **5530** (for example `sudo systemctl restart <your-api-service>`). Only use **`npm start`** for debugging after **`sudo systemctl stop <service>`**, or if nothing should be listening on **5530**.
 
 The **`npm warn EBADENGINE`** from Capacitor during **`sitrep-app`** install means Node is older than the CLI’s preferred range; the **Vite build can still succeed** on Node 20. Upgrade Node when convenient.
 
