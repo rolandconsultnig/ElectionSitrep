@@ -83,6 +83,32 @@ If you set **`PORT`** to something other than **5530**, update the proxy in **`s
 
 For production, serve the built SPA and route **`/api`** to the same Express process or a reverse proxy that forwards to the API — do not rely on the Vite dev proxy.
 
+**Important:** the **`server/`** package is plain Node — there is **no** `npm run build` for the API. Install deps and run:
+
+```bash
+cd server
+npm ci    # or npm install --omit=dev
+npm start
+```
+
+Build the **React SPA** (outputs `sitrep-app/dist/` for nginx):
+
+```bash
+cd sitrep-app
+npm ci
+npm run build
+```
+
+From the **repository root** (the folder that contains `server/`, `sitrep-app/`, and `package.json`), you can build only the web app with:
+
+```bash
+npm run build
+```
+
+That runs `sitrep-app`’s build after you have run `npm ci` inside **`sitrep-app`** at least once.
+
+If `cd server` fails, you are not at the repo root — `cd` to the directory that contains both **`server`** and **`sitrep-app`** subdirectories (your clone may live at e.g. `/opt/election`, not inside `server/`).
+
 ### Production server: HTTP and HTTPS (before you have a domain)
 
 Until you have a DNS name for Let’s Encrypt, you can still expose **both** ports:
