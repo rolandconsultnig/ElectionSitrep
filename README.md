@@ -107,11 +107,13 @@ npm run build
 
 That runs `sitrep-app`’s build after you have run `npm ci` inside **`sitrep-app`** at least once.
 
-If `cd server` fails, you are not at the repo root — `cd` to the directory that contains both **`server`** and **`sitrep-app`** subdirectories (production clone is often **`/election`**, not a subdirectory named `server/`).
+If `cd server` fails, you are not at the repo root — `cd` to the directory that contains both **`server`** and **`sitrep-app`** subdirectories. Production servers often use **`/election/ElectionSitrep`** (repo root), so env lives at **`/election/ElectionSitrep/.env`** or **`.env.local`**.
 
 ### Production: `.env.local`, port already in use
 
-The API reads **`DATABASE_URL`** (and optional **`JWT_SECRET`**, **`FRONTEND_ORIGIN`**) from **`.env.local` or `.env` at the repository root** — for the usual production clone at **`/election`**, create **`/election/.env.local`** (copy from `.env.example`). Deploy scripts under **`server/`** must not rely on a `.env` file only inside `server/`.
+The API reads **`DATABASE_URL`**, **`JWT_SECRET`**, **`PORT`**, and optional **`FRONTEND_ORIGIN`** from **`.env.local` then `.env` at the repository root** (same folder as **`package.json`**). Example layout: **`/election/ElectionSitrep/.env`**. Either filename works; **`.env.local`** is preferred if you keep both. Set **`FRONTEND_ORIGIN`** to the exact browser URL of the SPA (e.g. `https://YOUR_PUBLIC_IP:5545`) so CORS allows login from nginx — without it, only same-origin or localhost-style origins may work depending on config.
+
+Deploy scripts under **`server/`** must not rely on a `.env` file only inside `server/`.
 
 If **`npm start`** fails with **`EADDRINUSE`** on port **5530**, something is already listening (often a **systemd** service or an older Node process). That is normal if the API is managed by systemd: **do not** start a second copy with `npm start`. Check what holds the port:
 
@@ -138,4 +140,4 @@ chmod +x scripts/nginx-election-sitrep.sh scripts/generate-election-sitrep-tls.s
 sudo SITREP_PUBLIC_IP="$(curl -fsS ifconfig.me)" ./scripts/nginx-election-sitrep.sh
 ```
 
-Defaults: HTTP **5535**, HTTPS **5545**, deploy root **`/election/sitrep-app/dist`** (repo cloned at **`/election`**), API **`127.0.0.1:5530`**. Override with env vars documented at the top of **`scripts/nginx-election-sitrep.sh`**. When you get a domain, replace self-signed certs with Certbot and optionally move to ports **80** / **443**.
+Defaults: HTTP **5535**, HTTPS **5545**, deploy root **`/election/ElectionSitrep/sitrep-app/dist`**, API **`127.0.0.1:5530`**. Override `SITREP_DEPLOY_ROOT` if your clone path differs. When you get a domain, replace self-signed certs with Certbot and optionally move to ports **80** / **443**.
