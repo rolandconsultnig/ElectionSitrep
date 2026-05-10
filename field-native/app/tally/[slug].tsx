@@ -1,5 +1,6 @@
 import { ApiError, candidatePartiesRequest, submitVotesRequest } from '../../lib/api'
 import { useAuth } from '../../lib/auth-context'
+import { isLocalSessionToken } from '../../lib/local-session'
 import { enqueueVoteTally } from '../../lib/pending-queue'
 import { colors, radii, space } from '../../lib/theme'
 import { useQuery } from '@tanstack/react-query'
@@ -29,7 +30,7 @@ export default function TallyScreen() {
 
   const partiesQ = useQuery({
     queryKey: ['parties', slug, token],
-    enabled: Boolean(slug && token),
+    enabled: Boolean(slug && token && !isLocalSessionToken(token)),
     queryFn: async () => {
       if (!token) throw new Error('no token')
       return candidatePartiesRequest(token, slug)
@@ -43,6 +44,18 @@ export default function TallyScreen() {
   if (!ready) return null
   if (!token || !user) return <Redirect href="/login" />
   if (user.portalId !== 'field' || !user.onboardingComplete) return <Redirect href="/" />
+  if (isLocalSessionToken(token)) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={{ padding: space.lg }}>
+          <Text style={styles.blocked}>PU tally requires a connected officer account. Sign out and use your issued credentials.</Text>
+          <Pressable onPress={() => router.back()} style={styles.btn}>
+            <Text style={styles.btnText}>Go back</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    )
+  }
 
   function setVote(partyId: string, text: string) {
     const cleaned = text.replace(/[^\d]/g, '')
@@ -202,4 +215,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   btnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  blocked: { fontSize: 15, color: colors.muted, lineHeight: 22, marginBottom: space.lg },
 })

@@ -1,3 +1,4 @@
+import { ApiBaseGate } from '../lib/api-base-gate'
 import { AuthProvider, useAuth } from '../lib/auth-context'
 import { colors } from '../lib/theme'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -31,6 +32,7 @@ function NavStack() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ headerShown: false, title: 'Sign in' }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false, title: 'Profile' }} />
+        <Stack.Screen name="network-settings" options={{ title: 'Network settings', headerShown: true }} />
         <Stack.Screen name="tally/[slug]" options={{ title: 'PU tally', headerShown: true }} />
       </Stack>
       {!ready && (
@@ -47,9 +49,11 @@ function NavStack() {
 export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <NavStack />
-      </AuthProvider>
+      <ApiBaseGate>
+        <AuthProvider>
+          <NavStack />
+        </AuthProvider>
+      </ApiBaseGate>
     </QueryClientProvider>
   )
 }

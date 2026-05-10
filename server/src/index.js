@@ -28,7 +28,8 @@ const localhostOrigin =
 app.use(
   cors({
     origin(origin, cb) {
-      if (!origin) return cb(null, true)
+      // Mobile apps / curl often omit Origin; some send the literal "null".
+      if (!origin || origin === 'null') return cb(null, true)
       if (localhostOrigin.test(origin)) return cb(null, true)
       const allow = String(process.env.FRONTEND_ORIGIN || '').trim()
       if (allow && origin === allow) return cb(null, true)
@@ -2280,6 +2281,7 @@ app.get('/api/health', async (req, res) => {
   }
 })
 
-app.listen(PORT, () => {
-  console.log(`[election-sitrep-api] http://localhost:${PORT}`)
+/** Bind all IPv4 interfaces so cloud / LAN clients can reach the API (not only 127.0.0.1). */
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`[election-sitrep-api] listening on 0.0.0.0:${PORT}`)
 })

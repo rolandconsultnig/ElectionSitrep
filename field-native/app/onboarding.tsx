@@ -1,5 +1,6 @@
 import { onboardingRequest } from '../lib/api'
 import { useAuth } from '../lib/auth-context'
+import { isLocalSessionToken } from '../lib/local-session'
 import { colors, radii, space } from '../lib/theme'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import * as ImageManipulator from 'expo-image-manipulator'
@@ -44,6 +45,7 @@ export default function OnboardingScreen() {
   }, [user?.id])
 
   if (!ready || !token) return null
+  if (isLocalSessionToken(token)) return <Redirect href="/" />
   if (!user || user.portalId !== 'field') return <Redirect href="/login" />
   if (user.onboardingComplete && !user.passwordMustChange) return <Redirect href="/" />
 

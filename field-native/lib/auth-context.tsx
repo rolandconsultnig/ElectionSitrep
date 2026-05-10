@@ -1,4 +1,11 @@
 import { loginRequest, meRequest, ApiError } from './api'
+import {
+  createLocalOfflineUser,
+  isLocalSessionToken,
+  LOCAL_ADMIN_PASSWORD,
+  LOCAL_ADMIN_USERNAME,
+  LOCAL_SESSION_TOKEN,
+} from './local-session'
 import type { UserPayload } from './types'
 import * as SecureStore from 'expo-secure-store'
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
@@ -31,7 +38,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const t = await SecureStore.getItemAsync(TOKEN_KEY)
         if (cancelled) return
         setToken(t)
-        if (t) {
+        if (isLocalSessionToken(t)) {
+          setUser(createLocalOfflineUser())
+        } else if (t) {
           const { user: u } = await meRequest(t)
           if (!cancelled) setUser(u)
         }
@@ -51,6 +60,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const signIn = useCallback(async (identifier: string, password: string) => {
+    const id = identifier.trim().toLowerCase()
+    if (id === LOCAL_ADMIN_USERNAME.toLowerCase() && password === LOCAL_ADMIN_PASSWORD) {
+      await SecureStore.setItemAsync(TOKEN_KEY, LOCAL_SESSION_TOKEN)
+      setToken(LOCAL_SESSION_TOKEN)
+      setUser(createLocalOfflineUser())
+      return
+    }
+
     const { token: t, user: u } = await loginRequest(identifier.trim(), password)
     if (u.portalId !== 'field') {
       throw new ApiError('This app is for Field officers only.', 403)
@@ -68,6 +85,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     if (!token) return
+    if (isLocalSessionToken(token)) {
+      setUser(createLocalOfflineUser())
+      return
+    }
     const { user: u } = await meRequest(token)
     setUser(u)
   }, [token])

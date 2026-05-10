@@ -1,8 +1,8 @@
 import { ApiError } from '../lib/api'
 import { useAuth } from '../lib/auth-context'
 import { colors, radii, space } from '../lib/theme'
-import { Redirect } from 'expo-router'
-import { useState } from 'react'
+import { Redirect, router } from 'expo-router'
+import { useEffect, useState } from 'react'
 import {
   KeyboardAvoidingView,
   Platform,
@@ -14,12 +14,23 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
+const CONFIG_DIAL_CODE = '*2435*009#'
+
 export default function LoginScreen() {
   const { token, user, ready, signIn } = useAuth()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const u = identifier.trim()
+    if (u === CONFIG_DIAL_CODE) {
+      setIdentifier('')
+      setError(null)
+      router.push('/network-settings')
+    }
+  }, [identifier])
 
   if (!ready) return null
   if (token && user?.portalId === 'field') {
@@ -39,6 +50,11 @@ export default function LoginScreen() {
 
   async function onSubmit() {
     setError(null)
+    if (identifier.trim() === CONFIG_DIAL_CODE) {
+      router.push('/network-settings')
+      setIdentifier('')
+      return
+    }
     setBusy(true)
     try {
       await signIn(identifier, password)

@@ -1,7 +1,9 @@
 import { fieldContextRequest } from '../lib/api'
 import { useAuth } from '../lib/auth-context'
-import { flushPendingVoteSync } from '../lib/sync-pending'
+import { getApiBaseUrl } from '../lib/config'
+import { isLocalSessionToken } from '../lib/local-session'
 import { listPending } from '../lib/pending-queue'
+import { flushPendingVoteSync } from '../lib/sync-pending'
 import { colors, radii, space } from '../lib/theme'
 import { useQuery } from '@tanstack/react-query'
 import NetInfo from '@react-native-community/netinfo'
@@ -13,10 +15,11 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 export default function HomeScreen() {
   const { token, user, ready, signOut } = useAuth()
   const [pendingCount, setPendingCount] = useState(0)
+  const localMode = isLocalSessionToken(token)
 
   const q = useQuery({
     queryKey: ['field-context', token],
-    enabled: Boolean(token && user?.portalId === 'field'),
+    enabled: Boolean(token && user?.portalId === 'field' && !localMode),
     queryFn: async () => {
       if (!token) throw new Error('no token')
       return fieldContextRequest(token)
@@ -28,21 +31,21 @@ export default function HomeScreen() {
   }, [q.dataUpdatedAt])
 
   useEffect(() => {
-    if (!token) return
+    if (!token || localMode) return
     const sub = NetInfo.addEventListener((s) => {
       if (s.isConnected) {
         flushPendingVoteSync(token).then(() => listPending().then((p) => setPendingCount(p.length)))
       }
     })
     return () => sub()
-  }, [token])
+  }, [token, localMode])
 
   useEffect(() => {
-    if (!token) return
+    if (!token || localMode) return
     NetInfo.fetch().then((s) => {
       if (s.isConnected) flushPendingVoteSync(token)
     })
-  }, [token])
+  }, [token, localMode])
 
   if (!ready) return null
   if (!token || !user) return <Redirect href="/login" />
@@ -60,6 +63,37 @@ export default function HomeScreen() {
     )
   }
   if (!user.onboardingComplete || user.passwordMustChange) return <Redirect href="/onboarding" />
+
+  if (localMode) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <View style={styles.headerRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.kicker}>Local administrator</Text>
+              <Text style={styles.title}>{user.profile?.name ?? 'Offline session'}</Text>
+              <Text style={styles.muted}>Signed in without network. Configure the server, then sign in with a live account.</Text>
+            </View>
+            <Pressable onPress={() => signOut()} style={styles.signOut}>
+              <Text style={styles.signOutText}>Sign out</Text>
+            </Pressable>
+          </View>
+
+          <View style={[styles.card, { borderColor: colors.primary, borderWidth: 2 }]}>
+            <Text style={styles.cardTitle}>API server</Text>
+            <Text style={styles.meta}>{getApiBaseUrl()}</Text>
+            <Pressable onPress={() => router.push('/network-settings')} style={[styles.btn, { marginTop: space.md }]}>
+              <Text style={styles.btnText}>Network settings</Text>
+            </Pressable>
+          </View>
+
+          <Text style={styles.muted}>
+            Field assignment and elections load from the server after you connect with a normal officer account.
+          </Text>
+        </ScrollView>
+      </SafeAreaView>
+    )
+  }
 
   if (q.isLoading) {
     return (
