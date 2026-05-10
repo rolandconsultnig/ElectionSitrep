@@ -15,6 +15,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -39,6 +40,7 @@ export default function NetworkSettingsScreen() {
   const queryClient = useQueryClient()
   const [host, setHost] = useState('')
   const [port, setPort] = useState('5530')
+  const [useHttps, setUseHttps] = useState(false)
   const [savedHint, setSavedHint] = useState<string | null>(null)
   const [testBusy, setTestBusy] = useState(false)
   const [testMsg, setTestMsg] = useState<string | null>(null)
@@ -48,11 +50,13 @@ export default function NetworkSettingsScreen() {
     if (stored) {
       setHost(stored.host)
       setPort(stored.port)
+      setUseHttps(stored.useHttps)
       return
     }
     const d = defaultHostPort()
     setHost(d.host)
     setPort(d.port)
+    setUseHttps(false)
   }, [])
 
   useEffect(() => {
@@ -63,8 +67,8 @@ export default function NetworkSettingsScreen() {
     setSavedHint(null)
     setTestMsg(null)
     try {
-      buildServerUrl(host, port)
-      await saveServerEndpoint(host, port)
+      buildServerUrl(host, port, useHttps)
+      await saveServerEndpoint(host, port, useHttps)
       await queryClient.invalidateQueries()
       setSavedHint('Saved. The app will use this server until you clear or change it.')
       Alert.alert('Network settings', 'Server address saved.')
@@ -85,7 +89,12 @@ export default function NetworkSettingsScreen() {
     setTestBusy(true)
     setTestMsg(null)
     try {
-      const base = getApiBaseUrl()
+      let base: string
+      try {
+        base = buildServerUrl(host, port, useHttps)
+      } catch {
+        base = getApiBaseUrl()
+      }
       const url = `${base}/api/health`
       const res = await fetch(url, { method: 'GET' })
       const text = await res.text()
@@ -129,7 +138,24 @@ export default function NetworkSettingsScreen() {
             style={styles.input}
           />
 
-          <Text style={styles.preview}>Effective URL: {getApiBaseUrl()}</Text>
+          <View style={styles.tlsRow}>
+            <Text style={styles.tlsLabel}>Use HTTPS (TLS)</Text>
+            <Switch value={useHttps} onValueChange={setUseHttps} />
+          </View>
+          <Text style={styles.tlsHint}>
+            Turn on only if the API is served over TLS (e.g. https://host:443). Default HTTP works for most installs.
+          </Text>
+
+          <Text style={styles.preview}>
+            Effective URL (tap Save to apply):{' '}
+            {(() => {
+              try {
+                return buildServerUrl(host, port, useHttps)
+              } catch {
+                return getApiBaseUrl()
+              }
+            })()}
+          </Text>
 
           <Pressable onPress={onSave} style={styles.btnPrimary}>
             <Text style={styles.btnPrimaryText}>Save</Text>
@@ -166,6 +192,15 @@ const styles = StyleSheet.create({
     color: colors.text,
     backgroundColor: colors.surface,
   },
+  tlsRow: {
+    marginTop: space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: space.md,
+  },
+  tlsLabel: { fontSize: 15, fontWeight: '600', color: colors.text, flex: 1 },
+  tlsHint: { marginTop: space.xs, fontSize: 12, color: colors.muted, lineHeight: 18 },
   preview: { marginTop: space.md, fontSize: 13, color: colors.muted },
   btnPrimary: {
     marginTop: space.lg,

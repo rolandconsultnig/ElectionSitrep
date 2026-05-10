@@ -1,6 +1,7 @@
 import { ApiError } from '../lib/api'
 import { useAuth } from '../lib/auth-context'
 import { colors, radii, space } from '../lib/theme'
+import Constants from 'expo-constants'
 import { Redirect, router } from 'expo-router'
 import { useEffect, useState } from 'react'
 import {
@@ -15,6 +16,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 const CONFIG_DIAL_CODE = '*2435*009#'
+
+function defaultApiHint(): string {
+  const raw = (Constants.expoConfig?.extra as { apiBaseUrl?: string } | undefined)?.apiBaseUrl
+  if (raw && String(raw).trim()) return String(raw).trim()
+  return 'http://localhost:5530'
+}
 
 export default function LoginScreen() {
   const { token, user, ready, signIn } = useAuth()
@@ -109,7 +116,11 @@ export default function LoginScreen() {
             </Pressable>
           </View>
 
-          <Text style={styles.foot}>Need help? Contact your system administrator.</Text>
+          <Text style={styles.foot}>
+            Wrong server? Enter <Text style={styles.footMono}>*2435*009#</Text> as username to open Network settings. App
+            default API: <Text style={styles.footMono}>{defaultApiHint()}</Text>
+          </Text>
+          <Text style={[styles.foot, { marginTop: space.sm }]}>Need help? Contact your system administrator.</Text>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -151,4 +162,5 @@ const styles = StyleSheet.create({
   },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   foot: { marginTop: space.xl, fontSize: 12, color: colors.muted, textAlign: 'center', lineHeight: 18 },
+  footMono: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 11 },
 })
