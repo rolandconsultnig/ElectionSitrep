@@ -29,8 +29,12 @@ export function ProfilePage() {
             <dd className="mt-1 text-[var(--portal-muted)]">{user ? PORTALS[user.portalId].label : '—'}</dd>
           </div>
           <div>
-            <dt className="font-(--font-mono) text-[10px] uppercase tracking-wider text-[var(--portal-dim)]">Full name</dt>
-            <dd className="mt-1 text-[var(--portal-muted)]">{profile?.name ?? '—'}</dd>
+            <dt className="font-(--font-mono) text-[10px] uppercase tracking-wider text-[var(--portal-dim)]">First name</dt>
+            <dd className="mt-1 text-[var(--portal-muted)]">{profile?.firstName ?? '—'}</dd>
+          </div>
+          <div>
+            <dt className="font-(--font-mono) text-[10px] uppercase tracking-wider text-[var(--portal-dim)]">Last name</dt>
+            <dd className="mt-1 text-[var(--portal-muted)]">{profile?.lastName ?? '—'}</dd>
           </div>
           <div>
             <dt className="font-(--font-mono) text-[10px] uppercase tracking-wider text-[var(--portal-dim)]">Service number</dt>

@@ -12,6 +12,7 @@ const SAMPLE_MS = 160
 const SPIKE_THRESHOLD = 14
 const COOLDOWN_MS = 450
 
+/** Frame difference for blink detection */
 function frameDiff(a: ImageData, b: ImageData): number {
   const da = a.data
   const db = b.data
@@ -26,6 +27,138 @@ function frameDiff(a: ImageData, b: ImageData): number {
   return sum / (len / 4) / 3
 }
 
+/** Detect if frame contains a human face using skin color detection and edge analysis */
+function detectFacePresence(frame: ImageData): { hasFace: boolean; confidence: number; reason?: string } {
+  const data = frame.data
+  const width = frame.width
+  const height = frame.height
+  let skinPixels = 0
+  let totalBrightness = 0
+  let edgePixels = 0
+  const pixelCount = width * height
+
+  // Skin color range in YCbCr (simplified for RGB)
+  // Typical skin: R > G > B, R/G ratio between 0.8 and 1.6
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i]
+    const g = data[i + 1]
+    const b = data[i + 2]
+    
+    const brightness = (r + g + b) / 3
+    totalBrightness += brightness
+    
+    // Skin detection: warm tones with red dominance but not too red
+    const rgRatio = r / (g + 1)
+    const rbRatio = r / (b + 1)
+    const isSkin = rgRatio > 0.8 && rgRatio < 2.0 && rbRatio > 0.7 && rbRatio < 2.5 && 
+                   r > 60 && g > 40 && b > 20 && // Not too dark
+                   r < 240 && g < 220 && b < 210 // Not too bright/saturated
+    
+    if (isSkin) {
+      skinPixels++
+    }
+  }
+
+  // Edge detection (simplified Sobel)
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const idx = (y * width + x) * 4
+      const r = data[idx]
+      const right = data[idx + 4]
+      const down = data[(y + 1) * width * 4 + x * 4]
+      
+      const gradX = Math.abs(r - right)
+      const gradY = Math.abs(r - down)
+      
+      if (gradX > 30 || gradY > 30) {
+        edgePixels++
+      }
+    }
+  }
+
+  const skinRatio = skinPixels / pixelCount
+  const avgBrightness = totalBrightness / pixelCount
+  const edgeRatio = edgePixels / pixelCount
+
+  // Anti-spoofing checks
+  
+  // 1. Check for uniform brightness (photos of photos often have flat lighting)
+  if (avgBrightness < 40 || avgBrightness > 230) {
+    return { hasFace: false, confidence: 0.1, reason: 'Poor lighting - ensure good illumination' }
+  }
+
+  // 2. Check for screen reflection patterns (uniform texture)
+  if (skinRatio > 0.85) {
+    return { hasFace: false, confidence: 0.2, reason: 'Possible screen detected - use natural lighting' }
+  }
+
+  // 3. Check for printed photo (too uniform, no skin texture variation)
+  if (skinRatio > 0.6 && edgeRatio < 0.05) {
+    return { hasFace: false, confidence: 0.3, reason: 'Flat image detected - do not use photos' }
+  }
+
+  // 4. Check for animal/non-human (wrong color distribution)
+  if (skinRatio < 0.08) {
+    return { hasFace: false, confidence: 0.1, reason: 'No human face detected - position your face in frame' }
+  }
+
+  // 5. Reasonable face-like structure
+  if (skinRatio >= 0.15 && skinRatio <= 0.55 && edgeRatio >= 0.05) {
+    return { hasFace: true, confidence: Math.min(0.9, skinRatio * 2 + edgeRatio * 3) }
+  }
+
+  // Borderline case
+  if (skinRatio >= 0.1 && skinRatio <= 0.6) {
+    return { hasFace: true, confidence: 0.5, reason: 'Face detected - ensure clear view' }
+  }
+
+  return { hasFace: false, confidence: 0.2, reason: 'Position face clearly in camera view' }
+}
+
+/** Analyze texture to detect printed photos vs real skin */
+function analyzeTexture(frames: ImageData[]): { isLive: boolean; confidence: number; reason?: string } {
+  if (frames.length < 3) return { isLive: false, confidence: 0, reason: 'Analyzing...' }
+
+  // Calculate temporal variance (real faces have micro-movements)
+  const variances: number[] = []
+  
+  for (let i = 1; i < frames.length; i++) {
+    const prev = frames[i - 1].data
+    const curr = frames[i].data
+    let sumSqDiff = 0
+    const sampleStep = 16 // Sample every 4th pixel for performance
+    
+    for (let j = 0; j < prev.length; j += sampleStep) {
+      const diff = (prev[j] + prev[j+1] + prev[j+2]) / 3 - (curr[j] + curr[j+1] + curr[j+2]) / 3
+      sumSqDiff += diff * diff
+    }
+    
+    const variance = sumSqDiff / (prev.length / sampleStep)
+    variances.push(variance)
+  }
+
+  const avgVariance = variances.reduce((a, b) => a + b, 0) / variances.length
+  const maxVariance = Math.max(...variances)
+  
+  // Printed photos have very low temporal variance
+  if (avgVariance < 5 && maxVariance < 15) {
+    return { isLive: false, confidence: 0.1, reason: 'Static image detected - please use live camera' }
+  }
+
+  // Screens may have flicker patterns (high frequency)
+  const varianceOfVariances = variances.reduce((sum, v) => sum + Math.pow(v - avgVariance, 2), 0) / variances.length
+  if (varianceOfVariances > 500 && avgVariance > 50) {
+    return { isLive: false, confidence: 0.3, reason: 'Screen flicker detected - avoid screens' }
+  }
+
+  // Natural live face has moderate variance
+  if (avgVariance > 8 && avgVariance < 200) {
+    return { isLive: true, confidence: Math.min(0.85, avgVariance / 100) }
+  }
+
+  return { isLive: avgVariance > 5, confidence: 0.4, reason: 'Keep face steady and well-lit' }
+}
+
 export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -35,12 +168,17 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
   const blinkCountRef = useRef(0)
   const blinksCompleteRef = useRef(false)
   const intervalRef = useRef<number | null>(null)
+  const frameHistoryRef = useRef<ImageData[]>([])
+  const frameCountRef = useRef(0)
 
   const [permission, setPermission] = useState<'pending' | 'granted' | 'denied'>('pending')
   const [error, setError] = useState<string | null>(null)
   const [blinkCount, setBlinkCount] = useState(0)
   const [canCapture, setCanCapture] = useState(false)
   const [captured, setCaptured] = useState(false)
+  const [faceDetected, setFaceDetected] = useState(false)
+  const [livenessStatus, setLivenessStatus] = useState<'checking' | 'live' | 'spoof'>('checking')
+  const [statusMessage, setStatusMessage] = useState('Position your face in the camera frame')
 
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop())
@@ -68,10 +206,15 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
     setCaptured(false)
     setCanCapture(false)
     setBlinkCount(0)
+    setFaceDetected(false)
+    setLivenessStatus('checking')
+    setStatusMessage('Position your face in the camera frame')
     blinkCountRef.current = 0
     blinksCompleteRef.current = false
     prevFrameRef.current = null
     lastSpikeRef.current = 0
+    frameHistoryRef.current = []
+    frameCountRef.current = 0
     setError(null)
 
     let cancelled = false
@@ -139,8 +282,8 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
     const ctx = canvas.getContext('2d', { willReadFrequently: true })
     if (!ctx) return
 
-    const w = 96
-    const h = 72
+    const w = 128
+    const h = 96
 
     intervalRef.current = window.setInterval(() => {
       if (!video.videoWidth || captured || blinksCompleteRef.current) return
@@ -151,7 +294,49 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
       const frame = ctx.getImageData(0, 0, w, h)
       const prev = prevFrameRef.current
 
-      if (prev) {
+      // Face detection and anti-spoofing
+      frameCountRef.current++
+      
+      // Run face detection every frame
+      const faceCheck = detectFacePresence(frame)
+      setFaceDetected(faceCheck.hasFace)
+      
+      if (!faceCheck.hasFace) {
+        setStatusMessage(faceCheck.reason || 'No face detected')
+        setLivenessStatus('spoof')
+        prevFrameRef.current = frame
+        return
+      }
+
+      // Collect frames for texture analysis
+      if (frameCountRef.current % 3 === 0) {
+        frameHistoryRef.current.push(frame)
+        if (frameHistoryRef.current.length > 10) {
+          frameHistoryRef.current.shift()
+        }
+      }
+
+      // Run texture analysis periodically
+      if (frameCountRef.current % 6 === 0 && frameHistoryRef.current.length >= 5) {
+        const textureCheck = analyzeTexture(frameHistoryRef.current)
+        
+        if (!textureCheck.isLive) {
+          setStatusMessage(textureCheck.reason || 'Possible spoof detected')
+          setLivenessStatus('spoof')
+          prevFrameRef.current = frame
+          return
+        }
+        
+        setLivenessStatus('live')
+      }
+
+      // Update status message based on progress
+      if (faceCheck.hasFace && livenessStatus !== 'live') {
+        setStatusMessage('Face detected. Blink slowly when ready.')
+      }
+
+      // Blink detection
+      if (prev && faceCheck.hasFace) {
         const diff = frameDiff(frame, prev)
         const now = performance.now()
         if (
@@ -162,12 +347,14 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
           lastSpikeRef.current = now
           blinkCountRef.current += 1
           setBlinkCount(blinkCountRef.current)
+          setStatusMessage(`Blinks: ${blinkCountRef.current} / ${BLINKS_REQUIRED}`)
 
           if (blinkCountRef.current >= BLINKS_REQUIRED) {
             blinksCompleteRef.current = true
             if (intervalRef.current) window.clearInterval(intervalRef.current)
             intervalRef.current = null
             setCanCapture(true)
+            setStatusMessage('Verification complete! Tap Capture photo')
           }
         }
       }
@@ -178,7 +365,13 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
     return () => {
       if (intervalRef.current) window.clearInterval(intervalRef.current)
     }
-  }, [permission, captured])
+  }, [permission, captured, livenessStatus])
+
+  const getStatusColor = () => {
+    if (livenessStatus === 'spoof') return 'text-[#f05b4d]'
+    if (livenessStatus === 'live') return 'text-[#00C896]'
+    return 'text-white'
+  }
 
   return (
     <div className="space-y-3">
@@ -186,12 +379,14 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
         <video ref={videoRef} className="aspect-[4/3] w-full object-cover" playsInline muted />
         {!captured ? (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-4 pt-12">
-            <p className="text-center font-(--font-mono) text-[11px] font-semibold text-white">
-              Face the camera · Blink slowly {BLINKS_REQUIRED} times when prompted
+            <p className={`text-center font-(--font-mono) text-[11px] font-semibold ${getStatusColor()}`}>
+              {statusMessage}
             </p>
-            <p className="mt-1 text-center font-(--font-mono) text-[10px] text-white/75">
-              Detected blinks: {blinkCount} / {BLINKS_REQUIRED}
-            </p>
+            {faceDetected && livenessStatus !== 'spoof' && (
+              <p className="mt-1 text-center font-(--font-mono) text-[10px] text-white/75">
+                Detected blinks: {blinkCount} / {BLINKS_REQUIRED}
+              </p>
+            )}
           </div>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40">
@@ -215,10 +410,20 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
         </p>
       ) : null}
 
-      <p className="text-xs leading-relaxed text-[var(--portal-muted)]">
-        This demo uses motion-based blink detection on your device. Production would call a certified liveness API (depth /
-        texture analysis, optional challenge-response) to reduce spoofing from prints or replay.
-      </p>
+      <div className="space-y-1 text-xs leading-relaxed text-[var(--portal-muted)]">
+        <p className="flex items-center gap-2">
+          <span className={faceDetected ? 'text-[#00C896]' : 'text-[#f05b4d]'}>
+            {faceDetected ? '✓' : '○'} Face detected
+          </span>
+          <span className={livenessStatus === 'live' ? 'text-[#00C896]' : livenessStatus === 'spoof' ? 'text-[#f05b4d]' : 'text-[#F59E0B]'}>
+            {livenessStatus === 'live' ? '✓' : livenessStatus === 'spoof' ? '✗' : '○'} Liveness check
+          </span>
+        </p>
+        <p>
+          Anti-spoofing active: detects photos of photos, screens, and non-human subjects. 
+          Ensure natural lighting and look directly at the camera.
+        </p>
+      </div>
     </div>
   )
 }

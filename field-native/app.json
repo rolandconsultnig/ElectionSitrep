@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0a1628"
     },
     "ios": {
       "supportsTablet": true
@@ -20,12 +20,12 @@
       "minSdkVersion": 24,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0a1628"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "usesCleartextTraffic": true,
-      "package": "com.anonymous.fieldnative"
+      "package": "com.npfsitrep.field"
     },
     "extra": {
       "apiBaseUrl": "http://13.53.33.63:5530"
@@ -38,12 +38,22 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow NPF SitRep to access your camera for live photo verification.",
+          "microphonePermission": "Allow NPF SitRep to access your microphone for voice messages."
+        }
+      ],
       "./plugins/withAndroidLibraryMinSdk.js",
       [
         "expo-build-properties",
         {
           "android": {
-            "minSdkVersion": 24
+            "minSdkVersion": 24,
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 34,
+            "kotlinVersion": "2.0.21"
           }
         }
       ]

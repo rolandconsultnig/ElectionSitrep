@@ -4,7 +4,8 @@ import { apiFetch, apiJson, apiUrl, getAuthToken, setAuthToken } from '../lib/ap
 import { postLoginPath, type PortalId } from '../lib/navigation'
 
 export type OfficerProfile = {
-  name: string
+  firstName: string
+  lastName: string
   serviceNumber: string
   phone: string
   pictureDataUrl: string
@@ -129,7 +130,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await apiFetch('/api/me/onboarding', {
       method: 'PUT',
       body: JSON.stringify({
-        fullName: profile.name,
+        firstName: profile.firstName,
+        lastName: profile.lastName,
         serviceNumber: profile.serviceNumber,
         phone: profile.phone,
         pictureDataUrl: profile.pictureDataUrl,

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -38,6 +39,14 @@ export default function LoginScreen() {
       style={styles.wrap}
     >
       <View style={styles.card}>
+        {/* NPF Logo */}
+        <View style={styles.logoContainer}>
+          <Image
+            source={require('@/assets/images/police.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
         <Text style={styles.kicker}>NPF · Field agent</Text>
         <Text style={styles.title}>Sign in</Text>
         {!apiConfigured ? (
@@ -111,4 +120,14 @@ const styles = StyleSheet.create({
   btnText: { color: '#0a1628', fontWeight: '700', fontSize: 16 },
   err: { color: '#f87171', marginBottom: 12, fontSize: 14 },
   warn: { color: '#fbbf24', marginBottom: 14, fontSize: 13, lineHeight: 18 },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  logo: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
 })

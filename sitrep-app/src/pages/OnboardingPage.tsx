@@ -9,7 +9,8 @@ import { PORTALS, firstNavPath } from '../lib/navigation'
 export function OnboardingPage() {
   const navigate = useNavigate()
   const { user, completeOnboarding, bootstrapping } = useAuth()
-  const [name, setName] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [serviceNumber, setServiceNumber] = useState('')
   const [phone, setPhone] = useState('')
   const [pictureDataUrl, setPictureDataUrl] = useState<string | null>(null)
@@ -46,8 +47,12 @@ export function OnboardingPage() {
     if (!user) return
     setFormError(null)
 
-    if (!name.trim()) {
-      setFormError('Enter your full name.')
+    if (!firstName.trim()) {
+      setFormError('Enter your first name.')
+      return
+    }
+    if (!lastName.trim()) {
+      setFormError('Enter your last name.')
       return
     }
     if (!serviceNumber.trim()) {
@@ -72,7 +77,8 @@ export function OnboardingPage() {
     }
 
     const profile: OfficerProfile = {
-      name: name.trim(),
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
       serviceNumber: serviceNumber.trim(),
       phone: phone.trim(),
       pictureDataUrl,
@@ -118,18 +124,32 @@ export function OnboardingPage() {
 
         <form onSubmit={handleSubmit} className="sr-card mt-10 space-y-6 border-[#0dccb0]/20">
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <label className="sr-label" htmlFor="ob-name">
-                Full name
+            <div>
+              <label className="sr-label" htmlFor="ob-firstname">
+                First name
               </label>
               <input
-                id="ob-name"
-                name="name"
-                autoComplete="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                id="ob-firstname"
+                name="firstName"
+                autoComplete="given-name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
                 className="sr-input"
-                placeholder="As recorded on your appointment"
+                placeholder="First name"
+              />
+            </div>
+            <div>
+              <label className="sr-label" htmlFor="ob-lastname">
+                Last name
+              </label>
+              <input
+                id="ob-lastname"
+                name="lastName"
+                autoComplete="family-name"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className="sr-input"
+                placeholder="Last name"
               />
             </div>
             <div>

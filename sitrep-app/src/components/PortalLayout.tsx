@@ -42,12 +42,13 @@ export function PortalLayout({ portalId }: Props) {
   )
 
   const avatarInitials = useMemo(() => {
-    const src = user?.profile?.name?.trim() || user?.username?.trim() || ''
-    const parts = src.split(/\s+/).filter(Boolean)
-    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-    if (parts.length === 1 && parts[0].length >= 2) return parts[0].slice(0, 2).toUpperCase()
-    return src.slice(0, 2).toUpperCase() || '—'
-  }, [user?.profile?.name, user?.username])
+    const first = user?.profile?.firstName?.trim() || ''
+    const last = user?.profile?.lastName?.trim() || ''
+    if (first && last) return (first[0] + last[0]).toUpperCase()
+    if (first && first.length >= 2) return first.slice(0, 2).toUpperCase()
+    if (last && last.length >= 2) return last.slice(0, 2).toUpperCase()
+    return user?.username?.slice(0, 2).toUpperCase() || '—'
+  }, [user?.profile?.firstName, user?.profile?.lastName, user?.username])
 
   const headerSubtitle = user?.profile?.serviceNumber?.trim()
     ? `${user.profile.serviceNumber} · signed in`
@@ -146,15 +147,15 @@ export function PortalLayout({ portalId }: Props) {
           <div className="hidden min-w-0 flex-col items-end text-right sm:flex">
             <span
               className="truncate font-(--font-mono) text-[10px] font-medium text-[var(--portal-muted)]"
-              title={user?.profile?.name || user?.username}
+              title={`${user?.profile?.firstName || ''} ${user?.profile?.lastName || ''}`.trim() || user?.username}
             >
-              {user?.profile?.name?.trim() || user?.username}
+              {`${user?.profile?.firstName || ''} ${user?.profile?.lastName || ''}`.trim() || user?.username}
             </span>
             <span className="font-(--font-mono) text-[9px] uppercase tracking-wider text-[var(--portal-dim)]">{headerSubtitle}</span>
           </div>
           <div
             className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[color:var(--portal-border)] bg-[color:var(--theme-toggle-bg)] text-[var(--portal-fg)] shadow-inner"
-            title={user?.profile?.name || user?.username}
+            title={`${user?.profile?.firstName || ''} ${user?.profile?.lastName || ''}`.trim() || user?.username}
           >
             {user?.profile?.pictureDataUrl ? (
               <img src={user.profile.pictureDataUrl} alt="" className="size-full object-cover" />
