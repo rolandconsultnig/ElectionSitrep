@@ -36,6 +36,7 @@ Typical causes:
 2. **AWS security group** — Allow **inbound TCP** from the internet (or your IP) on the **API port**.
 3. **HTTPS toggle** — Leave **off** unless the API URL is really `https://…` with a valid certificate.
 4. **API down** — On server: `pm2 status election-sitrep-api`, `curl -sS http://127.0.0.1:5530/api/health`.
+5. **Stale release APK** — Release builds use **`app.json` → `extra.apiBaseUrl`** before `.env` embdedded at build time. After changing the API URL in **`app.json`**, rebuild the native app (`prebuild` / Gradle). **Clear Network settings** on the phone or reinstall so no bad URL stays in storage.
 
 From the phone’s browser, try `http://YOUR_PUBLIC_IP:5530/api/health` — if it won’t load, fix networking before the app will work.
 
