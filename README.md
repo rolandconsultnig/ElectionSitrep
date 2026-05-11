@@ -130,30 +130,42 @@ The **`npm warn EBADENGINE`** from Capacitor during **`sitrep-app`** install mea
 
 ### Production server: HTTP and HTTPS (before you have a domain)
 
-Until you have a DNS name for Let’s Encrypt, you can still expose **both** ports:
+Until you have a DNS name for Let’s Encrypt, use a **self-signed certificate** whose SAN includes your **public IPv4** (the install script does this).
 
-- **`http://SERVER:PORT`** — full app (live camera is blocked by browsers on plain HTTP to an IP; use photo upload or HTTPS).
-- **`https://SERVER:PORT`** — same app with a **self-signed** certificate (browser warning once), then **HTTPS counts as a secure context** so the live camera can work.
-
-From the repo on the server:
+**Install nginx site + TLS** (replace IP with yours):
 
 ```bash
 chmod +x scripts/nginx-election-sitrep.sh scripts/generate-election-sitrep-tls.sh
-sudo SITREP_PUBLIC_IP="$(curl -fsS ifconfig.me)" ./scripts/nginx-election-sitrep.sh
+sudo SITREP_PUBLIC_IP="13.53.33.63" ./scripts/nginx-election-sitrep.sh
 ```
 
-Defaults: HTTP **5535**, HTTPS **5545**, deploy root **`/election/ElectionSitrep/sitrep-app/dist`**, API **`127.0.0.1:5530`**. Override `SITREP_DEPLOY_ROOT` if your clone path differs. When you get a domain, replace self-signed certs with Certbot and optionally move to ports **80** / **443**.
+Defaults: HTTP **5535**, HTTPS **5545**, deploy root **`/election/ElectionSitrep/sitrep-app/dist`**, API **`127.0.0.1:5530`**.
+
+**HTTPS without a port in the URL** (`https://13.53.33.63/`) — listen on **443** as well (open **TCP 443** in AWS):
+
+```bash
+sudo SITREP_PUBLIC_IP="13.53.33.63" SITREP_HTTPS_LISTEN="443 5545" ./scripts/nginx-election-sitrep.sh
+```
+
+Optional: send everyone to HTTPS automatically:
+
+```bash
+sudo SITREP_PUBLIC_IP="13.53.33.63" SITREP_HTTPS_LISTEN="443 5545" SITREP_REDIRECT_HTTP_TO_HTTPS=1 ./scripts/nginx-election-sitrep.sh
+```
+
+(`SITREP_REDIRECT_HTTP_TO_HTTPS=1` turns the HTTP site into a **301** to HTTPS; set **`FRONTEND_ORIGIN`** to your real HTTPS URL afterward.)
+
+When you get a domain, replace self-signed certs with Certbot and optionally use ports **80** / **443** only.
 
 ### Browser: `ERR_SSL_PROTOCOL_ERROR` / “connection not secure” on the web UI
 
-With the default nginx layout, **port 5535 serves plain HTTP only**. **Port 5545** serves **HTTPS** (TLS), after you install the site with **`scripts/nginx-election-sitrep.sh`** and have certificates.
+Each **TCP port** speaks either **HTTP** or **HTTPS**, not both. With defaults, **5535 = HTTP**, **5545 = HTTPS** (and **443 = HTTPS** if you add it with **`SITREP_HTTPS_LISTEN`**).
 
 | What you open | Result |
 |----------------|--------|
-| **`http://13.53.33.63:5535`** | Correct for the **HTTP** site (bookmark this URL). |
-| **`https://13.53.33.63:5535`** | **Wrong** — the browser speaks TLS to a port that answers with HTTP → **`ERR_SSL_PROTOCOL_ERROR`**. |
-| **`https://13.53.33.63:5545`** | Correct for **HTTPS** (self-signed): accept the browser warning, then the live camera can work. |
+| **`http://13.53.33.63:5535`** | **HTTP** site (OK). |
+| **`https://13.53.33.63:5535`** | **Wrong** — TLS to an HTTP-only port → **`ERR_SSL_PROTOCOL_ERROR`**. |
+| **`https://13.53.33.63:5545`** | **HTTPS** (self-signed): accept the warning once. |
+| **`https://13.53.33.63/`** | **HTTPS** only after nginx listens on **443** and the security group allows **TCP 443**. |
 
-**Fix:** Type **`http://`** explicitly in the address bar (some browsers or extensions “upgrade” to HTTPS and break raw-IP HTTP). Or open **`https://13.53.33.63:5545`** and accept the certificate once.
-
-Open **TCP 5545** in the AWS security group if you use HTTPS. Set **`FRONTEND_ORIGIN`** in **`.env`** to match whatever URL users actually use (e.g. `http://13.53.33.63:5535` or `https://13.53.33.63:5545`).
+Set **`FRONTEND_ORIGIN`** in **`.env`** to the URL users actually use (e.g. `https://13.53.33.63:5545` or `https://13.53.33.63` when **443** is enabled).
