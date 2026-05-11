@@ -40,6 +40,13 @@ Typical causes:
 
 From the phone’s browser, try `http://YOUR_PUBLIC_IP:5530/api/health` — if it won’t load, fix networking before the app will work.
 
+### Ping / connectivity in the app
+
+- **Login** — **Ping API (test network)** runs an HTTP round-trip to **`GET {apiBase}/api/health`** and shows latency in ms. **Network settings** link opens host/port/TLS configuration.
+- **Network settings** — **Ping API** uses the host/port you entered (before or after Save). A banner shows **Wi‑Fi / mobile data** status from the device.
+
+ICMP ping is not used; HTTP health is the reliable check through firewalls and matches what the API exposes.
+
 ### Build
 
 From **`field-native/`**:

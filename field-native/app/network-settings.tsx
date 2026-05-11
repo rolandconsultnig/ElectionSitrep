@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from '../lib/config'
+import { pingApiHealth } from '../lib/ping-api'
 import { colors, radii, space } from '../lib/theme'
 import {
   buildServerUrl,
@@ -6,6 +7,7 @@ import {
   getStoredEndpoint,
   saveServerEndpoint,
 } from '../lib/server-settings'
+import NetInfo, { type NetInfoState } from '@react-native-community/netinfo'
 import { useQueryClient } from '@tanstack/react-query'
 import Constants from 'expo-constants'
 import { useCallback, useEffect, useState } from 'react'
@@ -44,6 +46,8 @@ export default function NetworkSettingsScreen() {
   const [savedHint, setSavedHint] = useState<string | null>(null)
   const [testBusy, setTestBusy] = useState(false)
   const [testMsg, setTestMsg] = useState<string | null>(null)
+  const [lastPingOk, setLastPingOk] = useState<boolean | null>(null)
+  const [netLabel, setNetLabel] = useState<string>('Checking device network…')
 
   const load = useCallback(async () => {
     const stored = await getStoredEndpoint()
@@ -62,6 +66,22 @@ export default function NetworkSettingsScreen() {
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    const unsub = NetInfo.addEventListener((state: NetInfoState) => {
+      if (!state.isConnected) {
+        setNetLabel('Device has no internet connection. Wi‑Fi or mobile data is required.')
+        return
+      }
+      const t = state.type === 'wifi' ? 'Wi‑Fi' : state.type === 'cellular' ? 'Mobile data' : state.type
+      const details =
+        state.type === 'wifi' && state.details && 'ssid' in state.details && state.details.ssid
+          ? ` (${String(state.details.ssid)})`
+          : ''
+      setNetLabel(`Connected via ${t}${details}.`)
+    })
+    return () => unsub()
+  }, [])
 
   async function onSave() {
     setSavedHint(null)
@@ -95,14 +115,19 @@ export default function NetworkSettingsScreen() {
       } catch {
         base = getApiBaseUrl()
       }
-      const url = `${base}/api/health`
-      const res = await fetch(url, { method: 'GET' })
-      const text = await res.text()
-      if (!res.ok) {
-        setTestMsg(`Failed (${res.status}): ${text.slice(0, 120)}`)
-        return
+      const result = await pingApiHealth(base)
+      setLastPingOk(result.ok)
+      if (result.ok && result.latencyMs != null) {
+        setTestMsg(
+          `Ping OK — ${result.latencyMs} ms to GET /api/health\n${result.bodyPreview ?? ''}`.trim(),
+        )
+      } else {
+        setTestMsg(
+          [result.message, result.bodyPreview ? `\n${result.bodyPreview}` : '', result.httpStatus ? ` (HTTP ${result.httpStatus})` : '']
+            .filter(Boolean)
+            .join(''),
+        )
       }
-      setTestMsg(`OK — ${text.slice(0, 200)}`)
     } catch (e) {
       setTestMsg(e instanceof Error ? e.message : 'Request failed.')
     } finally {
@@ -116,6 +141,9 @@ export default function NetworkSettingsScreen() {
           <Text style={styles.lead}>
             Set the API server used by this device. Values are stored only on this phone.
           </Text>
+          <View style={styles.netBanner}>
+            <Text style={styles.netBannerText}>{netLabel}</Text>
+          </View>
 
           <Text style={styles.label}>Server IP or hostname</Text>
           <TextInput
@@ -162,10 +190,16 @@ export default function NetworkSettingsScreen() {
           </Pressable>
 
           <Pressable onPress={onTest} disabled={testBusy} style={styles.btnSecondary}>
-            <Text style={styles.btnSecondaryText}>{testBusy ? 'Testing…' : 'Test connection'}</Text>
+            <Text style={styles.btnSecondaryText}>{testBusy ? 'Pinging…' : 'Ping API (GET /api/health)'}</Text>
           </Pressable>
+          <Text style={styles.pingHint}>
+            Ping measures round-trip time to the API. Use port <Text style={styles.mono}>5530</Text> for the Node server
+            (not the web port <Text style={styles.mono}>5535</Text> unless the API is there).
+          </Text>
 
-          {testMsg ? <Text style={styles.testOut}>{testMsg}</Text> : null}
+          {testMsg ? (
+            <Text style={[styles.testOut, lastPingOk ? styles.testOk : styles.testBad]}>{testMsg}</Text>
+          ) : null}
 
           <Pressable onPress={onClear} style={styles.btnGhost}>
             <Text style={styles.btnGhostText}>Use default server (clear override)</Text>
@@ -180,7 +214,18 @@ export default function NetworkSettingsScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   scroll: { padding: space.lg, paddingBottom: space.xl * 2 },
-  lead: { fontSize: 15, color: colors.muted, marginBottom: space.lg, lineHeight: 22 },
+  lead: { fontSize: 15, color: colors.muted, marginBottom: space.md, lineHeight: 22 },
+  netBanner: {
+    backgroundColor: colors.primaryMuted,
+    borderRadius: radii.md,
+    padding: space.md,
+    marginBottom: space.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  netBannerText: { fontSize: 13, color: colors.text, lineHeight: 19 },
+  mono: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 12 },
+  pingHint: { marginTop: space.sm, fontSize: 12, color: colors.muted, lineHeight: 18 },
   label: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: space.xs },
   input: {
     borderWidth: 1,
@@ -222,6 +267,8 @@ const styles = StyleSheet.create({
   btnSecondaryText: { color: colors.primary, fontWeight: '700', fontSize: 16 },
   btnGhost: { marginTop: space.lg, paddingVertical: space.sm, alignItems: 'center' },
   btnGhostText: { color: colors.danger, fontSize: 15, fontWeight: '600' },
-  testOut: { marginTop: space.md, fontSize: 14, color: colors.text, lineHeight: 20 },
+  testOut: { marginTop: space.md, fontSize: 14, lineHeight: 20 },
+  testOk: { color: colors.success },
+  testBad: { color: colors.danger },
   hint: { marginTop: space.md, fontSize: 13, color: colors.success },
 })
