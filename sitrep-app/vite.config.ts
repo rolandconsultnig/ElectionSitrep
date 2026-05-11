@@ -18,6 +18,8 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      /** Avoid service worker interfering with Vite HMR / stale blank shells in dev */
+      devOptions: { enabled: false },
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {

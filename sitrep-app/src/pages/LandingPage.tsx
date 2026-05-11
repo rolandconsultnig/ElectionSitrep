@@ -50,7 +50,9 @@ export function LandingPage() {
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4">
             <p className="text-sm text-[var(--portal-muted)]">
               Signed in as <span className="font-(--font-mono) text-[#0dccb0]">{user.username}</span> →{' '}
-              <strong className="text-[var(--sr-heading)]">{PORTALS[user.portalId].label}</strong>
+              <strong className="text-[var(--sr-heading)]">
+                {PORTALS[user.portalId as keyof typeof PORTALS]?.label ?? user.portalId}
+              </strong>
             </p>
             <button type="button" onClick={() => navigate(postLoginPath(user))} className="sr-btn-primary px-6">
               {user.onboardingComplete ? 'Open your portal' : 'Continue setup'}

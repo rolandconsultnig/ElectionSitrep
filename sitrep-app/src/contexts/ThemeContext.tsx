@@ -1,6 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-
-export type Theme = 'light' | 'dark'
+import type { Theme } from './theme-types'
 
 const STORAGE_KEY = 'npf_theme'
 
