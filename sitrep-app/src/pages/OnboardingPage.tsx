@@ -1,4 +1,5 @@
-import { useCallback, useState, type FormEvent } from 'react'
+import { useCallback, useState } from 'react'
+import type { FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { BrandLogo } from '../components/BrandLogo'
 import { LivenessCapture } from '../components/LivenessCapture'

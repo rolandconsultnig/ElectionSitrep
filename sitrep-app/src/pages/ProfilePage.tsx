@@ -1,4 +1,5 @@
-import { PORTALS, type PortalId } from '../lib/navigation'
+import { PORTALS } from '../lib/navigation'
+import type { PortalId } from '../lib/navigation'
 import { portalMatchHint } from '../lib/portalFromUsername'
 import { useAuth } from '../contexts/AuthContext'
 

@@ -1,7 +1,8 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { PortalLayout } from './PortalLayout'
-import { firstNavPath, type PortalId } from '../lib/navigation'
+import { firstNavPath } from '../lib/navigation'
+import type { PortalId } from '../lib/navigation'
 
 type Props = { portalId: PortalId }
 

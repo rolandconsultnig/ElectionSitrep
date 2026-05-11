@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiJson } from '../../lib/api'
-import { PORTALS, type PortalId } from '../../lib/navigation'
+import { PORTALS } from '../../lib/navigation'
+import type { PortalId } from '../../lib/navigation'
 
 type IssuedRow = {
   username: string
