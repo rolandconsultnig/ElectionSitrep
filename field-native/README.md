@@ -28,6 +28,17 @@ Open **Network settings** from the login screen: enter **`*2435*009#`** as the u
 - Emulator on PC: often **`http://10.0.2.2:5530`** (`.env.example`).
 - Physical device: server LAN IP or public IP + **`5530`**.
 
+### “Network connection failed” / cannot reach API
+
+Typical causes:
+
+1. **Wrong port** — Field app must target the **Node API** port (default **5530**). **5535** is often nginx serving only the web SPA; unless you proxy `/api` on 5535 to the API, use **5530**.
+2. **AWS security group** — Allow **inbound TCP** from the internet (or your IP) on the **API port**.
+3. **HTTPS toggle** — Leave **off** unless the API URL is really `https://…` with a valid certificate.
+4. **API down** — On server: `pm2 status election-sitrep-api`, `curl -sS http://127.0.0.1:5530/api/health`.
+
+From the phone’s browser, try `http://YOUR_PUBLIC_IP:5530/api/health` — if it won’t load, fix networking before the app will work.
+
 ### Build
 
 From **`field-native/`**:
