@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch, apiJson } from '../lib/api'
+import type { ContestCode } from './election-setup-types'
 
 type ApiParty = {
   id: string
@@ -14,17 +15,6 @@ type FullTree = {
   wards: { id: number; lgaId: number; code: string; name: string }[]
   pollingUnits: { id: number; wardId: number; code: string; name: string; lat: number; lng: number }[]
 }
-
-/** One ballot / contest type; an election may include several (e.g. presidential + senatorial + HoR). */
-export type ContestCode =
-  | 'presidential'
-  | 'governorship'
-  | 'senatorial'
-  | 'house_of_reps'
-  | 'state_assembly'
-  | 'lg_chairmanship'
-  | 'councillorship'
-  | 'other'
 
 const ALL_CONTEST_CODES: ContestCode[] = [
   'presidential',

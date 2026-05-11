@@ -10,12 +10,7 @@ import {
 } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { chartColors } from '../charts/register'
-
-/** GeoJSON FeatureCollection from API (typed loosely for GeoJSON component). */
-export type GeoFeatureCollection = {
-  type: 'FeatureCollection'
-  features: Array<Record<string, unknown>>
-}
+import type { GeoFeatureCollection } from './operations-map-types'
 
 type FieldPin = {
   userId: string

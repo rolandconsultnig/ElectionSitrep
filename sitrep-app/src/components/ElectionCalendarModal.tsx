@@ -1,11 +1,5 @@
 import { useMemo, useState } from 'react'
-
-export type CalendarElection = {
-  name: string
-  electionDate: string | null
-  electionType: string
-  status: string
-}
+import type { CalendarElection } from './election-calendar-types'
 
 type Props = {
   open: boolean

@@ -5,21 +5,9 @@ import { Bar } from 'react-chartjs-2'
 import { chartColors, chartTooltipTheme } from '../../charts/register'
 import { apiJson } from '../../lib/api'
 import { enqueueOffline, flushQueueIfOnline, getQueueDepth, listQueue } from '../../lib/offlineQueue'
+import type { FieldPortalContext } from './field-portal-types'
 
 const card = 'sr-card'
-
-export type FieldPortalContext = {
-  officer: { username: string; displayName: string; serviceNumber: string | null }
-  assignment: {
-    pollingUnit: { id: number; code: string; name: string; lat: number; lng: number }
-    ward: { id: number; code: string; name: string }
-    lga: { id: number; code: string; name: string }
-    state: { id: number; code: string; name: string }
-  } | null
-  geography: { statesAndFct: number; lgas: number; wards: number; pollingUnits: number }
-  activeElections: { slug: string; name: string; electionDate: string | null; status: string }[]
-  nationalPulse: { labels: string[]; submissions: number[]; incidents: number[] }
-}
 
 type PartyRow = {
   id: string

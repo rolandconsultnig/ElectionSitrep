@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react'
+import type { PartyLogoProps } from './party-logo-types'
 
 /** Fallback gradient marks — used when remote URL and `/public/party-logos/{abbr}.svg` fail to load. */
 const BRAND_GRADIENTS: Record<string, [string, string]> = {
@@ -31,15 +32,6 @@ function fontSizeForAbbr(abbr: string) {
   if (n === 3) return 17
   if (n === 4) return 13
   return 11
-}
-
-export type PartyLogoProps = {
-  abbreviation: string
-  partyName: string
-  /** Optional remote URL from config data */
-  logoUrl?: string
-  /** Admin-uploaded image (data URL) — highest priority */
-  uploadedDataUrl?: string | null
 }
 
 export function PartyLogo({ abbreviation, partyName, logoUrl, uploadedDataUrl }: PartyLogoProps) {

@@ -4,28 +4,9 @@ import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import { chartColors, chartTooltipTheme } from '../../charts/register'
 import { NigeriaMap } from '../../components/NigeriaMap'
 import { apiJson } from '../../lib/api'
+import type { ElectionResultsPayload, ExecutiveDashboardSummary } from './igp-portal-types'
 
 const card = 'sr-card'
-
-export type ExecutiveDashboardSummary = {
-  kpis: {
-    registeredPus: number
-    activeFieldOfficers: number
-    pendingApprovals: number
-    partiesRegistered: number
-  }
-  geography: {
-    statesAndFct: number
-    lgas: number
-    wards: number
-    pollingUnits: number
-  }
-  chart: { labels: string[]; submissions: number[]; incidents: number[] }
-  readiness: {
-    items: { label: string; status: string }[]
-    readinessPercent: number
-  }
-}
 
 type FieldOpsMap = {
   active: {
@@ -54,32 +35,6 @@ function useFieldOpsMap() {
     queryKey: ['igp-field-operations-map'],
     queryFn: () => apiJson<FieldOpsMap>('/api/igp/field-operations-map'),
   })
-}
-
-export type ElectionResultsPayload = {
-  election: {
-    slug: string
-    name: string
-    status: string
-    electionDate: string | null
-  }
-  nationalByParty: {
-    partyId: string
-    abbreviation: string
-    name: string
-    votes: number
-    voteShare: number
-  }[]
-  stackedByState: {
-    labels: string[]
-    parties: { id: string; abbreviation: string; name: string }[]
-    matrix: number[][]
-  }
-  meta: {
-    reportingPollingUnits: number
-    totalVotes: number
-    lastUploadedAt: string | null
-  }
 }
 
 const PARTY_CHART_PALETTE = [
