@@ -5,6 +5,8 @@
 # Plain HTTP  → full app + login; live camera is blocked by browsers on http://<ip> (use upload in UI).
 # HTTPS       → same app; after trusting the self-signed cert, camera works (secure context).
 #
+# Do not use https:// on the HTTP listen port (default 5535) — that causes ERR_SSL_PROTOCOL_ERROR. Use https:// on the HTTPS port (default 5545) only.
+#
 # Run on the production server (from repo or copied script):
 #   sudo SITREP_PUBLIC_IP=YOUR_PUBLIC_IP ./scripts/nginx-election-sitrep.sh
 #
