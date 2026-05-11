@@ -75,6 +75,12 @@ This usually means **nothing is listening on port 5530** — the API is not runn
 2. Confirm **`DATABASE_URL`** is set in **`.env.local` at the repo root** (not only inside `server/`). The API loads env from `../../.env.local` relative to `server/src`.
 3. Visit **`http://localhost:5530/api/health`**. If it fails, fix Postgres / migrations before retrying login.
 
+### `Content-Security-Policy: default-src 'none'` / “sandbox eval”
+
+This repo does **not** send a restrictive CSP for the Vite app. If the console shows **`default-src 'none'`** and a source like **`sandbox eval`**, the page is almost certainly running inside a **sandboxed embedded browser** (for example **Cursor Simple Browser** or some **VS Code** preview iframes). Those sandboxes block inline scripts (including Vite’s dev client) and arbitrary `img-src`, which breaks the app and can produce odd favicon requests.
+
+**Fix:** open **`http://localhost:5535`** in a normal system browser (**Chrome**, **Edge**, or **Firefox** from the taskbar / Start menu), not inside the editor’s built‑in preview.
+
 ### Changed API port
 
 If you set **`PORT`** to something other than **5530**, update the proxy in **`sitrep-app/vite.config.ts`** (`server.proxy['/api'].target`) to match.
