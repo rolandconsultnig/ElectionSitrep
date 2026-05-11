@@ -25,6 +25,15 @@ const app = express()
 /** Allow any localhost / 127.0.0.1 dev port (Vite default 5535, preview on 4173, etc.). */
 const localhostOrigin =
   /^https?:\/\/(localhost|127\.0\.0\.1|::1)(:\d+)?$/i
+
+/** Additional allowed origins for production */
+const ALLOWED_ORIGINS = [
+  'http://13.53.33.63:5535',
+  'https://13.53.33.63:5535',
+  'http://13.53.33.63',
+  'https://13.53.33.63',
+].filter(Boolean)
+
 app.use(
   cors({
     origin(origin, cb) {
@@ -33,11 +42,25 @@ app.use(
       if (localhostOrigin.test(origin)) return cb(null, true)
       const allow = String(process.env.FRONTEND_ORIGIN || '').trim()
       if (allow && origin === allow) return cb(null, true)
+      // Check additional allowed origins
+      if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true)
+      // Allow any origin in development
+      if (process.env.NODE_ENV !== 'production') return cb(null, true)
       cb(null, false)
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   }),
 )
+
+// Add security headers for all responses
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'DENY')
+  res.setHeader('X-XSS-Protection', '1; mode=block')
+  next()
+})
 app.use(express.json({ limit: '12mb' }))
 
 function authMiddleware(req, res, next) {
