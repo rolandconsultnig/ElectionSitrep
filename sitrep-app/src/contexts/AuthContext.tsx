@@ -2,25 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { flushSync } from 'react-dom'
 import { apiFetch, apiJson, apiUrl, getAuthToken, setAuthToken } from '../lib/api'
 import { postLoginPath, type PortalId } from '../lib/navigation'
-
-export type OfficerProfile = {
-  firstName: string
-  lastName: string
-  serviceNumber: string
-  phone: string
-  pictureDataUrl: string
-  livenessVerified: boolean
-  livenessCheckedAt?: string
-}
-
-export type AuthUser = {
-  username: string
-  portalId: PortalId
-  onboardingComplete: boolean
-  /** True until user sets their own password (demo/batch issuance) */
-  passwordMustChange?: boolean
-  profile?: OfficerProfile | null
-}
+import type { AuthUser, OfficerProfile } from './auth-types'
 
 type ApiUser = {
   username: string

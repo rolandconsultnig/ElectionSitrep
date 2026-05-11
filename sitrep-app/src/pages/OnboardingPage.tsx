@@ -3,7 +3,8 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { BrandLogo } from '../components/BrandLogo'
 import { LivenessCapture } from '../components/LivenessCapture'
 import { ThemeToggle } from '../components/ThemeToggle'
-import { useAuth, type OfficerProfile } from '../contexts/AuthContext'
+import { useAuth } from '../contexts/AuthContext'
+import type { OfficerProfile } from '../contexts/auth-types'
 import { PORTALS, firstNavPath } from '../lib/navigation'
 
 export function OnboardingPage() {
