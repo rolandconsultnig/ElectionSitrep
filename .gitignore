@@ -15,6 +15,9 @@
 **/android/app/build/
 **/android/build/
 
+# Field app — release APKs built locally (do not commit)
+field-native/releases/
+
 # Local scratch / tooling folders (not part of repo)
 /XNPF/
 

@@ -83,6 +83,8 @@ If you set **`PORT`** to something other than **5530**, update the proxy in **`s
 
 For production, serve the built SPA and route **`/api`** to the same Express process or a reverse proxy that forwards to the API — do not rely on the Vite dev proxy.
 
+The **Field Android APK** (`field-native/`) is **built only on a developer machine** (Android SDK + JDK), not on the production server. See **`field-native/README.md`** → *Release APK — build locally only* (`npm run android:apk` from `field-native/`).
+
 **Important:** the **`server/`** package is plain Node — there is **no** `npm run build` for the API. Install deps and run:
 
 ```bash

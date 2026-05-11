@@ -47,7 +47,7 @@ From the phone’s browser, try `http://YOUR_PUBLIC_IP:5530/api/health` — if i
 
 ICMP ping is not used; HTTP health is the reliable check through firewalls and matches what the API exposes.
 
-### Build
+### Run the app (dev)
 
 From **`field-native/`**:
 
@@ -56,4 +56,21 @@ npm ci
 npx expo start
 ```
 
-Release APK script (see **`scripts/build-android-release.sh`**).
+### Release APK — **build locally only**
+
+There is **no** cloud/CI APK pipeline in this repo. You produce the installable APK on **your own PC** (Windows, macOS, or Linux) with **Android SDK + JDK** installed (Android Studio is enough).
+
+**Prerequisites:** Node 20+, **JDK 17**, `ANDROID_HOME` / `ANDROID_SDK_ROOT` set so Gradle can find the SDK. On Windows, after first `expo prebuild`, `gradlew.bat` runs from **`field-native/android/`**.
+
+From **`field-native/`**:
+
+```bash
+npm ci
+npm run android:apk
+```
+
+- **`npm run android:apk`** runs **`expo prebuild --platform android`** then **`assembleRelease`**, then copies the APK to **`field-native/releases/npf-sitrep-field-release.apk`**.
+- The raw Gradle output is also under **`android/app/build/outputs/apk/release/app-release.apk`**.
+- Re-run **`npm run android:apk`** whenever you change **`app.json`** (API URL, permissions) or native code — that bakes config into the binary.
+
+Linux/macOS can use the same **`npm run android:apk`** (uses `gradlew` without `.bat`). Optional shell helper: **`scripts/build-android-release.sh`**.
