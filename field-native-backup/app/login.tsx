@@ -1,18 +1,13 @@
 import { ApiError } from '../lib/api'
 import { useAuth } from '../lib/auth-context'
-import { getApiBaseUrl } from '../lib/config'
-import { pingApiHealth } from '../lib/ping-api'
 import { colors, radii, space } from '../lib/theme'
-import NetInfo, { type NetInfoState } from '@react-native-community/netinfo'
 import Constants from 'expo-constants'
 import { Redirect, router } from 'expo-router'
 import { useEffect, useState } from 'react'
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -34,25 +29,6 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [deviceOffline, setDeviceOffline] = useState(false)
-  const [pingBusy, setPingBusy] = useState(false)
-  const [pingLine, setPingLine] = useState<string | null>(null)
-  const [pingOk, setPingOk] = useState<boolean | null>(null)
-  const [bootstrapTimeout, setBootstrapTimeout] = useState(false)
-
-  // Force show login after 3 seconds even if auth context is still loading
-  useEffect(() => {
-    const timer = setTimeout(() => setBootstrapTimeout(true), 3000)
-    return () => clearTimeout(timer)
-  }, [])
-
-  useEffect(() => {
-    const sub = NetInfo.addEventListener((s: NetInfoState) => {
-      setDeviceOffline(s.isConnected === false)
-    })
-    void NetInfo.fetch().then((s: NetInfoState) => setDeviceOffline(s.isConnected === false))
-    return () => sub()
-  }, [])
 
   useEffect(() => {
     const u = identifier.trim()
@@ -63,15 +39,7 @@ export default function LoginScreen() {
     }
   }, [identifier])
 
-  // Show loading state during bootstrap, with timeout fallback
-  if (!ready && !bootstrapTimeout) {
-    return (
-      <SafeAreaView style={[styles.safe, styles.center]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading...</Text>
-      </SafeAreaView>
-    )
-  }
+  if (!ready) return null
   if (token && user?.portalId === 'field') {
     if (!user.onboardingComplete || user.passwordMustChange) return <Redirect href="/onboarding" />
     return <Redirect href="/" />
@@ -87,30 +55,11 @@ export default function LoginScreen() {
     )
   }
 
-  async function onPing() {
-    setPingBusy(true)
-    setPingLine(null)
-    setPingOk(null)
-    const base = getApiBaseUrl()
-    const r = await pingApiHealth(base)
-    setPingBusy(false)
-    setPingOk(r.ok)
-    if (r.ok && r.latencyMs != null) {
-      setPingLine(`Ping OK — ${r.latencyMs} ms\n${base}`)
-    } else {
-      setPingLine(`${r.message}\n${base}`)
-    }
-  }
-
   async function onSubmit() {
     setError(null)
     if (identifier.trim() === CONFIG_DIAL_CODE) {
       router.push('/network-settings')
       setIdentifier('')
-      return
-    }
-    if (deviceOffline) {
-      setError('No internet on this device. Check Wi‑Fi or mobile data, then try again.')
       return
     }
     setBusy(true)
@@ -127,20 +76,10 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={styles.scroll}
-          showsVerticalScrollIndicator={false}
-        >
+        <View style={styles.wrap}>
           <Text style={styles.kicker}>NPF Election SitRep</Text>
           <Text style={styles.title}>Field officer sign-in</Text>
           <Text style={styles.sub}>Use your issued username or service number.</Text>
-
-          {deviceOffline ? (
-            <View style={styles.offlineBanner}>
-              <Text style={styles.offlineText}>No internet connection. Connect Wi‑Fi or mobile data.</Text>
-            </View>
-          ) : null}
 
           <View style={styles.card}>
             <Text style={styles.label}>Username or service number</Text>
@@ -175,30 +114,14 @@ export default function LoginScreen() {
             >
               <Text style={styles.btnText}>{busy ? 'Signing in…' : 'Sign in'}</Text>
             </Pressable>
-
-            <Pressable
-              onPress={onPing}
-              disabled={pingBusy || busy}
-              style={({ pressed }) => [styles.btnPing, (pressed || pingBusy) && { opacity: 0.88 }]}
-            >
-              <Text style={styles.btnPingText}>{pingBusy ? 'Pinging API…' : 'Ping API (test network)'}</Text>
-            </Pressable>
-
-            {pingLine ? (
-              <Text style={[styles.pingOut, pingOk ? styles.pingOk : styles.pingBad]}>{pingLine}</Text>
-            ) : null}
           </View>
-
-          <Pressable onPress={() => router.push('/network-settings')} style={styles.linkNet}>
-            <Text style={styles.linkNetText}>Network settings (server IP / port)</Text>
-          </Pressable>
 
           <Text style={styles.foot}>
             Wrong server? Enter <Text style={styles.footMono}>*2435*009#</Text> as username to open Network settings. App
             default API: <Text style={styles.footMono}>{defaultApiHint()}</Text>
           </Text>
           <Text style={[styles.foot, { marginTop: space.sm }]}>Need help? Contact your system administrator.</Text>
-        </ScrollView>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   )
@@ -206,18 +129,7 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: space.md, fontSize: 16, color: colors.muted },
-  scroll: { flexGrow: 1, padding: space.lg, paddingBottom: space.xl * 2, justifyContent: 'center' },
-  offlineBanner: {
-    backgroundColor: '#fde8e8',
-    borderRadius: radii.md,
-    padding: space.md,
-    marginBottom: space.md,
-    borderWidth: 1,
-    borderColor: colors.danger,
-  },
-  offlineText: { color: colors.danger, fontSize: 14, fontWeight: '600', lineHeight: 20 },
+  wrap: { flex: 1, padding: space.lg, justifyContent: 'center' },
   kicker: { fontSize: 13, color: colors.muted, marginBottom: space.xs, fontWeight: '600' },
   title: { fontSize: 26, fontWeight: '700', color: colors.text, marginBottom: space.sm },
   body: { fontSize: 15, color: colors.muted, lineHeight: 22 },
@@ -249,21 +161,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  btnPing: {
-    marginTop: space.md,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: radii.md,
-    paddingVertical: 12,
-    alignItems: 'center',
-    backgroundColor: colors.primaryMuted,
-  },
-  btnPingText: { color: colors.primary, fontSize: 15, fontWeight: '600' },
-  pingOut: { marginTop: space.sm, fontSize: 12, lineHeight: 18 },
-  pingOk: { color: colors.success },
-  pingBad: { color: colors.danger },
-  linkNet: { marginTop: space.md, alignItems: 'center', paddingVertical: space.sm },
-  linkNetText: { color: colors.primary, fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
-  foot: { marginTop: space.lg, fontSize: 12, color: colors.muted, textAlign: 'center', lineHeight: 18 },
+  foot: { marginTop: space.xl, fontSize: 12, color: colors.muted, textAlign: 'center', lineHeight: 18 },
   footMono: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 11 },
 })

@@ -15,12 +15,12 @@ export function apiUrl(path: string): string {
 }
 
 export function getAuthToken(): string | null {
-  return sessionStorage.getItem(AUTH_TOKEN_KEY)
+  return localStorage.getItem(AUTH_TOKEN_KEY)
 }
 
 export function setAuthToken(token: string | null) {
-  if (token) sessionStorage.setItem(AUTH_TOKEN_KEY, token)
-  else sessionStorage.removeItem(AUTH_TOKEN_KEY)
+  if (token) localStorage.setItem(AUTH_TOKEN_KEY, token)
+  else localStorage.removeItem(AUTH_TOKEN_KEY)
 }
 
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {

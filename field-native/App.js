@@ -12,8 +12,17 @@ import {
   StatusBar
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
-const API_BASE = 'http://13.53.33.63:5530';
+// Get API base URL from app.json config (expo.extra.apiBaseUrl) or fallback
+const getApiBaseUrl = () => {
+  const extra = Constants.expoConfig?.extra;
+  if (extra?.apiBaseUrl) return extra.apiBaseUrl;
+  // Fallback for development
+  return 'http://localhost:5530';
+};
+
+const API_BASE = getApiBaseUrl();
 const TOKEN_KEY = '@npf_token';
 
 export default function App() {

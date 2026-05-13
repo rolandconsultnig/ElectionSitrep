@@ -21,6 +21,12 @@ type ApiUser = {
   profile?: OfficerProfile | null
 }
 
+/** When the Vite proxy returns 5xx or fetch fails — backend not on 5530 or DB down */
+function devApiUnavailableHint() {
+  const ui = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5535'
+  return `Start the API on port 5530 (server PORT in .env). Test: http://localhost:5530/api/health — expect {"ok":true}. From repo root: npm run dev (API + web), or npm run dev --prefix server while Vite runs. This page: ${ui}. See README.`
+}
+
 function mapApiUser(u: ApiUser): AuthUser {
   const portalId = u.portalId as PortalId
   return {
@@ -95,9 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (res.status === 502 || res.status === 503 || res.status === 504) {
           return {
             ok: false as const,
-            error:
-              data.error ||
-              'API or database unavailable. The dev API listens on port 5530 (see server PORT env). From repo root: npm install && npm run dev — or run npm run dev in server/ and sitrep-app/. Open the app at http://localhost:5535. Check http://localhost:5530/api/health (see README).',
+            error: data.error || `API or database unavailable. ${devApiUnavailableHint()}`,
           }
         }
         return { ok: false as const, error: data.error || 'Invalid username or password.' }
@@ -111,8 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       return {
         ok: false as const,
-        error:
-          'Cannot reach the API. By default it runs on port 5530 (not 4000). From repo root: npm install && npm run dev — or run npm run dev in server/ and sitrep-app/. Use http://localhost:5535 for the web UI; verify http://localhost:5530/api/health. See README.',
+        error: `Cannot reach the API. ${devApiUnavailableHint()}`,
       }
     }
   }, [])

@@ -15,14 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 export default function HomeScreen() {
   const { token, user, ready, signOut } = useAuth()
   const [pendingCount, setPendingCount] = useState(0)
-  const [bootstrapTimeout, setBootstrapTimeout] = useState(false)
   const localMode = isLocalSessionToken(token)
-
-  // Force show UI after 3 seconds even if auth context is still loading
-  useEffect(() => {
-    const timer = setTimeout(() => setBootstrapTimeout(true), 3000)
-    return () => clearTimeout(timer)
-  }, [])
 
   const q = useQuery({
     queryKey: ['field-context', token],
@@ -54,15 +47,7 @@ export default function HomeScreen() {
     })
   }, [token, localMode])
 
-  // Show loading state during bootstrap, with timeout fallback
-  if (!ready && !bootstrapTimeout) {
-    return (
-      <SafeAreaView style={[styles.safe, styles.center]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.muted, { marginTop: space.md }]}>Loading...</Text>
-      </SafeAreaView>
-    )
-  }
+  if (!ready) return null
   if (!token || !user) return <Redirect href="/login" />
   if (user.portalId !== 'field') {
     return (

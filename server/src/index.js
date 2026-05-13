@@ -14,7 +14,15 @@ dotenv.config({ path: path.join(__dirname, '../../.env.local') })
 dotenv.config({ path: path.join(__dirname, '../../.env') })
 
 const PORT = Number(process.env.PORT || 5530)
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-change-JWT_SECRET-in-production'
+const JWT_SECRET = process.env.JWT_SECRET
+
+// Validate JWT_SECRET on startup - fail fast if not configured
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  console.error('[FATAL] JWT_SECRET environment variable is not set or is too short (minimum 32 characters).')
+  console.error('[FATAL] Please set a secure random secret in .env.local: JWT_SECRET=your-random-secret-here')
+  process.exit(1)
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 3 * 1024 * 1024 },
@@ -62,6 +70,145 @@ app.use((req, res, next) => {
   next()
 })
 app.use(express.json({ limit: '12mb' }))
+app.use(sanitizeInput) // Sanitize all incoming requests
+
+// Simple in-memory rate limiter for auth endpoints
+const loginAttempts = new Map()
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000 // 15 minutes
+const MAX_ATTEMPTS = 5
+
+function rateLimitLogin(req, res, next) {
+  const key = req.body?.username?.toLowerCase()?.trim() || req.ip
+  const now = Date.now()
+  const attempt = loginAttempts.get(key)
+
+  if (attempt) {
+    // Clean old attempts outside window
+    const validAttempts = attempt.timestamps.filter(t => now - t < RATE_LIMIT_WINDOW_MS)
+    attempt.timestamps = validAttempts
+
+    if (validAttempts.length >= MAX_ATTEMPTS) {
+      const oldestAttempt = validAttempts[0]
+      const retryAfter = Math.ceil((RATE_LIMIT_WINDOW_MS - (now - oldestAttempt)) / 1000)
+      return res.status(429).json({
+        error: `Too many login attempts. Please try again in ${Math.ceil(retryAfter / 60)} minutes.`,
+        retryAfter
+      })
+    }
+  }
+
+  next()
+}
+
+function recordLoginAttempt(identifier, success) {
+  const key = identifier?.toLowerCase()?.trim()
+  if (!key) return
+
+  const now = Date.now()
+  const attempt = loginAttempts.get(key) || { timestamps: [], lastSuccess: null }
+
+  if (success) {
+    attempt.lastSuccess = now
+    attempt.timestamps = [] // Reset on success
+  } else {
+    attempt.timestamps.push(now)
+  }
+
+  loginAttempts.set(key, attempt)
+}
+
+// Input validation utilities
+const VALIDATION_RULES = {
+  username: {
+    minLength: 3,
+    maxLength: 191,
+    pattern: /^[a-zA-Z0-9_.-]+$/,
+    message: 'Username must be 3-191 characters and contain only letters, numbers, underscores, dots, and hyphens'
+  },
+  password: {
+    minLength: 8,
+    maxLength: 255,
+    message: 'Password must be at least 8 characters'
+  },
+  name: {
+    minLength: 1,
+    maxLength: 100,
+    pattern: /^[\p{L}\s'-]+$/u,
+    message: 'Name must be 1-100 characters and contain only letters, spaces, hyphens, and apostrophes'
+  },
+  phone: {
+    minLength: 5,
+    maxLength: 64,
+    pattern: /^[+\d\s()-]+$/,
+    message: 'Phone number must be 5-64 characters and contain only digits, spaces, and +()-'
+  },
+  serviceNumber: {
+    minLength: 2,
+    maxLength: 128,
+    pattern: /^[A-Z0-9/-]+$/i,
+    message: 'Service number must be 2-128 characters'
+  }
+}
+
+function validateString(value, rule) {
+  if (!value || typeof value !== 'string') {
+    return { valid: false, error: rule.message }
+  }
+  const trimmed = value.trim()
+  if (trimmed.length < rule.minLength) {
+    return { valid: false, error: `Minimum length is ${rule.minLength} characters` }
+  }
+  if (trimmed.length > rule.maxLength) {
+    return { valid: false, error: `Maximum length is ${rule.maxLength} characters` }
+  }
+  if (rule.pattern && !rule.pattern.test(trimmed)) {
+    return { valid: false, error: rule.message }
+  }
+  return { valid: true, value: trimmed }
+}
+
+function validateRequest(fields) {
+  return (req, res, next) => {
+    const errors = {}
+    const validated = {}
+
+    for (const [fieldName, fieldRule] of Object.entries(fields)) {
+      const value = req.body?.[fieldName]
+      const result = validateString(value, VALIDATION_RULES[fieldRule])
+
+      if (!result.valid) {
+        errors[fieldName] = result.error
+      } else {
+        validated[fieldName] = result.value
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        errors,
+        message: Object.values(errors).join('; ')
+      })
+    }
+
+    // Attach validated values to request
+    req.validated = validated
+    next()
+  }
+}
+
+// Sanitize middleware - removes potentially dangerous characters
+function sanitizeInput(req, res, next) {
+  if (req.body && typeof req.body === 'object') {
+    for (const [key, value] of Object.entries(req.body)) {
+      if (typeof value === 'string') {
+        // Remove null bytes and control characters except newlines
+        req.body[key] = value.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+      }
+    }
+  }
+  next()
+}
 
 function authMiddleware(req, res, next) {
   const h = req.headers.authorization
@@ -535,11 +682,14 @@ async function loadUserPayload(userId) {
 }
 
 /** POST /api/auth/login — identifier is username, or service number after onboarding */
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', rateLimitLogin, async (req, res) => {
   try {
     const identifier = String(req.body?.username || req.body?.identifier || '').trim()
     const password = String(req.body?.password || '')
-    if (!identifier || !password) return res.status(400).json({ error: 'Username or service number and password required' })
+    if (!identifier || !password) {
+      recordLoginAttempt(identifier, false)
+      return res.status(400).json({ error: 'Username or service number and password required' })
+    }
 
     const r = await pool.query(
       `SELECT u.id, u.username, u.password_hash, u.portal, u.onboarding_complete
@@ -556,11 +706,20 @@ app.post('/api/auth/login', async (req, res) => {
        LIMIT 1`,
       [identifier],
     )
-    if (!r.rows.length) return res.status(401).json({ error: 'Invalid username or password' })
+    if (!r.rows.length) {
+      recordLoginAttempt(identifier, false)
+      return res.status(401).json({ error: 'Invalid username or password' })
+    }
 
     const row = r.rows[0]
     const ok = await bcrypt.compare(password, row.password_hash)
-    if (!ok) return res.status(401).json({ error: 'Invalid username or password' })
+    if (!ok) {
+      recordLoginAttempt(identifier, false)
+      return res.status(401).json({ error: 'Invalid username or password' })
+    }
+
+    // Record successful login
+    recordLoginAttempt(identifier, true)
 
     const token = jwt.sign({ sub: row.id, username: row.username, portal: row.portal }, JWT_SECRET, {
       expiresIn: '7d',
@@ -597,7 +756,9 @@ app.put('/api/me/onboarding', authMiddleware, async (req, res) => {
   const client = await pool.connect()
   try {
     const body = req.body || {}
-    const fullName = String(body.fullName || '').trim()
+    const firstName = String(body.firstName || '').trim()
+    const lastName = String(body.lastName || '').trim()
+    const fullName = `${firstName} ${lastName}`.trim()
     const serviceNumber = String(body.serviceNumber || '').trim()
     const phone = String(body.phone || '').trim()
     const pictureDataUrl = String(body.pictureDataUrl || '')
@@ -606,8 +767,8 @@ app.put('/api/me/onboarding', authMiddleware, async (req, res) => {
     const newPassword = String(body.newPassword || '')
     const confirmPassword = String(body.confirmPassword || '')
 
-    if (!fullName || !serviceNumber || !phone) {
-      return res.status(400).json({ error: 'Name, service number, and phone are required' })
+    if (!firstName || !lastName || !serviceNumber || !phone) {
+      return res.status(400).json({ error: 'First name, last name, service number, and phone are required' })
     }
     const parsed = parseDataUrl(pictureDataUrl)
     if (!parsed?.buffer?.length) {

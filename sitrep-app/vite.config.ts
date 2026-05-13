@@ -15,8 +15,8 @@ export default defineConfig({
     },
   },
   plugins: [
-    /** Fast Refresh + `export type` in .tsx caused `$RefreshSig$ is not defined` and a blank page in dev. */
-    react({ fastRefresh: false }),
+    /** v6 injects safe `$RefreshSig$` stubs in dev; no `fastRefresh` option (see plugin-react changelog). */
+    react(),
     tailwindcss(),
     VitePWA({
       /** Avoid service worker interfering with Vite HMR / stale blank shells in dev */

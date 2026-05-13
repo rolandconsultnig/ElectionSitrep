@@ -1,4 +1,3 @@
-import { ErrorBoundary } from '../components/ErrorBoundary'
 import { ApiBaseGate } from '../lib/api-base-gate'
 import { AuthProvider, useAuth } from '../lib/auth-context'
 import { colors } from '../lib/theme'
@@ -49,14 +48,12 @@ function NavStack() {
 
 export default function RootLayout() {
   return (
-    <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <ApiBaseGate>
-          <AuthProvider>
-            <NavStack />
-          </AuthProvider>
-        </ApiBaseGate>
-      </QueryClientProvider>
-    </ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <ApiBaseGate>
+        <AuthProvider>
+          <NavStack />
+        </AuthProvider>
+      </ApiBaseGate>
+    </QueryClientProvider>
   )
 }
