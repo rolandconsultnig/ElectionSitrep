@@ -756,6 +756,13 @@ app.put('/api/me/onboarding', authMiddleware, async (req, res) => {
   const client = await pool.connect()
   try {
     const body = req.body || {}
+    
+    // Debug logging - log what we received
+    console.log('[onboarding] Received body keys:', Object.keys(body))
+    console.log('[onboarding] firstName:', body.firstName, '| lastName:', body.lastName)
+    console.log('[onboarding] serviceNumber:', body.serviceNumber, '| phone:', body.phone)
+    console.log('[onboarding] pictureDataUrl length:', body.pictureDataUrl?.length || 0)
+    
     const firstName = String(body.firstName || '').trim()
     const lastName = String(body.lastName || '').trim()
     const fullName = `${firstName} ${lastName}`.trim()
@@ -767,8 +774,20 @@ app.put('/api/me/onboarding', authMiddleware, async (req, res) => {
     const newPassword = String(body.newPassword || '')
     const confirmPassword = String(body.confirmPassword || '')
 
-    if (!firstName || !lastName || !serviceNumber || !phone) {
-      return res.status(400).json({ error: 'First name, last name, service number, and phone are required' })
+    // Detailed validation error
+    const missing = []
+    if (!firstName) missing.push('firstName')
+    if (!lastName) missing.push('lastName')
+    if (!serviceNumber) missing.push('serviceNumber')
+    if (!phone) missing.push('phone')
+    
+    if (missing.length > 0) {
+      console.log('[onboarding] Validation failed - missing:', missing)
+      return res.status(400).json({ 
+        error: 'First name, last name, service number, and phone are required',
+        missing,
+        received: { firstName: body.firstName, lastName: body.lastName, serviceNumber: body.serviceNumber, phone: body.phone }
+      })
     }
     const parsed = parseDataUrl(pictureDataUrl)
     if (!parsed?.buffer?.length) {
