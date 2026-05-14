@@ -1005,7 +1005,7 @@ app.post('/api/admin/credential-batches', authMiddleware, requireAdmin, async (r
     const rankSlug = rankLabel.replace(/\s+/g, '').toLowerCase() || 'user'
 
     for (let i = 0; i < count; i++) {
-      const username = `${portal}.${rankSlug}.${randomToken(6)}`
+      const username = generateBatchKey() // Format: XXXX.XXXX (4 digits dot 4 letters)
       const password = randomPassword()
       const hash = await bcrypt.hash(password, 10)
       await client.query(
