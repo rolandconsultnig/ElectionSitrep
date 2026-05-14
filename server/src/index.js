@@ -245,17 +245,23 @@ function randomToken(len) {
 }
 
 function randomPassword() {
-  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
-  const lower = 'abcdefghijkmnopqrstuvwxyz'
-  const num = '23456789'
-  const sym = '!@#$%&*'
+  // Default password for all batch-created accounts
+  return 'pass123'
+}
+
+function generateBatchKey() {
+  // Format: XXXX.XXXX where first 4 are digits (0-9) and last 4 are letters (A-Z)
   const pick = (set, n) => {
     let o = ''
     const buf = randomBytes(n)
     for (let i = 0; i < n; i++) o += set[buf[i] % set.length]
     return o
   }
-  return pick(upper, 2) + pick(lower, 6) + pick(num, 2) + pick(sym, 2)
+  const digits = '0123456789'
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  const part1 = pick(digits, 4)
+  const part2 = pick(letters, 4)
+  return `${part1}.${part2}`
 }
 
 function slugFromElectionName(name) {
@@ -987,7 +993,7 @@ app.post('/api/admin/credential-batches', authMiddleware, requireAdmin, async (r
     const allowed = ['admin', 'field', 'management', 'igp']
     if (!allowed.includes(portal)) return res.status(400).json({ error: 'Invalid portal' })
 
-    const batchKey = `batch-${Date.now().toString(36)}-${randomToken(4)}`
+    const batchKey = generateBatchKey()
     await client.query('BEGIN')
     const ins = await client.query(
       `INSERT INTO credential_batches (batch_key, portal, rank_label, role_label) VALUES ($1,$2,$3,$4) RETURNING id, created_at`,
