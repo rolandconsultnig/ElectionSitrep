@@ -6,6 +6,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { RootErrorBoundary } from './components/RootErrorBoundary'
 import { AuthProvider } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
+import { SocketProvider } from './contexts/SocketContext'
 import './charts/register'
 import './index.css'
 import App from './App.tsx'
@@ -41,7 +42,9 @@ if (!rootEl) {
             <BrowserRouter>
               <ThemeProvider>
                 <AuthProvider>
-                  <App />
+                  <SocketProvider>
+                    <App />
+                  </SocketProvider>
                 </AuthProvider>
               </ThemeProvider>
             </BrowserRouter>

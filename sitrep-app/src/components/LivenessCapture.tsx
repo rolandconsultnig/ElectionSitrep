@@ -212,20 +212,26 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
     onVerified(snap)
   }, [canCapture, captured, onVerified, stopStream])
 
-  useEffect(() => {
+  const [prevResetKey, setPrevResetKey] = useState(resetKey)
+
+  if (resetKey !== prevResetKey) {
+    setPrevResetKey(resetKey)
     setCaptured(false)
     setCanCapture(false)
     setBlinkCount(0)
     setFaceDetected(false)
     setLivenessStatus('checking')
     setStatusMessage('Position your face in the camera frame')
+    setError(null)
+  }
+
+  useEffect(() => {
     blinkCountRef.current = 0
     blinksCompleteRef.current = false
     prevFrameRef.current = null
     lastSpikeRef.current = 0
     frameHistoryRef.current = []
     frameCountRef.current = 0
-    setError(null)
 
     let cancelled = false
 

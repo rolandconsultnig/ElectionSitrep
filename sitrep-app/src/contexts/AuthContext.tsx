@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import {
   createContext,
   useCallback,
@@ -14,6 +15,7 @@ import type { PortalId } from '../lib/navigation'
 import type { AuthUser, OfficerProfile } from './auth-types'
 
 type ApiUser = {
+  id: string
   username: string
   portalId: string
   onboardingComplete: boolean
@@ -30,6 +32,7 @@ function devApiUnavailableHint() {
 function mapApiUser(u: ApiUser): AuthUser {
   const portalId = u.portalId as PortalId
   return {
+    id: u.id,
     username: u.username,
     portalId,
     onboardingComplete: Boolean(u.onboardingComplete),
@@ -58,14 +61,11 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
-  const [bootstrapping, setBootstrapping] = useState(true)
+  const [bootstrapping, setBootstrapping] = useState<boolean>(() => !!getAuthToken())
 
   useEffect(() => {
     const token = getAuthToken()
-    if (!token) {
-      setBootstrapping(false)
-      return
-    }
+    if (!token) return
     void (async () => {
       try {
         const data = await apiJson<{ user: ApiUser }>('/api/auth/me')

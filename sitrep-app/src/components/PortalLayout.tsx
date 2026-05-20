@@ -20,9 +20,11 @@ export function PortalLayout({ portalId }: Props) {
     return () => clearInterval(t)
   }, [])
 
-  useEffect(() => {
+  const [prevPortalId, setPrevPortalId] = useState(portalId)
+  if (portalId !== prevPortalId) {
+    setPrevPortalId(portalId)
     setMobileNavOpen(false)
-  }, [portalId])
+  }
 
   useEffect(() => {
     document.body.style.overflow = mobileNavOpen ? 'hidden' : ''

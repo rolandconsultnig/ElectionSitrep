@@ -1,4 +1,4 @@
-/** §03 — 12 roles across 4 portal tiers (spec reference). */
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                        /** §03 — 12 roles across 4 portal tiers (spec reference). */
 export type SpecRole =
   | 'system_administrator'
   | 'npf_election_data_officer'

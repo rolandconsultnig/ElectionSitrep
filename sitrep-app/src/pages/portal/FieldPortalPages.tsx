@@ -77,14 +77,51 @@ const FIELD_QUICK_ACTIONS = [
   { to: '/field/violence', label: 'Violence', icon: '🚨', hint: 'Urgent — CP / HQ' },
   { to: '/field/reference', label: 'Parties', icon: '⚑', hint: 'Candidates ref.' },
   { to: '/field/history', label: 'History', icon: '🕐', hint: 'Queue on device' },
+  { to: '/field/communications', label: 'Comms', icon: '💬', hint: 'HQ Chat & Video' },
 ] as const
 
 export function FieldOfflineBanner() {
   const depth = useOfflineQueueDepth()
-  const online = typeof navigator !== 'undefined' && navigator.onLine
+  const [online, setOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
+  const [syncStatus, setSyncStatus] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
+
+  useEffect(() => {
+    const handleOnline = () => setOnline(true)
+    const handleOffline = () => setOnline(false)
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
+
+  async function handleRetry() {
+    if (!online) {
+      setSyncStatus('Cannot sync while offline. Reconnect and try again.')
+      return
+    }
+
+    setSyncing(true)
+    setSyncStatus(null)
+
+    try {
+      const syncedCount = await flushQueueIfOnline()
+      setSyncStatus(
+        syncedCount > 0
+          ? `Synced ${syncedCount} pending item${syncedCount === 1 ? '' : 's'}.`
+          : 'No pending items were synced. Try again when the API is reachable.',
+      )
+    } catch (error) {
+      setSyncStatus(error instanceof Error ? error.message : 'Retry failed')
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   return (
-    <div className="sr-card mb-6 flex flex-wrap items-center justify-between gap-3 border-[#0dccb0]/20 bg-[var(--portal-input-bg)]/80 py-3">
+    <div className="sr-card mb-6 flex flex-col gap-3 border-[#0dccb0]/20 bg-[var(--portal-input-bg)]/80 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="text-[13px] text-[var(--portal-muted)]">
         <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-dim)]">Offline queue · Field PWA</span>
         <span className="ml-3">
@@ -99,12 +136,14 @@ export function FieldOfflineBanner() {
         Pending items: <strong className="text-[var(--portal-fg)]">{depth}</strong>
         <button
           type="button"
-          onClick={() => flushQueueIfOnline()}
-          className="sr-btn-ghost px-3 py-1.5 text-[11px]"
+          disabled={syncing}
+          onClick={handleRetry}
+          className="sr-btn-ghost px-3 py-1.5 text-[11px] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Retry sync
+          {syncing ? 'Syncing…' : 'Retry sync'}
         </button>
       </div>
+      {syncStatus && <div className="text-[11px] text-[var(--portal-muted)]">{syncStatus}</div>}
     </div>
   )
 }
@@ -182,7 +221,7 @@ export function FieldDashboard() {
           tone="blue"
         />
         <Stat label="Queued submissions today" value={String(todayQueued)} sub="Local queue (this device)" tone="amber" />
-        <Stat label="Pending sync" value={String(depth)} sub="Offline-first stub" tone="red" />
+        <Stat label="Pending sync" value={String(depth)} sub="Local queue depth for device sync" tone="red" />
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <div className={card}>
@@ -248,7 +287,7 @@ export function FieldSitRep() {
       },
     })
     setBusy(false)
-    alert('SitRep queued locally (demo sync). Data includes your PU when assigned.')
+    alert('SitRep queued locally. Retry sync when online to deliver it to the backend.')
   }
 
   return (
@@ -327,15 +366,21 @@ export function FieldVoting() {
   const [votes, setVotes] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => {
-    const list = electionsQ.data?.elections
-    if (!list?.length) return
-    setElectionSlug((s) => (s && list.some((e) => e.slug === s) ? s : list[0].slug))
-  }, [electionsQ.data?.elections])
+  const [prevElections, setPrevElections] = useState(electionsQ.data?.elections)
+  const [prevElectionSlug, setPrevElectionSlug] = useState(electionSlug)
 
-  useEffect(() => {
+  if (electionsQ.data?.elections !== prevElections) {
+    setPrevElections(electionsQ.data?.elections)
+    const list = electionsQ.data?.elections
+    if (list?.length) {
+      setElectionSlug((s) => (s && list.some((e) => e.slug === s) ? s : list[0].slug))
+    }
+  }
+
+  if (electionSlug !== prevElectionSlug) {
+    setPrevElectionSlug(electionSlug)
     setVotes({})
-  }, [electionSlug])
+  }
 
   const candQ = useQuery({
     queryKey: ['field-election-candidates', electionSlug],
@@ -352,6 +397,10 @@ export function FieldVoting() {
     if (!electionSlug) return
     setBusy(true)
     try {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        throw new Error('offline')
+      }
+
       await apiJson<{ ok: boolean }>(`/api/field/elections/${encodeURIComponent(electionSlug)}/votes`, {
         method: 'POST',
         body: JSON.stringify({
@@ -360,7 +409,25 @@ export function FieldVoting() {
       })
       alert('Votes uploaded for your PU — national IGP charts refresh automatically.')
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Upload failed')
+      const isOfflineError =
+        typeof navigator !== 'undefined' && !navigator.onLine
+          ? true
+          : e instanceof Error && /offline|Cannot reach|Request failed \(0\)/i.test(e.message)
+
+      if (isOfflineError) {
+        await enqueueOffline({
+          type: 'vote_tally',
+          createdAt: new Date().toISOString(),
+          payload: {
+            electionSlug,
+            votes: rows.map((p) => ({ partyId: p.id, votes: Number(votes[p.id]) || 0 })),
+            ...pu,
+          },
+        })
+        alert('Vote tally saved locally. Retry sync when you are online.')
+      } else {
+        alert(e instanceof Error ? e.message : 'Upload failed')
+      }
     } finally {
       setBusy(false)
     }
@@ -472,7 +539,7 @@ export function FieldTurnout() {
       labels: ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00'],
       datasets: [
         {
-          label: 'Placeholder (no dashboard_hourly_metrics)',
+          label: 'No live hourly metrics available',
           data: [0, 0, 0, 0, 0, 0, 0],
           backgroundColor: 'rgba(0,200,150,.25)',
           borderColor: chartColors.green,
@@ -516,17 +583,30 @@ export function FieldIncidents() {
   const [busy, setBusy] = useState(false)
   const [category, setCategory] = useState('Card reader failure')
   const [detail, setDetail] = useState('')
+  const [photoDataUrl, setPhotoDataUrl] = useState('')
   const ctxQ = useFieldContext()
   const pu = puPayloadFromContext(ctxQ.data)
+
+  const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      if (ev.target?.result) setPhotoDataUrl(ev.target.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
 
   async function submit() {
     setBusy(true)
     await enqueueOffline({
       type: 'incident',
       createdAt: new Date().toISOString(),
-      payload: { category, detail: detail.trim() || undefined, ...pu },
+      payload: { category, detail: detail.trim() || undefined, photoDataUrl: photoDataUrl || undefined, ...pu },
     })
     setBusy(false)
+    setDetail('')
+    setPhotoDataUrl('')
     alert('Incident queued locally.')
   }
 
@@ -563,6 +643,15 @@ export function FieldIncidents() {
             placeholder="What happened, who observed it, time."
           />
         </label>
+        <label className="mt-4 block text-[13px]">
+          <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">Attach Photo (Optional)</span>
+          <input type="file" accept="image/*" onChange={handlePhotoCapture} className="mt-2 block w-full text-sm text-[var(--portal-muted)]" />
+        </label>
+        {photoDataUrl && (
+          <div className="mt-2">
+            <img src={photoDataUrl} alt="Incident" className="h-32 w-auto rounded-md object-cover" />
+          </div>
+        )}
         <button
           type="button"
           disabled={busy}
@@ -661,7 +750,7 @@ export function FieldHistory() {
       <header>
         <h1 className="font-(--font-syne) text-2xl font-bold text-[var(--portal-fg)]">Submission history</h1>
         <p className="mt-1 text-sm text-[var(--portal-muted)]">
-          This device&apos;s offline queue · sync status · PDF export when backend history lands (§M17)
+          This device&apos;s offline queue · sync status · backend history export pending implementation (§M17)
         </p>
       </header>
       <div className={card}>

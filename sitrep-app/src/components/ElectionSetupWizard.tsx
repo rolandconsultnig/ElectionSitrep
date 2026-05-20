@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch, apiJson } from '../lib/api'
 import type { ContestCode } from './election-setup-types'
@@ -283,38 +283,60 @@ export function ElectionSetupWizard({ open, mode, editSlug, onClose, onSaved }: 
       ? govStateId
       : null
 
-  useEffect(() => {
-    if (!open || mode !== 'edit' || !setupQuery.data || !tree) return
-    const e = setupQuery.data.election
-    setName(e.name)
-    setElectionDate(e.electionDate ?? '')
-    setStatus(e.status as 'draft' | 'active' | 'closed')
-    setElectionKind(e.isRerun ? 'rerun' : 'fresh')
-    setContestTypes(parseContestTypesFromApi(e))
-    setGovStateId(e.governorshipAllStates ? 'all' : e.governorshipStateId != null ? e.governorshipStateId : '')
-    const cand: Record<string, string> = {}
-    for (const p of setupQuery.data.parties) cand[p.partyId] = p.candidateName
-    setCandidateByParty(cand)
-    setGeoBlocks(hydrateGeoBlocksFromSetup(setupQuery.data, tree))
-  }, [open, mode, setupQuery.data, tree])
+  const [prevOpen, setPrevOpen] = useState(open)
+  const [prevMode, setPrevMode] = useState(mode)
+  const [prevSetupData, setPrevSetupData] = useState(setupQuery.data)
+  const [prevTree, setPrevTree] = useState(tree)
+  const [prevLockedStateId, setPrevLockedStateId] = useState<number | null>(null)
 
-  useEffect(() => {
-    if (lockedStateId === null) return
-    setGeoBlocks((prev) => prev.map((b) => ({ ...b, stateId: lockedStateId })))
-  }, [lockedStateId])
+  if (open !== prevOpen || mode !== prevMode || setupQuery.data !== prevSetupData || tree !== prevTree || lockedStateId !== prevLockedStateId) {
+    let nextBlocks = geoBlocks
 
-  useEffect(() => {
-    if (!open || mode !== 'create') return
-    setName('')
-    setElectionDate('')
-    setStatus('draft')
-    setElectionKind('fresh')
-    setContestTypes(['presidential'])
-    setGovStateId('')
-    setCandidateByParty({})
-    setGeoBlocks([emptyStateBlock()])
-    setSubmitErr(null)
-  }, [open, mode])
+    if (open !== prevOpen || mode !== prevMode) {
+      setPrevOpen(open)
+      setPrevMode(mode)
+      if (open && mode === 'create') {
+        setName('')
+        setElectionDate('')
+        setStatus('draft')
+        setElectionKind('fresh')
+        setContestTypes(['presidential'])
+        setGovStateId('')
+        setCandidateByParty({})
+        nextBlocks = [emptyStateBlock()]
+        setSubmitErr(null)
+      }
+    }
+
+    if (setupQuery.data !== prevSetupData || tree !== prevTree) {
+      setPrevSetupData(setupQuery.data)
+      setPrevTree(tree)
+      if (open && mode === 'edit' && setupQuery.data && tree) {
+        const e = setupQuery.data.election
+        setName(e.name)
+        setElectionDate(e.electionDate ?? '')
+        setStatus(e.status as 'draft' | 'active' | 'closed')
+        setElectionKind(e.isRerun ? 'rerun' : 'fresh')
+        setContestTypes(parseContestTypesFromApi(e))
+        setGovStateId(e.governorshipAllStates ? 'all' : e.governorshipStateId != null ? e.governorshipStateId : '')
+        const cand: Record<string, string> = {}
+        for (const p of setupQuery.data.parties) cand[p.partyId] = p.candidateName
+        setCandidateByParty(cand)
+        nextBlocks = hydrateGeoBlocksFromSetup(setupQuery.data, tree)
+      }
+    }
+
+    if (lockedStateId !== prevLockedStateId) {
+      setPrevLockedStateId(lockedStateId)
+      if (lockedStateId !== null) {
+        nextBlocks = nextBlocks.map((b) => ({ ...b, stateId: lockedStateId }))
+      }
+    }
+
+    if (nextBlocks !== geoBlocks) {
+      setGeoBlocks(nextBlocks)
+    }
+  }
 
   const scopeItemsPayload = useMemo(() => geoBlocksToScopeItems(geoBlocks), [geoBlocks])
 

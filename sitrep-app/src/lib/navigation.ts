@@ -108,6 +108,12 @@ export const PORTALS: Record<PortalId, PortalMeta> = {
         ],
       },
       {
+        section: 'Communications',
+        items: [
+          { id: 'communications', moduleCode: 'M17b', label: 'HQ Communications', icon: '💬', path: 'communications' },
+        ],
+      },
+      {
         section: 'Account',
         items: [
           {
@@ -149,6 +155,12 @@ export const PORTALS: Record<PortalId, PortalMeta> = {
         items: [
           { id: 'orders', moduleCode: 'M24', label: 'Issue Operational Orders', icon: '📣', path: 'orders' },
           { id: 'units', moduleCode: 'M25', label: 'Field Unit Status', icon: '🏛', path: 'units' },
+        ],
+      },
+      {
+        section: 'Communications',
+        items: [
+          { id: 'communications', moduleCode: 'M25b', label: 'Comms Hub', icon: '💬', path: 'communications' },
         ],
       },
       {

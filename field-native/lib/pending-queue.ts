@@ -1,16 +1,18 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Crypto from 'expo-crypto'
 
-const KEY = '@field_pending_vote_items'
+const KEY = '@field_pending_items'
 
-export type PendingVoteItem = {
+export type FieldBatchKind = 'vote_tally' | 'sitrep' | 'incident' | 'violence'
+
+export type PendingFieldBatchItem = {
   clientId: string
-  kind: 'vote_tally'
-  payload: { electionSlug: string; votes: { partyId: string; votes: number }[] }
+  kind: FieldBatchKind
+  payload: Record<string, unknown>
   createdAt: string
 }
 
-async function readAll(): Promise<PendingVoteItem[]> {
+async function readAll(): Promise<PendingFieldBatchItem[]> {
   const raw = await AsyncStorage.getItem(KEY)
   if (!raw) return []
   try {
@@ -25,17 +27,21 @@ async function writeAll(items: PendingVoteItem[]) {
   await AsyncStorage.setItem(KEY, JSON.stringify(items))
 }
 
-export async function enqueueVoteTally(slug: string, votes: { partyId: string; votes: number }[]) {
+export async function enqueueFieldBatch(kind: FieldBatchKind, payload: Record<string, unknown>) {
   const items = await readAll()
   const clientId = Crypto.randomUUID()
   items.push({
     clientId,
-    kind: 'vote_tally',
-    payload: { electionSlug: slug, votes },
+    kind,
+    payload,
     createdAt: new Date().toISOString(),
   })
   await writeAll(items)
   return clientId
+}
+
+export async function enqueueVoteTally(slug: string, votes: { partyId: string; votes: number }[]) {
+  return enqueueFieldBatch('vote_tally', { electionSlug: slug, votes })
 }
 
 export async function dequeueClientIds(ids: Set<string>) {
@@ -44,6 +50,6 @@ export async function dequeueClientIds(ids: Set<string>) {
   await writeAll(next)
 }
 
-export async function listPending(): Promise<PendingVoteItem[]> {
+export async function listPending(): Promise<PendingFieldBatchItem[]> {
   return readAll()
 }

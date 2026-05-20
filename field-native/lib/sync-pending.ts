@@ -1,22 +1,18 @@
 import { syncFieldBatch } from './api'
-import { dequeueClientIds, listPending, type PendingVoteItem } from './pending-queue'
+import { dequeueClientIds, listPending, type PendingFieldBatchItem } from './pending-queue'
 
 export async function flushPendingVoteSync(token: string): Promise<{ flushed: number; errors: string[] }> {
   const pending = await listPending()
-  const voteItems = pending.filter((p): p is PendingVoteItem => p.kind === 'vote_tally')
-  if (!voteItems.length) return { flushed: 0, errors: [] }
+  if (!pending.length) return { flushed: 0, errors: [] }
 
   const errors: string[] = []
   try {
     const res = await syncFieldBatch(
       token,
-      voteItems.map((v) => ({
+      pending.map((v) => ({
         clientId: v.clientId,
-        kind: 'vote_tally',
-        payload: {
-          electionSlug: v.payload.electionSlug,
-          votes: v.payload.votes,
-        },
+        kind: v.kind,
+        payload: v.payload,
         createdAt: v.createdAt,
       })),
     )

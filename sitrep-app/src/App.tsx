@@ -38,6 +38,8 @@ import {
   MgmtTurnout,
   MgmtUnits,
 } from './pages/portal/ManagementPortalPages'
+import { FieldCommunications } from './pages/portal/FieldCommunications'
+import { ManagementCommunications } from './pages/portal/ManagementCommunications'
 import {
   IGPBriefing,
   IGPHotspots,
@@ -95,6 +97,7 @@ export default function App() {
         <Route path="violence" element={<FieldViolence />} />
         <Route path="reference" element={<FieldReference />} />
         <Route path="history" element={<FieldHistory />} />
+        <Route path="communications" element={<FieldCommunications />} />
         <Route path="profile" element={<ProfilePage />} />
       </Route>
 
@@ -108,6 +111,7 @@ export default function App() {
         <Route path="turnout" element={<MgmtTurnout />} />
         <Route path="orders" element={<MgmtOrders />} />
         <Route path="units" element={<MgmtUnits />} />
+        <Route path="communications" element={<ManagementCommunications />} />
         <Route path="profile" element={<ProfilePage />} />
       </Route>
 

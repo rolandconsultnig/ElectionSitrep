@@ -26,7 +26,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 function defaultHostPort(): { host: string; port: string } {
   const extra = Constants.expoConfig?.extra as { apiBaseUrl?: string } | undefined
-  const raw = extra?.apiBaseUrl || 'http://localhost:5530'
+  const raw = extra?.apiBaseUrl
+  if (!raw || !String(raw).trim()) return { host: '', port: '5530' }
   try {
     const u = new URL(raw.includes('://') ? raw : `http://${raw}`)
     return {
@@ -113,7 +114,7 @@ export default function NetworkSettingsScreen() {
       try {
         base = buildServerUrl(host, port, useHttps)
       } catch {
-        base = getApiBaseUrl()
+        base = getApiBaseUrl() ?? ''
       }
       const result = await pingApiHealth(base)
       setLastPingOk(result.ok)
@@ -180,7 +181,7 @@ export default function NetworkSettingsScreen() {
               try {
                 return buildServerUrl(host, port, useHttps)
               } catch {
-                return getApiBaseUrl()
+                return getApiBaseUrl() ?? 'Not configured'
               }
             })()}
           </Text>

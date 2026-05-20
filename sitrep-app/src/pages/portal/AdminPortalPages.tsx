@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Line } from 'react-chartjs-2'
@@ -701,20 +701,23 @@ export function AdminGeography() {
   const [wardId, setWardId] = useState<number | ''>('')
   const [puId, setPuId] = useState<number | ''>('')
 
-  useEffect(() => {
+  const [prevStateId, setPrevStateId] = useState<number | ''>(stateId)
+  const [prevLgaId, setPrevLgaId] = useState<number | ''>(lgaId)
+  const [prevWardId, setPrevWardId] = useState<number | ''>(wardId)
+
+  if (stateId !== prevStateId) {
+    setPrevStateId(stateId)
     setLgaId('')
     setWardId('')
     setPuId('')
-  }, [stateId])
-
-  useEffect(() => {
+  } else if (lgaId !== prevLgaId) {
+    setPrevLgaId(lgaId)
     setWardId('')
     setPuId('')
-  }, [lgaId])
-
-  useEffect(() => {
+  } else if (wardId !== prevWardId) {
+    setPrevWardId(wardId)
     setPuId('')
-  }, [wardId])
+  }
 
   const lgasQ = useQuery({
     queryKey: ['geography-lgas', stateId],
@@ -1137,13 +1140,17 @@ export function AdminSettings() {
   const [ocrPct, setOcrPct] = useState(5)
   const [smsGateway, setSmsGateway] = useState('africas_talking')
 
-  useEffect(() => {
+  const [prevSettings, setPrevSettings] = useState(settingsQuery.data?.settings)
+  
+  if (settingsQuery.data?.settings !== prevSettings) {
+    setPrevSettings(settingsQuery.data?.settings)
     const s = settingsQuery.data?.settings
-    if (!s) return
-    if (s.detection?.anomalySigma != null) setSigma(Number(s.detection.anomalySigma))
-    if (s.detection?.ocrMismatchPct != null) setOcrPct(Number(s.detection.ocrMismatchPct))
-    if (s.notifications?.smsGateway) setSmsGateway(String(s.notifications.smsGateway))
-  }, [settingsQuery.data])
+    if (s) {
+      if (s.detection?.anomalySigma != null) setSigma(Number(s.detection.anomalySigma))
+      if (s.detection?.ocrMismatchPct != null) setOcrPct(Number(s.detection.ocrMismatchPct))
+      if (s.notifications?.smsGateway) setSmsGateway(String(s.notifications.smsGateway))
+    }
+  }
 
   const saveSettings = useMutation({
     mutationFn: async () => {

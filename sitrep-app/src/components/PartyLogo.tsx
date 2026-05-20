@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { useId, useState } from 'react'
 import type { PartyLogoProps } from './party-logo-types'
 
 /** Fallback gradient marks — used when remote URL and `/public/party-logos/{abbr}.svg` fail to load. */
@@ -40,17 +40,13 @@ export function PartyLogo({ abbreviation, partyName, logoUrl, uploadedDataUrl }:
   const slug = abbreviation.toLowerCase()
   const defaultSrc = `/party-logos/${slug}.svg`
 
-  const [uploadBroken, setUploadBroken] = useState(false)
-  const [remoteFailed, setRemoteFailed] = useState(false)
-  const [localFailed, setLocalFailed] = useState(false)
+  const [failedUploadUrl, setFailedUploadUrl] = useState<string | null>(null)
+  const [failedRemoteUrl, setFailedRemoteUrl] = useState<string | null>(null)
+  const [failedLocalSrc, setFailedLocalSrc] = useState<string | null>(null)
 
-  useEffect(() => {
-    setUploadBroken(false)
-  }, [uploadedDataUrl])
-
-  useEffect(() => {
-    setRemoteFailed(false)
-  }, [logoUrl])
+  const uploadBroken = uploadedDataUrl ? failedUploadUrl === uploadedDataUrl : false
+  const remoteFailed = logoUrl ? failedRemoteUrl === logoUrl : false
+  const localFailed = failedLocalSrc === defaultSrc
 
   const [c1, c2] = BRAND_GRADIENTS[abbreviation] ?? ['#475569', '#1e293b']
   const fs = fontSizeForAbbr(abbreviation)
@@ -91,7 +87,7 @@ export function PartyLogo({ abbreviation, partyName, logoUrl, uploadedDataUrl }:
           src={uploadedDataUrl}
           alt=""
           className="size-11 object-contain object-center"
-          onError={() => setUploadBroken(true)}
+          onError={() => setFailedUploadUrl(uploadedDataUrl || null)}
         />
       </span>
     )
@@ -104,7 +100,7 @@ export function PartyLogo({ abbreviation, partyName, logoUrl, uploadedDataUrl }:
           src={logoUrl}
           alt=""
           className="size-11 object-contain object-center"
-          onError={() => setRemoteFailed(true)}
+          onError={() => setFailedRemoteUrl(logoUrl || null)}
         />
       </span>
     )
@@ -117,7 +113,7 @@ export function PartyLogo({ abbreviation, partyName, logoUrl, uploadedDataUrl }:
           src={defaultSrc}
           alt=""
           className="size-11 object-cover object-center"
-          onError={() => setLocalFailed(true)}
+          onError={() => setFailedLocalSrc(defaultSrc)}
         />
       </span>
     )

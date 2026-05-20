@@ -11,6 +11,7 @@ export type OfficerProfile = {
 }
 
 export type AuthUser = {
+  id: string
   username: string
   portalId: PortalId
   onboardingComplete: boolean

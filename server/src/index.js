@@ -7,7 +7,9 @@ import dotenv from 'dotenv'
 import path from 'path'
 import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'url'
+import { createServer } from 'http'
 import { pool } from './db.js'
+import { initWebSockets } from './websockets.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(__dirname, '../../.env.local') })
@@ -40,6 +42,10 @@ const ALLOWED_ORIGINS = [
   'https://13.53.33.63:5535',
   'http://13.53.33.63',
   'https://13.53.33.63',
+  'http://129.121.73.137',
+  'https://129.121.73.137',
+  'http://129.121.73.137:5535',
+  'https://129.121.73.137:5535',
 ].filter(Boolean)
 
 app.use(
@@ -1594,12 +1600,23 @@ app.post('/api/field/sync', authMiddleware, requireAnyPortal('field'), async (re
 
     try {
       const devAt = createdAtRaw ? new Date(createdAtRaw) : new Date()
+      let photoBuf = null
+      let photoMime = null
+      if (payload && payload.photoDataUrl) {
+        const parsed = parseDataUrl(payload.photoDataUrl)
+        if (parsed) {
+          photoBuf = parsed.buffer
+          photoMime = parsed.mime
+        }
+        delete payload.photoDataUrl
+      }
+
       const ins = await pool.query(
-        `INSERT INTO field_capture_outbox (client_id, user_id, kind, payload, device_created_at)
-         VALUES ($1, $2::uuid, $3, $4::jsonb, $5)
+        `INSERT INTO field_capture_outbox (client_id, user_id, kind, payload, device_created_at, photo_data, photo_mime)
+         VALUES ($1, $2::uuid, $3, $4::jsonb, $5, $6, $7)
          ON CONFLICT (user_id, client_id) DO NOTHING
          RETURNING id`,
-        [clientId, userId, kind, JSON.stringify(payload), devAt],
+        [clientId, userId, kind, JSON.stringify(payload), devAt, photoBuf, photoMime],
       )
       results.push({ clientId, ok: true, duplicate: ins.rows.length === 0 })
     } catch (e) {
@@ -2490,7 +2507,35 @@ app.get('/api/health', async (req, res) => {
   }
 })
 
+/** GET /api/chat/:roomId - Fetch chat history */
+app.get('/api/chat/:roomId', authMiddleware, async (req, res) => {
+  try {
+    const { roomId } = req.params
+    const limit = parseInt(req.query.limit) || 50
+    const offset = parseInt(req.query.offset) || 0
+
+    const { rows } = await pool.query(
+      `SELECT c.id, c.sender_id, u.username AS sender_username, c.room_id, c.content, c.created_at 
+       FROM chat_messages c
+       JOIN app_users u ON u.id = c.sender_id
+       WHERE c.room_id = $1
+       ORDER BY c.created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [roomId, limit, offset]
+    )
+    
+    // Return in chronological order
+    return res.json({ messages: rows.reverse() })
+  } catch (e) {
+    console.error('Chat history error:', e)
+    return res.status(500).json({ error: 'Failed to fetch chat history' })
+  }
+})
+
 /** Bind all IPv4 interfaces so cloud / LAN clients can reach the API (not only 127.0.0.1). */
-app.listen(PORT, '0.0.0.0', () => {
+const httpServer = createServer(app)
+initWebSockets(httpServer, pool, JWT_SECRET)
+
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`[election-sitrep-api] listening on 0.0.0.0:${PORT}`)
 })

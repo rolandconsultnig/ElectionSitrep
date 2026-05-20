@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import { chartColors, chartTooltipTheme } from '../../charts/register'
@@ -319,11 +319,15 @@ export function IGPResults() {
   const [slug, setSlug] = useState<string | null>(null)
   const resQ = useIgpElectionResults(slug)
 
-  useEffect(() => {
+  const [prevElections, setPrevElections] = useState(listQ.data?.elections)
+
+  if (listQ.data?.elections !== prevElections) {
+    setPrevElections(listQ.data?.elections)
     const rows = listQ.data?.elections
-    if (!rows?.length) return
-    setSlug((s) => (s && rows.some((e) => e.slug === s) ? s : rows[0].slug))
-  }, [listQ.data?.elections])
+    if (rows?.length) {
+      setSlug((s) => (s && rows.some((e) => e.slug === s) ? s : rows[0].slug))
+    }
+  }
 
   const nationalBar = useMemo(() => {
     const nat = resQ.data?.nationalByParty

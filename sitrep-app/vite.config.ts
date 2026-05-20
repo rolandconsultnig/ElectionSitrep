@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { nodePolyfills } from 'vite-plugin-node-polyfills'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -17,6 +18,7 @@ export default defineConfig({
   plugins: [
     /** v6 injects safe `$RefreshSig$` stubs in dev; no `fastRefresh` option (see plugin-react changelog). */
     react(),
+    nodePolyfills(),
     tailwindcss(),
     VitePWA({
       /** Avoid service worker interfering with Vite HMR / stale blank shells in dev */

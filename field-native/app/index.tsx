@@ -15,8 +15,34 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 export default function HomeScreen() {
   const { token, user, ready, signOut } = useAuth()
   const [pendingCount, setPendingCount] = useState(0)
+  const [syncStatus, setSyncStatus] = useState<string | null>(null)
+  const [syncErrors, setSyncErrors] = useState<string[]>([])
   const [bootstrapTimeout, setBootstrapTimeout] = useState(false)
   const localMode = isLocalSessionToken(token)
+
+  async function refreshPendingCount() {
+    const p = await listPending()
+    setPendingCount(p.length)
+  }
+
+  function updateSyncState(result: { flushed: number; errors: string[] }) {
+    setSyncErrors(result.errors)
+    if (result.errors.length > 0) {
+      setSyncStatus(`${result.flushed} queued item(s) synced, ${result.errors.length} error(s).`)
+    } else if (result.flushed > 0) {
+      setSyncStatus(`${result.flushed} queued item(s) synced successfully.`)
+    } else {
+      setSyncStatus('No queued items to send.')
+    }
+  }
+
+  async function trySyncPending() {
+    if (!token || localMode) return
+    setSyncStatus('Checking queued sync…')
+    const result = await flushPendingVoteSync(token)
+    updateSyncState(result)
+    await refreshPendingCount()
+  }
 
   // Force show UI after 3 seconds even if auth context is still loading
   useEffect(() => {
@@ -34,14 +60,14 @@ export default function HomeScreen() {
   })
 
   useEffect(() => {
-    listPending().then((p) => setPendingCount(p.length))
+    refreshPendingCount()
   }, [q.dataUpdatedAt])
 
   useEffect(() => {
     if (!token || localMode) return
     const sub = NetInfo.addEventListener((s) => {
       if (s.isConnected) {
-        flushPendingVoteSync(token).then(() => listPending().then((p) => setPendingCount(p.length)))
+        void trySyncPending()
       }
     })
     return () => sub()
@@ -49,8 +75,9 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (!token || localMode) return
-    NetInfo.fetch().then((s) => {
-      if (s.isConnected) flushPendingVoteSync(token)
+    void NetInfo.fetch().then((s) => {
+      if (s.isConnected) void trySyncPending()
+      else void refreshPendingCount()
     })
   }, [token, localMode])
 
@@ -96,7 +123,7 @@ export default function HomeScreen() {
 
           <View style={[styles.card, { borderColor: colors.primary, borderWidth: 2 }]}>
             <Text style={styles.cardTitle}>API server</Text>
-            <Text style={styles.meta}>{getApiBaseUrl()}</Text>
+          <Text style={styles.meta}>{getApiBaseUrl() ?? 'Not configured'}</Text>
             <Pressable onPress={() => router.push('/network-settings')} style={[styles.btn, { marginTop: space.md }]}>
               <Text style={styles.btnText}>Network settings</Text>
             </Pressable>
@@ -153,11 +180,20 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        {pendingCount > 0 ? (
+        {(pendingCount > 0 || syncErrors.length > 0) ? (
           <View style={styles.banner}>
             <Text style={styles.bannerText}>
-              {pendingCount} tally update(s) queued — will send when online.
+              {pendingCount > 0 ? `${pendingCount} queued update${pendingCount === 1 ? '' : 's'}` : 'No queued updates'}
+              {syncStatus ? ` · ${syncStatus}` : ''}
             </Text>
+            {syncErrors.length > 0 ? (
+              <Text style={styles.bannerError} numberOfLines={2}>
+                {`Sync errors: ${syncErrors.length}. ${syncErrors[0] ?? 'Tap network settings to verify server connection.'}`}
+              </Text>
+            ) : null}
+            <Pressable onPress={() => void trySyncPending()} style={styles.retryButton}>
+              <Text style={styles.retryButtonText}>Retry sync now</Text>
+            </Pressable>
           </View>
         ) : null}
 
@@ -265,4 +301,18 @@ const styles = StyleSheet.create({
   btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
   btnSecondary: { alignItems: 'center', paddingVertical: 10 },
   btnSecondaryText: { color: colors.primary, fontWeight: '600' },
+  bannerError: { color: colors.danger, marginTop: space.xs, fontSize: 13, lineHeight: 18 },
+  retryButton: {
+    marginTop: space.sm,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primary,
+    paddingVertical: 8,
+    paddingHorizontal: space.md,
+    borderRadius: radii.sm,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
 })

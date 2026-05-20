@@ -20,13 +20,19 @@
     "@capacitor/cli": "^8.3.3",
     "@capacitor/core": "^8.3.3",
     "@tanstack/react-query": "^5.100.9",
+    "buffer": "^6.0.3",
     "chart.js": "^4.5.1",
+    "events": "^3.3.0",
     "leaflet": "^1.9.4",
+    "process": "^0.11.10",
     "react": "^19.2.5",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.2.5",
     "react-leaflet": "^5.0.0",
-    "react-router-dom": "^7.15.0"
+    "react-router-dom": "^7.15.0",
+    "simple-peer": "^9.11.1",
+    "socket.io-client": "^4.8.3",
+    "util": "^0.12.5"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -35,6 +41,7 @@
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/simple-peer": "^9.11.9",
     "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^10.2.1",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -44,6 +51,7 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",
     "vite": "^8.0.10",
+    "vite-plugin-node-polyfills": "^0.27.0",
     "vite-plugin-pwa": "^1.3.0"
   }
 }

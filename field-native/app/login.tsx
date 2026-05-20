@@ -25,7 +25,7 @@ const CONFIG_DIAL_CODE = '*2435*009#'
 function defaultApiHint(): string {
   const raw = (Constants.expoConfig?.extra as { apiBaseUrl?: string } | undefined)?.apiBaseUrl
   if (raw && String(raw).trim()) return String(raw).trim()
-  return 'http://localhost:5530'
+  return 'Not configured — use Network settings'
 }
 
 export default function LoginScreen() {
@@ -91,7 +91,7 @@ export default function LoginScreen() {
     setPingBusy(true)
     setPingLine(null)
     setPingOk(null)
-    const base = getApiBaseUrl()
+    const base = getApiBaseUrl() ?? ''
     const r = await pingApiHealth(base)
     setPingBusy(false)
     setPingOk(r.ok)

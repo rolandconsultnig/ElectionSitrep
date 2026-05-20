@@ -26,6 +26,12 @@ export async function apiFetch<T>(
   opts: RequestInit & { token?: string | null } = {},
 ): Promise<T> {
   const base = getApiBaseUrl()
+  if (!base) {
+    throw new ApiError(
+      'API base URL is not configured. Set a valid server URL in Network settings or provide EXPO_PUBLIC_API_BASE_URL / app.json extra.apiBaseUrl.',
+      0,
+    )
+  }
   const url = `${base}${path.startsWith('/') ? path : `/${path}`}`
   const headers = new Headers(opts.headers)
   if (!headers.has('Content-Type') && opts.body && typeof opts.body === 'string') {

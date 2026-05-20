@@ -23,7 +23,7 @@ function embeddedApiBase(): string | undefined {
  * 2) Release: embedded `app.json` extra (production API) before env — avoids shipping an emulator `.env` URL on real devices.
  * 3) Dev: `EXPO_PUBLIC_API_BASE_URL` then embedded then localhost.
  */
-export function getApiBaseUrl(): string {
+export function getApiBaseUrl(): string | null {
   const injected = getApiBaseUrlOverride()
   if (injected) return injected
 
@@ -39,5 +39,5 @@ export function getApiBaseUrl(): string {
 
   if (embedded) return embedded
   if (envUrl) return envUrl
-  return 'http://localhost:5530'
+  return null
 }
