@@ -6,6 +6,7 @@ import { chartColors, chartTooltipTheme } from '../../charts/register'
 import { apiJson } from '../../lib/api'
 import { enqueueOffline, flushQueueIfOnline, getQueueDepth, listQueue } from '../../lib/offlineQueue'
 import type { FieldPortalContext } from './field-portal-types'
+import { currentPosition, fetchIncidentTypes, SEVERITY_STYLE, type Severity } from '../../lib/incidents'
 
 const card = 'sr-card'
 
@@ -582,11 +583,17 @@ export function FieldTurnout() {
 
 export function FieldIncidents() {
   const [busy, setBusy] = useState(false)
-  const [category, setCategory] = useState('Card reader failure')
+  const [typeCode, setTypeCode] = useState('')
+  const [severity, setSeverity] = useState<Severity | ''>('')
   const [detail, setDetail] = useState('')
   const [photoDataUrl, setPhotoDataUrl] = useState('')
+  const [msg, setMsg] = useState<string | null>(null)
   const ctxQ = useFieldContext()
   const pu = puPayloadFromContext(ctxQ.data)
+  const typesQ = useQuery({ queryKey: ['incident-types'], queryFn: fetchIncidentTypes, staleTime: 3_600_000 })
+  const types = typesQ.data?.types ?? []
+  const selected = types.find((t) => t.code === typeCode)
+  const effectiveSeverity: Severity = severity || selected?.defaultSeverity || 'low'
 
   const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -598,17 +605,33 @@ export function FieldIncidents() {
     reader.readAsDataURL(file)
   }
 
-  async function submit() {
+  async function submit(isFlash: boolean) {
+    const code = isFlash && !typeCode ? 'other' : typeCode
+    if (!code) return setMsg('Select an incident type.')
+    if (!isFlash && effectiveSeverity !== 'low' && detail.trim().length < 5) {
+      return setMsg('Describe what happened (required for medium, high and critical incidents).')
+    }
     setBusy(true)
+    const pos = await currentPosition()
     await enqueueOffline({
       type: 'incident',
       createdAt: new Date().toISOString(),
-      payload: { category, detail: detail.trim() || undefined, photoDataUrl: photoDataUrl || undefined, ...pu },
+      payload: {
+        typeCode: code,
+        severity: isFlash ? 'critical' : effectiveSeverity,
+        isFlash,
+        description: detail.trim() || undefined,
+        photoDataUrl: photoDataUrl || undefined,
+        lat: pos?.lat,
+        lng: pos?.lng,
+        ...pu,
+      },
     })
+    void flushQueueIfOnline()
     setBusy(false)
     setDetail('')
     setPhotoDataUrl('')
-    alert('Incident queued locally.')
+    setMsg(isFlash ? 'FLASH sent — Force HQ and all commands alerted.' : 'Incident submitted. It will sync automatically if offline.')
   }
 
   return (
@@ -617,46 +640,82 @@ export function FieldIncidents() {
       <header>
         <h1 className="font-(--font-syne) text-2xl font-bold text-[var(--portal-fg)]">Report incident</h1>
         <p className="mt-1 text-sm text-[var(--portal-muted)]">
-          Escalation chain Field → Ward → DPO → Area → CP → DIG → Force HQ · Red may freeze PU result
+          Severity routes the alert: Low → DPO · Medium → Area Command · High → State · Critical/FLASH → Force HQ. Unanswered alerts
+          escalate automatically.
         </p>
       </header>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => {
+          if (window.confirm('Send FLASH report? This alerts every command dashboard immediately.')) void submit(true)
+        }}
+        className="w-full rounded-xl bg-red-600 px-4 py-4 text-lg font-extrabold tracking-widest text-white shadow-lg shadow-red-900/40 disabled:opacity-50"
+      >
+        ⚡ FLASH
+      </button>
       <div className={card}>
         <label className="block text-[13px]">
-          <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">Category</span>
+          <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">Incident type *</span>
           <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            value={typeCode}
+            onChange={(e) => {
+              setTypeCode(e.target.value)
+              setSeverity('')
+            }}
             className="mt-1 w-full rounded-lg border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)] px-3 py-2 text-[var(--portal-fg)]"
           >
-            <option>Card reader failure</option>
-            <option>Result snatching</option>
-            <option>Violence / gunfire</option>
-            <option>Over-voting</option>
+            <option value="">— Select —</option>
+            {types.map((t) => (
+              <option key={t.code} value={t.code}>
+                {t.label}
+              </option>
+            ))}
           </select>
         </label>
+        <div className="mt-4 text-[13px]">
+          <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">Severity</span>
+          <div className="mt-1 flex flex-wrap gap-2">
+            {(['low', 'medium', 'high', 'critical'] as Severity[]).map((sv) => (
+              <button
+                key={sv}
+                type="button"
+                onClick={() => setSeverity(sv)}
+                className={`rounded-full px-3 py-1 text-xs font-semibold uppercase ${
+                  effectiveSeverity === sv ? SEVERITY_STYLE[sv] : 'border border-[color:var(--portal-border)] text-[var(--portal-muted)]'
+                }`}
+              >
+                {sv}
+              </button>
+            ))}
+          </div>
+        </div>
         <label className="mt-4 block text-[13px]">
-          <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">Details</span>
+          <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">
+            Details {effectiveSeverity !== 'low' ? '*' : ''}
+          </span>
           <textarea
             rows={3}
             value={detail}
             onChange={(e) => setDetail(e.target.value)}
             className="mt-1 w-full rounded-lg border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)] px-3 py-2 text-[var(--portal-fg)]"
-            placeholder="What happened, who observed it, time."
+            placeholder="What happened, how many people, who observed it, time."
           />
         </label>
         <label className="mt-4 block text-[13px]">
-          <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">Attach Photo (Optional)</span>
-          <input type="file" accept="image/*" onChange={handlePhotoCapture} className="mt-2 block w-full text-sm text-[var(--portal-muted)]" />
+          <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">Evidence photo (optional, SHA-256 hashed)</span>
+          <input type="file" accept="image/*" capture="environment" onChange={handlePhotoCapture} className="mt-2 block w-full text-sm text-[var(--portal-muted)]" />
         </label>
         {photoDataUrl && (
           <div className="mt-2">
             <img src={photoDataUrl} alt="Incident" className="h-32 w-auto rounded-md object-cover" />
           </div>
         )}
+        {msg && <p className="mt-4 text-sm text-[var(--portal-fg)]">{msg}</p>}
         <button
           type="button"
           disabled={busy}
-          onClick={submit}
+          onClick={() => void submit(false)}
           className="mt-6 rounded-lg bg-[#EF4444]/90 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
           Submit incident & escalate

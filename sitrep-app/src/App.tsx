@@ -6,6 +6,8 @@ import { LandingPage } from './pages/LandingPage'
 import { LoginPage } from './pages/LoginPage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { FieldSafetyPage } from './pages/portal/FieldSafetyPage'
+import { IncidentCommandPage } from './pages/portal/IncidentCommandPage'
 import {
   AdminAudit,
   AdminCandidates,
@@ -79,6 +81,7 @@ export default function App() {
         <Route path="candidates" element={<AdminCandidates />} />
         <Route path="geography" element={<AdminGeography />} />
         <Route path="operations-map" element={<AdminOperationsMap />} />
+        <Route path="incident-command" element={<IncidentCommandPage />} />
         <Route path="users" element={<AdminUsers />} />
         <Route path="roles" element={<AdminRoles />} />
         <Route path="audit" element={<AdminAudit />} />
@@ -95,6 +98,7 @@ export default function App() {
         <Route path="turnout" element={<FieldTurnout />} />
         <Route path="incidents" element={<FieldIncidents />} />
         <Route path="violence" element={<FieldViolence />} />
+        <Route path="safety" element={<FieldSafetyPage />} />
         <Route path="reference" element={<FieldReference />} />
         <Route path="history" element={<FieldHistory />} />
         <Route path="communications" element={<FieldCommunications />} />
@@ -108,6 +112,7 @@ export default function App() {
         <Route path="sitrep" element={<MgmtSitRepFeed />} />
         <Route path="results" element={<MgmtResults />} />
         <Route path="incidents" element={<MgmtIncidents />} />
+        <Route path="incident-command" element={<IncidentCommandPage />} />
         <Route path="turnout" element={<MgmtTurnout />} />
         <Route path="orders" element={<MgmtOrders />} />
         <Route path="units" element={<MgmtUnits />} />
@@ -119,6 +124,7 @@ export default function App() {
         <Route index element={<Navigate to="overview" replace />} />
         <Route path="overview" element={<IGPOverview />} />
         <Route path="security" element={<IGPSecurity />} />
+        <Route path="incident-command" element={<IncidentCommandPage />} />
         <Route path="results" element={<IGPResults />} />
         <Route path="hotspots" element={<IGPHotspots />} />
         <Route path="timeline" element={<IGPTimeline />} />
