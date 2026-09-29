@@ -1,4 +1,4 @@
-import * as FaceDetector from 'expo-face-detector'
+import FaceDetection, { type FaceDetectionOptions } from '@react-native-ml-kit/face-detection'
 
 export type FrameSample = {
   uri: string
@@ -6,15 +6,14 @@ export type FrameSample = {
   minEyeOpen: number | null
 }
 
-const DETECTION_OPTS: FaceDetector.DetectionOptions = {
-  mode: FaceDetector.FaceDetectorMode.accurate,
-  detectLandmarks: FaceDetector.FaceDetectorLandmarks.all,
-  runClassifications: FaceDetector.FaceDetectorClassifications.all,
+const DETECTION_OPTS: FaceDetectionOptions = {
+  performanceMode: 'accurate',
+  classificationMode: 'all',
+  minFaceSize: 0.15,
 }
 
 export async function sampleFrame(uri: string): Promise<FrameSample> {
-  const result = await FaceDetector.detectFacesAsync(uri, DETECTION_OPTS)
-  const faces = result.faces ?? []
+  const faces = (await FaceDetection.detect(uri, DETECTION_OPTS)) ?? []
   if (faces.length !== 1) {
     return { uri, faceCount: faces.length, minEyeOpen: null }
   }
