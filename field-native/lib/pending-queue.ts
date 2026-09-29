@@ -23,7 +23,7 @@ async function readAll(): Promise<PendingFieldBatchItem[]> {
   }
 }
 
-async function writeAll(items: PendingVoteItem[]) {
+async function writeAll(items: PendingFieldBatchItem[]) {
   await AsyncStorage.setItem(KEY, JSON.stringify(items))
 }
 
