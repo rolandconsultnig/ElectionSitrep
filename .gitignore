@@ -26,3 +26,5 @@ field-native/releases/
 npm-debug.*
 .DS_Store
 Thumbs.db
+/ota/
+field-native/dist-ota/

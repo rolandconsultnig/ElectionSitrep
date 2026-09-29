@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url'
 import { createServer } from 'http'
 import { pool } from './db.js'
 import { initWebSockets } from './websockets.js'
+import { createOtaRouter } from './ota.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(__dirname, '../../.env.local') })
@@ -84,6 +85,7 @@ app.use((req, res, next) => {
 })
 app.use(express.json({ limit: '12mb' }))
 app.use(sanitizeInput) // Sanitize all incoming requests
+app.use('/api/ota', createOtaRouter(process.env.OTA_DIR || path.join(__dirname, '../../ota')))
 
 // Simple in-memory rate limiter for auth endpoints
 const loginAttempts = new Map()

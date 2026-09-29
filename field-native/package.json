@@ -13,7 +13,8 @@
     "android:apk": "expo prebuild --platform android && node scripts/run-release-build.cjs",
     "android:apk:unix": "expo prebuild --platform android && node scripts/run-release-build.cjs",
     "android:copy-apk": "node scripts/copy-release-apk.cjs",
-    "postinstall": "node scripts/generate-png-assets.cjs"
+    "postinstall": "node scripts/generate-png-assets.cjs",
+    "ota:export": "bash scripts/export-ota.sh"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -34,6 +35,7 @@
     "expo-secure-store": "~15.0.8",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
+    "expo-updates": "~29.0.20",
     "expo-web-browser": "~15.0.10",
     "react": "19.1.0",
     "react-dom": "19.1.0",

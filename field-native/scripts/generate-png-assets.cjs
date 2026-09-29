@@ -1,6 +1,7 @@
 'use strict'
 /**
- * Generates solid PNG placeholders (PNG only — no WEBP).
+ * Generates solid PNG placeholders (PNG only — no WEBP) for any missing image asset.
+ * Existing assets (e.g. the NPF crest icons) are left untouched.
  */
 const fs = require('fs')
 const path = require('path')
@@ -59,6 +60,7 @@ function writePng(name, w, h, bg, withAccent) {
     fill(png, bg)
     if (withAccent) accentBar(png, '#1a4b8c')
     const target = path.join(OUT, name)
+    if (fs.existsSync(target)) return resolve()
     fs.mkdirSync(path.dirname(target), { recursive: true })
     const out = fs.createWriteStream(target)
     out.on('finish', resolve)
