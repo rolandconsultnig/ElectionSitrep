@@ -28,7 +28,7 @@
       "package": "com.npfsitrep.field"
     },
     "extra": {
-      "apiBaseUrl": "http://13.53.33.63:5530"
+      "apiBaseUrl": "https://flankmobile.online"
     },
     "web": {
       "bundler": "metro",
