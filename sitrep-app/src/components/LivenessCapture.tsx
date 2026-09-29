@@ -17,6 +17,7 @@ const WASM_BASE = `${import.meta.env.BASE_URL}mediapipe-wasm`
 const MODEL_URL = `${import.meta.env.BASE_URL}models/blaze_face_short_range.tflite`
 
 let detectorPromise: Promise<FaceDetector> | null = null
+let imageDetectorPromise: Promise<FaceDetector> | null = null
 
 /** Singleton BlazeFace detector — model + WASM are bundled under /public so it works fully offline. */
 function getFaceDetector(): Promise<FaceDetector> {
@@ -34,6 +35,24 @@ function getFaceDetector(): Promise<FaceDetector> {
     })
   }
   return detectorPromise
+}
+
+/** IMAGE-mode detector for verifying uploaded still photos — separate instance since runningMode is fixed at creation. */
+function getImageFaceDetector(): Promise<FaceDetector> {
+  if (!imageDetectorPromise) {
+    imageDetectorPromise = (async () => {
+      const fileset = await FilesetResolver.forVisionTasks(WASM_BASE)
+      return FaceDetector.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: MODEL_URL },
+        runningMode: 'IMAGE',
+        minDetectionConfidence: FACE_SCORE_THRESHOLD,
+      })
+    })()
+    imageDetectorPromise.catch(() => {
+      imageDetectorPromise = null
+    })
+  }
+  return imageDetectorPromise
 }
 
 /** Frame difference for blink detection */
@@ -470,7 +489,8 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
       <div className="rounded-xl border border-[color:var(--portal-border)] bg-[color:var(--sr-panel)]/40 p-4">
         <p className="sr-label mb-2">Upload photo (fallback)</p>
         <p className="mb-3 text-xs text-[var(--portal-muted)]">
-          Use when the camera preview stays blank or the browser blocks camera over HTTP. JPEG or PNG only (not WEBP).
+          Use when the camera preview stays blank or the browser blocks camera over HTTP. JPEG or PNG only (not WEBP)
+          — the photo must show a real face, which is checked automatically.
         </p>
         <input
           ref={fileInputRef}
@@ -503,14 +523,39 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
                 cx.drawImage(img, 0, 0)
                 dataUrl = c.toDataURL('image/jpeg', 0.92)
               }
+
+              // Verify the uploaded photo actually contains a real human face —
+              // the upload path bypasses the live camera, so without this check
+              // any image (object, screen, logo) would pass.
+              const detector = await getImageFaceDetector()
+              const imgEl = new Image()
+              await new Promise<void>((resolve, reject) => {
+                imgEl.onload = () => resolve()
+                imgEl.onerror = () => reject(new Error('Invalid image'))
+                imgEl.src = dataUrl
+              })
+              const result = detector.detect(imgEl)
+              const imgArea = imgEl.naturalWidth * imgEl.naturalHeight
+              const faces = result.detections.filter((d) => {
+                const score = d.categories[0]?.score ?? 0
+                const box = d.boundingBox
+                return box && score >= FACE_SCORE_THRESHOLD && box.width * box.height / imgArea >= 0.01
+              })
+              if (faces.length === 0) {
+                throw new Error('No human face detected in that photo — upload a clear face photo or use the camera.')
+              }
+              if (faces.length > 1) {
+                throw new Error('More than one face detected — upload a photo of a single face.')
+              }
+
               stopStream()
               if (videoRef.current?.srcObject) videoRef.current.srcObject = null
               setCaptured(true)
               setPermission('granted')
               setError(null)
               onVerified(dataUrl)
-            } catch {
-              setError('Could not use that image. Try another JPEG or PNG.')
+            } catch (err) {
+              setError(err instanceof Error ? err.message : 'Could not use that image. Try another JPEG or PNG.')
             }
           }}
         />
