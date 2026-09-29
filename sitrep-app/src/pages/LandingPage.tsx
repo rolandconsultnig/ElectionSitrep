@@ -174,6 +174,18 @@ export function LandingPage() {
                 <a href="#capabilities" className="sr-btn-ghost px-6 py-3">
                   Explore capabilities
                 </a>
+                <a
+                  href="/downloads/npf-sitrep-field.apk"
+                  download
+                  className="sr-btn-ghost inline-flex items-center gap-2 px-6 py-3"
+                >
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 3v12" />
+                    <path d="m7 11 5 5 5-5" />
+                    <path d="M4 19h16" />
+                  </svg>
+                  Field app (Android)
+                </a>
               </div>
               <p className="mt-6 font-(--font-mono) text-[11px] leading-relaxed text-[var(--portal-dim)]">
                 Restricted to NPF command tiers and authorised field personnel.
