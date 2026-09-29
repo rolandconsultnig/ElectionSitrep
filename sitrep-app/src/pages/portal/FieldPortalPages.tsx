@@ -362,6 +362,7 @@ function useFieldElections() {
 export function FieldVoting() {
   const electionsQ = useFieldElections()
   const ctxQ = useFieldContext()
+  const pu = puPayloadFromContext(ctxQ.data)
   const [electionSlug, setElectionSlug] = useState('')
   const [votes, setVotes] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { FaceDetector, FilesetResolver } from '@mediapipe/tasks-vision'
 
 type Props = {
   /** Called with a JPEG data URL after liveness passes and the user taps Capture */
@@ -11,6 +12,29 @@ const BLINKS_REQUIRED = 2
 const SAMPLE_MS = 160
 const SPIKE_THRESHOLD = 14
 const COOLDOWN_MS = 450
+const FACE_SCORE_THRESHOLD = 0.5
+const WASM_BASE = `${import.meta.env.BASE_URL}mediapipe-wasm`
+const MODEL_URL = `${import.meta.env.BASE_URL}models/blaze_face_short_range.tflite`
+
+let detectorPromise: Promise<FaceDetector> | null = null
+
+/** Singleton BlazeFace detector — model + WASM are bundled under /public so it works fully offline. */
+function getFaceDetector(): Promise<FaceDetector> {
+  if (!detectorPromise) {
+    detectorPromise = (async () => {
+      const fileset = await FilesetResolver.forVisionTasks(WASM_BASE)
+      return FaceDetector.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: MODEL_URL },
+        runningMode: 'VIDEO',
+        minDetectionConfidence: FACE_SCORE_THRESHOLD,
+      })
+    })()
+    detectorPromise.catch(() => {
+      detectorPromise = null
+    })
+  }
+  return detectorPromise
+}
 
 /** Frame difference for blink detection */
 function frameDiff(a: ImageData, b: ImageData): number {
@@ -27,92 +51,17 @@ function frameDiff(a: ImageData, b: ImageData): number {
   return sum / (len / 4) / 3
 }
 
-/** Detect if frame contains a human face using skin color detection and edge analysis */
-function detectFacePresence(frame: ImageData): { hasFace: boolean; confidence: number; reason?: string } {
-  const data = frame.data
-  const width = frame.width
-  const height = frame.height
-  let skinPixels = 0
-  let totalBrightness = 0
-  let edgePixels = 0
-  const pixelCount = width * height
-
-  // Skin color range in YCbCr (simplified for RGB)
-  // Typical skin: R > G > B, R/G ratio between 0.8 and 1.6
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i]
-    const g = data[i + 1]
-    const b = data[i + 2]
-    
-    const brightness = (r + g + b) / 3
-    totalBrightness += brightness
-    
-    // Skin detection: warm tones with red dominance but not too red
-    const rgRatio = r / (g + 1)
-    const rbRatio = r / (b + 1)
-    const isSkin = rgRatio > 0.8 && rgRatio < 2.0 && rbRatio > 0.7 && rbRatio < 2.5 && 
-                   r > 60 && g > 40 && b > 20 && // Not too dark
-                   r < 240 && g < 220 && b < 210 // Not too bright/saturated
-    
-    if (isSkin) {
-      skinPixels++
-    }
+/** Best detection in a frame: highest-confidence face bounding box, or null when none found. */
+function bestFace(result: ReturnType<FaceDetector['detectForVideo']>) {
+  let best: { score: number; boxArea: number } | null = null
+  for (const d of result.detections) {
+    const score = d.categories[0]?.score ?? 0
+    const box = d.boundingBox
+    if (!box || score < FACE_SCORE_THRESHOLD) continue
+    const boxArea = box.width * box.height
+    if (!best || score > best.score) best = { score, boxArea }
   }
-
-  // Edge detection (simplified Sobel)
-  for (let y = 1; y < height - 1; y++) {
-    for (let x = 1; x < width - 1; x++) {
-      const idx = (y * width + x) * 4
-      const r = data[idx]
-      const right = data[idx + 4]
-      const down = data[(y + 1) * width * 4 + x * 4]
-      
-      const gradX = Math.abs(r - right)
-      const gradY = Math.abs(r - down)
-      
-      if (gradX > 30 || gradY > 30) {
-        edgePixels++
-      }
-    }
-  }
-
-  const skinRatio = skinPixels / pixelCount
-  const avgBrightness = totalBrightness / pixelCount
-  const edgeRatio = edgePixels / pixelCount
-
-  // Anti-spoofing checks
-  
-  // 1. Check for uniform brightness (photos of photos often have flat lighting)
-  if (avgBrightness < 40 || avgBrightness > 230) {
-    return { hasFace: false, confidence: 0.1, reason: 'Poor lighting - ensure good illumination' }
-  }
-
-  // 2. Check for screen reflection patterns (uniform texture)
-  if (skinRatio > 0.85) {
-    return { hasFace: false, confidence: 0.2, reason: 'Possible screen detected - use natural lighting' }
-  }
-
-  // 3. Check for printed photo (too uniform, no skin texture variation)
-  if (skinRatio > 0.6 && edgeRatio < 0.05) {
-    return { hasFace: false, confidence: 0.3, reason: 'Flat image detected - do not use photos' }
-  }
-
-  // 4. Check for animal/non-human (wrong color distribution)
-  if (skinRatio < 0.08) {
-    return { hasFace: false, confidence: 0.1, reason: 'No human face detected - position your face in frame' }
-  }
-
-  // 5. Reasonable face-like structure
-  if (skinRatio >= 0.15 && skinRatio <= 0.55 && edgeRatio >= 0.05) {
-    return { hasFace: true, confidence: Math.min(0.9, skinRatio * 2 + edgeRatio * 3) }
-  }
-
-  // Borderline case
-  if (skinRatio >= 0.1 && skinRatio <= 0.6) {
-    return { hasFace: true, confidence: 0.5, reason: 'Face detected - ensure clear view' }
-  }
-
-  return { hasFace: false, confidence: 0.2, reason: 'Position face clearly in camera view' }
+  return best
 }
 
 /** Analyze texture to detect printed photos vs real skin */
@@ -180,6 +129,8 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
   const intervalRef = useRef<number | null>(null)
   const frameHistoryRef = useRef<ImageData[]>([])
   const frameCountRef = useRef(0)
+  const detectorRef = useRef<FaceDetector | null>(null)
+  const lastDetectTsRef = useRef(-1)
 
   const [permission, setPermission] = useState<'pending' | 'granted' | 'denied'>('pending')
   const [error, setError] = useState<string | null>(null)
@@ -189,6 +140,7 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
   const [faceDetected, setFaceDetected] = useState(false)
   const [livenessStatus, setLivenessStatus] = useState<'checking' | 'live' | 'spoof'>('checking')
   const [statusMessage, setStatusMessage] = useState('Position your face in the camera frame')
+  const [modelStatus, setModelStatus] = useState<'loading' | 'ready' | 'error'>('loading')
 
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop())
@@ -290,6 +242,19 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
           setError('Camera access is required for live face verification.')
         }
       }
+
+      try {
+        const detector = await getFaceDetector()
+        if (!cancelled) {
+          detectorRef.current = detector
+          setModelStatus('ready')
+        }
+      } catch {
+        if (!cancelled) {
+          setModelStatus('error')
+          setError('Face detector failed to load. Check your connection and reload, or use Upload photo.')
+        }
+      }
     }
 
     void start()
@@ -325,13 +290,35 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
 
       // Face detection and anti-spoofing
       frameCountRef.current++
-      
-      // Run face detection every frame
-      const faceCheck = detectFacePresence(frame)
-      setFaceDetected(faceCheck.hasFace)
-      
-      if (!faceCheck.hasFace) {
-        setStatusMessage(faceCheck.reason || 'No face detected')
+
+      const detector = detectorRef.current
+      if (!detector) {
+        setStatusMessage('Loading face detector…')
+        prevFrameRef.current = frame
+        return
+      }
+
+      const now = performance.now()
+      let face: { score: number; boxArea: number } | null = null
+      if (now > lastDetectTsRef.current) {
+        lastDetectTsRef.current = now
+        try {
+          face = bestFace(detector.detectForVideo(video, now))
+        } catch {
+          face = null
+        }
+      }
+
+      // Require a face covering a reasonable part of the frame — objects, hands, and
+      // background never produce a bounding box, so this rejects non-human subjects.
+      const frameArea = video.videoWidth * video.videoHeight
+      const hasFace = !!face && face.boxArea / frameArea >= 0.02
+      setFaceDetected(hasFace)
+
+      if (!hasFace) {
+        setStatusMessage(
+          face ? 'Move closer — your face is too small in frame' : 'No human face detected — position your face in frame',
+        )
         setLivenessStatus('checking')
         prevFrameRef.current = frame
         return
@@ -360,14 +347,13 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
       }
 
       // Update status message based on progress
-      if (faceCheck.hasFace && livenessStatus !== 'live') {
+      if (livenessStatus !== 'live') {
         setStatusMessage('Face detected. Blink slowly when ready.')
       }
 
-      // Blink detection
-      if (prev && faceCheck.hasFace) {
+      // Blink detection — only while a real face is confirmed and not flagged as spoof
+      if (prev && livenessStatus !== 'spoof') {
         const diff = frameDiff(frame, prev)
-        const now = performance.now()
         if (
           diff > SPIKE_THRESHOLD &&
           now - lastSpikeRef.current > COOLDOWN_MS &&
@@ -547,8 +533,11 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
           </span>
         </p>
         <p>
-          Anti-spoofing active: detects photos of photos, screens, and non-human subjects. 
-          Ensure natural lighting and look directly at the camera.
+          {modelStatus === 'loading'
+            ? 'Face detector is loading…'
+            : modelStatus === 'error'
+              ? 'Face detector unavailable — use Upload photo or reload.'
+              : 'Real face detection active: objects, hands and screens are rejected. Ensure natural lighting and look directly at the camera.'}
         </p>
       </div>
     </div>
