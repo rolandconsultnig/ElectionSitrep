@@ -49,6 +49,10 @@ const ALLOWED_ORIGINS = [
   'http://66.45.231.142:6633',
   'https://66.45.231.142:6633',
   'https://66.45.231.142:6634',
+  'https://flankmobile.online',
+  'https://www.flankmobile.online',
+  'http://flankmobile.online',
+  'http://www.flankmobile.online',
 ].filter(Boolean)
 
 app.use(
