@@ -92,7 +92,9 @@ const STALE_MS = 45_000
 const NIGERIA: [number, number] = [9.08, 8.68]
 
 function ago(iso: string, now: number) {
-  const m = Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000))
+  const sec = Math.max(0, Math.floor((now - new Date(iso).getTime()) / 1000))
+  if (sec < 60) return `${sec}s ago`
+  const m = Math.floor(sec / 60)
   if (m < 60) return `${m}m ago`
   const h = Math.floor(m / 60)
   return h < 48 ? `${h}h ${m % 60}m ago` : `${Math.floor(h / 24)}d ago`

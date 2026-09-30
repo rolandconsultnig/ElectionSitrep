@@ -47,7 +47,7 @@ function IncidentDetail({ id, onClose }: { id: number; onClose: () => void }) {
     queryFn: () => apiJson<{ incident: Incident; events: IncidentEvent[] }>(`/api/incidents/${id}`),
   })
   const [note, setNote] = useState('')
-  const [photo, setPhoto] = useState<string | null>(null)
+  const [photoState, setPhoto] = useState<{ id: number; url: string | null } | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const inc = q.data?.incident
 
@@ -56,12 +56,14 @@ function IncidentDetail({ id, onClose }: { id: number; onClose: () => void }) {
     let url: string | null = null
     void fetchPhotoObjectUrl(`/api/incidents/${id}/photo`).then((u) => {
       url = u
-      setPhoto(u)
+      setPhoto({ id, url: u })
     })
     return () => {
       if (url) URL.revokeObjectURL(url)
     }
   }, [id, inc?.hasPhoto])
+
+  const photo = inc?.hasPhoto && photoState?.id === id ? photoState.url : null
 
   async function act(action: 'acknowledge' | 'escalate' | 'resolve' | 'note') {
     setErr(null)

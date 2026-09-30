@@ -33,6 +33,7 @@ export function FieldSafetyPage() {
   const sosQ = useQuery({
     queryKey: ['sos-mine'],
     queryFn: () => apiJson<{ activeId: number | null }>('/api/sos/mine'),
+    refetchInterval: (query) => (query.state.data?.activeId ? 15_000 : false),
   })
   const pinQ = useQuery({ queryKey: ['duress-pin'], queryFn: () => apiJson<{ enabled: boolean }>('/api/me/duress-pin') })
   const [msg, setMsg] = useState<string | null>(null)
