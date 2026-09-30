@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import type { PortalId } from '../lib/navigation'
 import { PORTALS } from '../lib/navigation'
 import { BrandLogo } from './BrandLogo'
+import { CommandAlertCenter } from './CommandAlertCenter'
 import { ThemeToggle } from './ThemeToggle'
 
 type Props = { portalId: PortalId }
@@ -221,6 +222,7 @@ export function PortalLayout({ portalId }: Props) {
           <div className="sr-grid-bg pointer-events-none" aria-hidden />
           <div className="relative z-[1] mx-auto max-w-[1600px] p-4 md:p-8">
             <Outlet />
+            {portalId !== 'field' && <CommandAlertCenter basePath={`/${portalId}`} />}
           </div>
         </main>
       </div>

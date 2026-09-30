@@ -1,5 +1,6 @@
 import { Server } from 'socket.io'
 import jwt from 'jsonwebtoken'
+import { joinCommandRooms } from './incidents.js'
 
 export function initWebSockets(httpServer, pool, JWT_SECRET) {
   const io = new Server(httpServer, {
@@ -28,6 +29,7 @@ export function initWebSockets(httpServer, pool, JWT_SECRET) {
     socket.join(`portal_${user.portal}`)
     // Also join a personal room for 1:1 signaling
     socket.join(`user_${user.sub}`)
+    joinCommandRooms(pool, socket, user.sub, user.portal).catch((e) => console.error('[ws] command rooms', e))
 
     // Broadcast presence to management
     if (user.portal === 'field') {
