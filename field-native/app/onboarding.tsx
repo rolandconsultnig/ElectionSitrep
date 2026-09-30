@@ -4,6 +4,7 @@ import { isLocalSessionToken } from '../lib/local-session'
 import { colors, radii, space } from '../lib/theme'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import * as ImageManipulator from 'expo-image-manipulator'
+import { judgeFrames, sampleFrame, type FrameSample } from '../lib/liveness'
 import { Redirect } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import {
@@ -32,6 +33,7 @@ export default function OnboardingScreen() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showCamera, setShowCamera] = useState(false)
+  const [verifying, setVerifying] = useState(false)
 
   useEffect(() => {
     const p = user?.profile
@@ -53,11 +55,26 @@ export default function OnboardingScreen() {
 
   async function capturePhoto() {
     setError(null)
-    if (!cameraRef.current) return
+    if (!cameraRef.current || verifying) return
+    setVerifying(true)
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.88 })
-      if (!photo?.uri) throw new Error('Camera did not return an image.')
-      const manip = await ImageManipulator.manipulateAsync(photo.uri, [], {
+      // Take several frames over a few seconds and require a real, blinking face.
+      const frames: FrameSample[] = []
+      let lastUri: string | null = null
+      for (let i = 0; i < 4; i++) {
+        const photo = await cameraRef.current!.takePictureAsync({ quality: 0.5, skipProcessing: true })
+        if (!photo?.uri) throw new Error('Camera did not return an image.')
+        lastUri = photo.uri
+        try {
+          frames.push(await sampleFrame(photo.uri))
+        } catch {
+          frames.push({ uri: photo.uri, faceCount: 0, minEyeOpen: null })
+        }
+        if (i < 3) await new Promise((r) => setTimeout(r, 900))
+      }
+      const verdict = judgeFrames(frames)
+      if (!verdict.ok) throw new Error(verdict.reason ?? 'Face verification failed.')
+      const manip = await ImageManipulator.manipulateAsync(lastUri!, [], {
         compress: 0.85,
         format: ImageManipulator.SaveFormat.JPEG,
         base64: true,
@@ -67,6 +84,8 @@ export default function OnboardingScreen() {
       setShowCamera(false)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Photo capture failed.')
+    } finally {
+      setVerifying(false)
     }
   }
 
@@ -135,12 +154,18 @@ export default function OnboardingScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: '#000' }}>
         <CameraView ref={cameraRef} style={{ flex: 1 }} facing="front" />
+        <View style={styles.camHint}>
+          <Text style={styles.camHintText}>
+            {verifying ? 'Verifying your face — hold still…' : 'Centre your face and blink slowly when you tap Capture'}
+          </Text>
+          {error ? <Text style={styles.camErr}>{error}</Text> : null}
+        </View>
         <SafeAreaView style={styles.camBar}>
-          <Pressable onPress={() => setShowCamera(false)} style={styles.secondary}>
+          <Pressable onPress={() => setShowCamera(false)} style={styles.secondary} disabled={verifying}>
             <Text style={styles.secondaryText}>Cancel</Text>
           </Pressable>
-          <Pressable onPress={capturePhoto} style={styles.btn}>
-            <Text style={styles.btnText}>Capture</Text>
+          <Pressable onPress={capturePhoto} style={[styles.btn, verifying && { opacity: 0.7 }]} disabled={verifying}>
+            {verifying ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Capture</Text>}
           </Pressable>
         </SafeAreaView>
       </View>
@@ -257,4 +282,14 @@ const styles = StyleSheet.create({
   },
   secondary: { padding: space.sm },
   secondaryText: { color: '#ccc', fontSize: 16 },
+  camHint: {
+    position: 'absolute',
+    bottom: 110,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingHorizontal: space.lg,
+  },
+  camHintText: { color: '#fff', fontSize: 15, textAlign: 'center', fontWeight: '600' },
+  camErr: { color: '#ff9b9b', fontSize: 14, textAlign: 'center', marginTop: space.sm },
 })

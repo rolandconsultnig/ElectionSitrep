@@ -19,6 +19,7 @@
     "@capacitor/app": "^8.1.0",
     "@capacitor/cli": "^8.3.3",
     "@capacitor/core": "^8.3.3",
+    "@mediapipe/tasks-vision": "1.0.1",
     "@react-map/nigeria": "^1.0.9",
     "@tanstack/react-query": "^5.100.9",
     "buffer": "^6.0.3",

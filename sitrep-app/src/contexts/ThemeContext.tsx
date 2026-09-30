@@ -19,7 +19,7 @@ function readStoredTheme(): Theme {
   } catch {
     /* ignore */
   }
-  return 'light'
+  return 'dark'
 }
 
 function applyDomTheme(theme: Theme) {
@@ -41,7 +41,7 @@ const ThemeContext = createContext<ThemeContextValue | null>(null)
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() =>
-    typeof window !== 'undefined' ? readStoredTheme() : 'light',
+    typeof window !== 'undefined' ? readStoredTheme() : 'dark',
   )
 
   const setTheme = useCallback((t: Theme) => {

@@ -17,7 +17,7 @@
       "supportsTablet": true
     },
     "android": {
-      "minSdkVersion": 26,
+      "minSdkVersion": 29,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0a1628"
@@ -28,7 +28,7 @@
       "package": "com.npfsitrep.field"
     },
     "extra": {
-      "apiBaseUrl": "http://13.53.33.63:5530"
+      "apiBaseUrl": "https://flankmobile.online"
     },
     "web": {
       "bundler": "metro",
@@ -40,13 +40,19 @@
         "expo-build-properties",
         {
           "android": {
-            "minSdkVersion": 26,
+            "minSdkVersion": 29,
             "compileSdkVersion": 35,
-            "targetSdkVersion": 35,
-            "kotlinVersion": "2.0.21"
+            "targetSdkVersion": 35
           }
         }
       ]
-    ]
+    ],
+    "runtimeVersion": "1.0.0",
+    "updates": {
+      "enabled": true,
+      "url": "https://flankmobile.online/api/ota/manifest",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    }
   }
 }

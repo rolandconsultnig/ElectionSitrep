@@ -26,6 +26,9 @@ type ApiUser = {
 
 /** When the Vite proxy returns 5xx or fetch fails — backend not on 5530 or DB down */
 function devApiUnavailableHint() {
+  if (import.meta.env.PROD) {
+    return 'Check your internet connection and try again. If it persists, your network may be blocking or caching an old address for this site — try another network or contact your system administrator.'
+  }
   const ui = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5535'
   return `Start the API on port 5530 (server PORT in .env). Test: http://localhost:5530/api/health — expect {"ok":true}. From repo root: npm run dev (API + web), or npm run dev --prefix server while Vite runs. This page: ${ui}. See README.`
 }

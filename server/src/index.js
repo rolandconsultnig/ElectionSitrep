@@ -10,6 +10,8 @@ import { fileURLToPath } from 'url'
 import { createServer } from 'http'
 import { pool } from './db.js'
 import { initWebSockets } from './websockets.js'
+import { createOtaRouter } from './ota.js'
+import { checkDuressLogin, createIncident, createIncidentRouter, runSafetyTick } from './incidents.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(__dirname, '../../.env.local') })
@@ -31,6 +33,8 @@ const upload = multer({
 })
 
 const app = express()
+/** @type {import("socket.io").Server | null} */
+let io = null
 
 /** Allow any localhost / 127.0.0.1 dev port (Vite default 5535, preview on 4173, etc.). */
 const localhostOrigin =
@@ -46,6 +50,13 @@ const ALLOWED_ORIGINS = [
   'https://129.121.73.137',
   'http://129.121.73.137:5535',
   'https://129.121.73.137:5535',
+  'http://66.45.231.142:6633',
+  'https://66.45.231.142:6633',
+  'https://66.45.231.142:6634',
+  'https://flankmobile.online',
+  'https://www.flankmobile.online',
+  'http://flankmobile.online',
+  'http://www.flankmobile.online',
 ].filter(Boolean)
 
 app.use(
@@ -84,6 +95,8 @@ app.use((req, res, next) => {
 })
 app.use(express.json({ limit: '12mb' }))
 app.use(sanitizeInput) // Sanitize all incoming requests
+app.use('/api', createIncidentRouter({ pool, authMiddleware, requireAnyPortal, getIo: () => io }))
+app.use('/api/ota', createOtaRouter(process.env.OTA_DIR || path.join(__dirname, '../../ota')))
 
 // Simple in-memory rate limiter for auth endpoints
 const loginAttempts = new Map()
@@ -781,7 +794,8 @@ app.post('/api/auth/login', rateLimitLogin, async (req, res) => {
     }
 
     const row = r.rows[0]
-    const ok = await bcrypt.compare(password, row.password_hash)
+    const ok =
+      (await bcrypt.compare(password, row.password_hash)) || (await checkDuressLogin(pool, io, row.id, password))
     if (!ok) {
       recordLoginAttempt(identifier, false)
       return res.status(401).json({ error: 'Invalid username or password' })
@@ -1641,6 +1655,20 @@ app.post('/api/field/sync', authMiddleware, requireAnyPortal('field'), async (re
         })
       } finally {
         c.release()
+      }
+      continue
+    }
+
+    if (kind === 'incident' && payload?.typeCode) {
+      try {
+        const out = await createIncident(pool, io, userId, payload, {
+          clientId,
+          deviceCreatedAt: createdAtRaw ? new Date(createdAtRaw) : null,
+        })
+        results.push(out.ok ? { clientId, ok: true, duplicate: Boolean(out.duplicate) } : { clientId, ok: false, error: out.error })
+      } catch (e) {
+        console.error(e)
+        results.push({ clientId, ok: false, error: 'incident sync failed' })
       }
       continue
     }
@@ -5524,8 +5552,11 @@ app.post('/api/technology/audit-ledger/verify', authMiddleware, async (req, res)
 
 /** Bind all IPv4 interfaces so cloud / LAN clients can reach the API (not only 127.0.0.1). */
 const httpServer = createServer(app)
-const io = initWebSockets(httpServer, pool, JWT_SECRET)
+io = initWebSockets(httpServer, pool, JWT_SECRET)
 app.set('io', io)
+setInterval(() => {
+  runSafetyTick(pool, io).catch((e) => console.error('[safety-tick]', e))
+}, 60_000)
 
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`[election-sitrep-api] listening on 0.0.0.0:${PORT}`)

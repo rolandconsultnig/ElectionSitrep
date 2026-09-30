@@ -2,7 +2,7 @@
 try {
   const t = localStorage.getItem('npf_theme')
   if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t
-  else document.documentElement.dataset.theme = 'light'
+  else document.documentElement.dataset.theme = 'dark'
 } catch {
-  document.documentElement.dataset.theme = 'light'
+  document.documentElement.dataset.theme = 'dark'
 }

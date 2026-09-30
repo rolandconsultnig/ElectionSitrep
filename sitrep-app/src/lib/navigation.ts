@@ -56,6 +56,7 @@ export const PORTALS: Record<PortalId, PortalMeta> = {
             ]
           },
           { id: 'operations-map', moduleCode: 'M05b', label: 'Operations map', icon: '🗺', path: 'operations-map' },
+          { id: 'incident-command', moduleCode: 'M05c', label: 'Incident command', icon: '🚨', path: 'incident-command' },
         ],
       },
       {
@@ -133,6 +134,7 @@ export const PORTALS: Record<PortalId, PortalMeta> = {
         items: [
           { id: 'incidents', moduleCode: 'M14', label: 'Report Incident', icon: '⚠', path: 'incidents' },
           { id: 'violence', moduleCode: 'M15', label: 'Violence & Disturbance Log', icon: '🚨', path: 'violence' },
+          { id: 'safety', moduleCode: 'M15b', label: 'Safety · SOS & check-in', icon: '🆘', path: 'safety' },
         ],
       },
       {
@@ -202,6 +204,7 @@ export const PORTALS: Record<PortalId, PortalMeta> = {
         section: 'Analysis',
         items: [
           { id: 'results', moduleCode: 'M21', label: 'Live Results Tracker', icon: '📊', path: 'results' },
+          { id: 'incident-command', moduleCode: 'M22a', label: 'Incident command', icon: '🚨', path: 'incident-command' },
           { id: 'incidents', moduleCode: 'M22', label: 'Incident Tracker', icon: '⚠', path: 'incidents' },
           { id: 'turnout', moduleCode: 'M23', label: 'Turnout Analysis', icon: '📈', path: 'turnout' },
         ],
@@ -282,6 +285,7 @@ export const PORTALS: Record<PortalId, PortalMeta> = {
               { id: 'svg-monitor', moduleCode: 'EXT-2', label: 'Situation Room (Large Screen)', path: '/svg-monitor' }
             ]
           },
+          { id: 'incident-command', moduleCode: 'M27a', label: 'Incident command', icon: '🚨', path: 'incident-command' },
           { id: 'results', moduleCode: 'M28', label: 'Election Results', icon: '📊', path: 'results' },
         ],
       },
