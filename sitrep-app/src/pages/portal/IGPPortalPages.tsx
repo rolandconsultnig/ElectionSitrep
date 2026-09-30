@@ -3,8 +3,10 @@ import { useQuery } from '@tanstack/react-query'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import { chartColors, chartTooltipTheme } from '../../charts/register'
 import { NigeriaMap } from '../../components/NigeriaMap'
+import { IGPExecutiveDashboard } from '../../components/IGPExecutiveDashboard'
 import { apiJson } from '../../lib/api'
 import type { ElectionResultsPayload, ExecutiveDashboardSummary } from './igp-portal-types'
+import type { GeoFeatureCollection } from '../../components/operations-map-types'
 
 const card = 'sr-card'
 
@@ -38,7 +40,7 @@ function useFieldOpsMap() {
 }
 
 const PARTY_CHART_PALETTE = [
-  '#00C896',
+  '#d9b64a',
   '#3B82F6',
   '#F59E0B',
   '#EF4444',
@@ -76,142 +78,22 @@ function useIgpElectionResults(slug: string | null) {
 }
 
 export function IGPReadOnlyBanner() {
-  return (
-    <div className="mb-6 rounded-xl border border-[#c9a227]/35 bg-gradient-to-r from-[#c9a227]/10 to-[#0dccb0]/10 px-4 py-3 text-[13px] text-[var(--portal-muted)] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-      <span className="font-(--font-mono) text-[10px] uppercase tracking-wider text-[#00C896]">IGP portal</span>
-      <span className="ml-3">
-        Read-only executive intelligence — data from live system KPIs and field deployment (no data entry) (§04 / §M26–M31).
-      </span>
-    </div>
-  )
+  return null
 }
 
 export function IGPOverview() {
   const dash = useExecutiveDashboard()
   const d = dash.data
 
-  const readinessDonut = useMemo(
-    () =>
-      d
-        ? {
-            labels: ['Readiness index', 'Open items'],
-            datasets: [
-              {
-                data: [d.readiness.readinessPercent, Math.max(0, 100 - d.readiness.readinessPercent)],
-                backgroundColor: [chartColors.green, chartColors.border],
-                borderColor: '#0A1628',
-                borderWidth: 4,
-              },
-            ],
-          }
-        : null,
-    [d],
-  )
-
   return (
-    <div className="space-y-6">
-      <IGPReadOnlyBanner />
-      <header>
-        <h1 className="font-(--font-syne) text-2xl font-bold text-[var(--portal-fg)]">National overview</h1>
-        <p className="mt-1 text-sm text-[var(--portal-muted)]">Live KPIs from operations database · same signals as command view (§M26)</p>
-      </header>
-
-      {dash.isError ? (
-        <p className="rounded-lg border border-[#f05b4d]/30 bg-[#f05b4d]/10 px-3 py-2 text-sm text-[#fca5a5]" role="alert">
-          {dash.error instanceof Error ? dash.error.message : 'Could not load executive summary'}
-        </p>
-      ) : null}
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <BigKpi
-          value={d ? fmt(d.kpis.registeredPus) : '—'}
-          label="Registered PUs (system)"
-          color="text-[#00C896]"
-          loading={dash.isLoading}
-        />
-        <BigKpi
-          value={d ? fmt(d.kpis.activeFieldOfficers) : '—'}
-          label="Active field officers"
-          color="text-[#3B82F6]"
-          loading={dash.isLoading}
-        />
-        <BigKpi
-          value={d ? fmt(d.geography.pollingUnits) : '—'}
-          label="PU catalog (geography)"
-          color="text-[#F59E0B]"
-          loading={dash.isLoading}
-        />
-        <BigKpi
-          value={d ? fmt(d.kpis.pendingApprovals) : '—'}
-          label="Pending approvals"
-          color="text-[#EF4444]"
-          loading={dash.isLoading}
-        />
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className={card}>
-          <div className="mb-3 font-(--font-syne) text-sm font-semibold text-[var(--portal-fg)]">Readiness index</div>
-          {readinessDonut ? (
-            <Doughnut
-              data={readinessDonut}
-              options={{
-                cutout: '65%',
-                plugins: {
-                  legend: { position: 'right', labels: { color: chartColors.muted } },
-                  tooltip: chartTooltipTheme(),
-                },
-              }}
-            />
-          ) : (
-            <p className="py-12 text-center text-sm text-[var(--portal-muted)]">{dash.isLoading ? 'Loading…' : '—'}</p>
-          )}
-        </div>
-        <div className={card}>
-          <div className="mb-3 font-(--font-syne) text-sm font-semibold text-[var(--portal-fg)]">National footprint</div>
-          <dl className="grid gap-3 text-sm text-[var(--portal-muted)]">
-            <div className="flex justify-between border-b border-[color:var(--portal-border)] pb-2">
-              <dt>States &amp; FCT</dt>
-              <dd className="font-(--font-mono) text-[var(--portal-fg)]">{d ? fmt(d.geography.statesAndFct) : '—'}</dd>
-            </div>
-            <div className="flex justify-between border-b border-[color:var(--portal-border)] pb-2">
-              <dt>LGAs</dt>
-              <dd className="font-(--font-mono) text-[var(--portal-fg)]">{d ? fmt(d.geography.lgas) : '—'}</dd>
-            </div>
-            <div className="flex justify-between border-b border-[color:var(--portal-border)] pb-2">
-              <dt>Wards</dt>
-              <dd className="font-(--font-mono) text-[var(--portal-fg)]">{d ? fmt(d.geography.wards) : '—'}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt>Parties registered</dt>
-              <dd className="font-(--font-mono) text-[#00C896]">{d ? fmt(d.kpis.partiesRegistered) : '—'}</dd>
-            </div>
-          </dl>
-          <p className="mt-4 text-xs text-[var(--portal-dim)]">
-            Readiness checklist drives the doughnut; geography reflects imported INEC hierarchy.
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function BigKpi({
-  value,
-  label,
-  color,
-  loading,
-}: {
-  value: string
-  label: string
-  color: string
-  loading?: boolean
-}) {
-  return (
-    <div className="rounded-2xl border border-[#00C896]/15 bg-gradient-to-br from-white/[0.04] to-[#00C896]/5 p-6 text-center">
-      <div className={`font-(--font-syne) text-4xl font-extrabold ${loading ? 'animate-pulse text-[var(--portal-dim)]' : color}`}>
-        {loading ? '…' : value}
-      </div>
-      <div className="mt-2 text-xs text-[var(--portal-muted)]">{label}</div>
+    <div className="-m-4 sm:-m-6 md:-m-8">
+      <IGPExecutiveDashboard 
+        kpis={d?.kpis || { registeredPus: 0, activeFieldOfficers: 0, pendingApprovals: 0, partiesRegistered: 0 }}
+        geography={d?.geography || { statesAndFct: 0, lgas: 0, wards: 0, pollingUnits: 0 }}
+        readiness={d?.readiness || { items: [], readinessPercent: 0 }}
+        isLoading={dash.isLoading}
+        isError={dash.isError}
+      />
     </div>
   )
 }
@@ -256,7 +138,7 @@ export function IGPSecurity() {
         {
           data: [Math.round(safe * 10) / 10, Math.round(risk * 10) / 10],
           backgroundColor: [chartColors.green, chartColors.red],
-          borderColor: '#0A1628',
+          borderColor: '#0a1510',
           borderWidth: 2,
         },
       ],
@@ -354,7 +236,7 @@ export function IGPResults() {
         {
           data: nat.map((p) => p.votes),
           backgroundColor: nat.map((_, i) => partyChartColor(i)),
-          borderColor: '#0A1628',
+          borderColor: '#0a1510',
           borderWidth: 2,
         },
       ],
@@ -422,7 +304,7 @@ export function IGPResults() {
           </div>
           <div>
             <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-dim)]">Total votes recorded</span>
-            <div className="mt-0.5 font-(--font-syne) text-lg text-[#00C896]">{fmt(meta.totalVotes)}</div>
+            <div className="mt-0.5 font-(--font-syne) text-lg text-[#d9b64a]">{fmt(meta.totalVotes)}</div>
           </div>
           <div>
             <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-dim)]">Last upload</span>
@@ -531,6 +413,11 @@ export function IGPResults() {
 
 export function IGPHotspots() {
   const mapQ = useFieldOpsMap()
+  const statesLayer = useQuery({
+    queryKey: ['geo-layer-states'],
+    queryFn: () => apiJson<GeoFeatureCollection>('/api/geo/layers/states'),
+  })
+
   const pinProps = useMemo(() => {
     const data = mapQ.data
     if (!data) return []
@@ -566,14 +453,19 @@ export function IGPHotspots() {
         </p>
       ) : null}
 
-      {mapQ.isLoading ? (
+      {mapQ.isLoading || statesLayer.isLoading ? (
         <div className={`${card} py-16 text-center text-sm text-[var(--portal-muted)]`}>Loading deployment…</div>
       ) : pinProps.length === 0 ? (
         <div className={`${card} py-16 text-center text-sm text-[var(--portal-muted)]`}>
           No field officers provisioned yet — use Admin → credential batches to deploy accounts.
         </div>
       ) : (
-        <NigeriaMap pins={pinProps} height="400px" hint="Executive security overview — field roster positions" />
+        <NigeriaMap 
+          pins={pinProps} 
+          statesGeo={statesLayer.data}
+          height="400px" 
+          hint="Executive security overview — field roster positions. Click any state to zoom in." 
+        />
       )}
     </div>
   )
@@ -670,7 +562,7 @@ export function IGPBriefing() {
         </p>
       ) : null}
 
-      <div className={`${card} border-l-4 border-[#00C896]`}>
+      <div className={`${card} border-l-4 border-[#d9b64a]`}>
         <div className="font-(--font-mono) text-[10px] uppercase tracking-wider text-[var(--portal-dim)]">
           Classification: RESTRICTED · NPF operational intelligence
         </div>

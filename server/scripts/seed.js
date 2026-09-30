@@ -27,6 +27,19 @@ const demoUsers = [
   ['igp.office', 'igp'],
 ]
 
+/**
+ * Command-tier demo accounts with jurisdiction scope (migration_020).
+ * onboarding_complete + password set so reviewers can sign straight in.
+ * level/state/lga resolved against geo tables at seed time.
+ */
+const commandUsers = [
+  { username: 'hq.command', level: 'national' },
+  { username: 'oyo.command', level: 'state', stateName: 'Oyo' },
+  { username: 'lagos.command', level: 'state', stateName: 'Lagos' },
+  { username: 'kano.command', level: 'state', stateName: 'Kano' },
+  { username: 'area.ibadan', level: 'area', stateName: 'Oyo', lgaName: 'Ibadan North' },
+]
+
 async function main() {
   const connectionString = process.env.DATABASE_URL
   if (!connectionString) {
@@ -118,6 +131,48 @@ async function main() {
       )
     }
     console.log(`Demo users upserted (login password: demo): ${demoUsers.map((u) => u[0]).join(', ')}`)
+
+    // Command-tier accounts with jurisdiction scope
+    for (const cu of commandUsers) {
+      let stateId = null
+      let lgaId = null
+      if (cu.stateName) {
+        const s = await client.query('SELECT id FROM geo_states WHERE lower(name) = lower($1) LIMIT 1', [cu.stateName])
+        stateId = s.rows[0]?.id ?? null
+      }
+      if (cu.level === 'area' && cu.lgaName) {
+        const l = await client.query(
+          'SELECT id, state_id FROM geo_lgas WHERE lower(name) = lower($1) LIMIT 1',
+          [cu.lgaName],
+        )
+        if (l.rows.length) {
+          lgaId = l.rows[0].id
+          stateId = l.rows[0].state_id
+        } else if (stateId) {
+          // Fallback: first LGA of the requested state
+          const anyLga = await client.query('SELECT id FROM geo_lgas WHERE state_id = $1 ORDER BY name LIMIT 1', [stateId])
+          lgaId = anyLga.rows[0]?.id ?? null
+        }
+      }
+      await client.query(
+        `INSERT INTO app_users (username, password_hash, portal, onboarding_complete, password_must_change,
+                                jurisdiction_level, jurisdiction_state_id, jurisdiction_lga_id)
+         VALUES ($1, $2, 'management', true, false, $3, $4, $5)
+         ON CONFLICT (username) DO UPDATE SET
+           password_hash = EXCLUDED.password_hash,
+           portal = 'management',
+           onboarding_complete = true,
+           password_must_change = false,
+           jurisdiction_level = EXCLUDED.jurisdiction_level,
+           jurisdiction_state_id = EXCLUDED.jurisdiction_state_id,
+           jurisdiction_lga_id = EXCLUDED.jurisdiction_lga_id,
+           updated_at = now()`,
+        [cu.username, demoHash, cu.level, stateId, lgaId],
+      )
+      const scope =
+        cu.level === 'national' ? 'Force HQ (national)' : cu.level === 'state' ? `${cu.stateName} State` : `${cu.lgaName} Area (LGA id ${lgaId})`
+      console.log(`  command account ${cu.username} → ${scope}`)
+    }
 
     const ac = await client.query(`SELECT COUNT(*)::int AS c FROM audit_log`)
     if (ac.rows[0].c === 0) {

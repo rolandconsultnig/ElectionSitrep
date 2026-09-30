@@ -25,7 +25,7 @@ From the **repository root** (`ElectionSitrep/`):
 
 1. Copy `.env.example` to `.env.local`.
 2. Set **`DATABASE_URL`** to your PostgreSQL connection string (same pattern as in `.env.example`).
-3. Optionally set **`JWT_SECRET`** for auth tokens (the API falls back to a dev secret if unset).
+3. Set **`JWT_SECRET`** for auth tokens — required, minimum 32 characters (the API refuses to start without it).
 
 ### 2. Database
 

@@ -5,7 +5,8 @@ export type NavItem = {
   moduleCode: string
   label: string
   icon: string
-  path: string
+  path?: string
+  subItems?: Omit<NavItem, 'subItems' | 'icon'>[]
 }
 
 export type NavSection = { section: string; items: NavItem[] }
@@ -39,6 +40,21 @@ export const PORTALS: Record<PortalId, PortalMeta> = {
           { id: 'parties', moduleCode: 'M03', label: 'Political Parties', icon: '⚑', path: 'parties' },
           { id: 'candidates', moduleCode: 'M04', label: 'Candidates', icon: '👤', path: 'candidates' },
           { id: 'geography', moduleCode: 'M05', label: 'LGAs & Polling Units', icon: '📍', path: 'geography' },
+        ],
+      },
+      {
+        section: 'Command view',
+        items: [
+          { 
+            id: 'command-screens', 
+            moduleCode: 'EXT', 
+            label: 'Situation Room', 
+            icon: '📺', 
+            subItems: [
+              { id: 'situation-room', moduleCode: 'EXT-1', label: 'Situation Room 1', path: '/situation-room' },
+              { id: 'svg-monitor', moduleCode: 'EXT-2', label: 'Situation Room (Large Screen)', path: '/svg-monitor' }
+            ]
+          },
           { id: 'operations-map', moduleCode: 'M05b', label: 'Operations map', icon: '🗺', path: 'operations-map' },
         ],
       },
@@ -54,6 +70,15 @@ export const PORTALS: Record<PortalId, PortalMeta> = {
             icon: '🔑',
             path: 'credential-batches',
           },
+        ],
+      },
+      {
+        section: 'Technology & Zero-Trust Integrity (Phase 5)',
+        items: [
+          { id: 'admin-offline', moduleCode: 'P5-01', label: 'Offline Sync & Conflicts', icon: '📶', path: 'offline-sync' },
+          { id: 'admin-telemetry', moduleCode: 'P5-02', label: 'Device & Battery Telemetry', icon: '🔋', path: 'device-telemetry' },
+          { id: 'admin-sms', moduleCode: 'P5-03', label: 'SMS & USSD Fallback Gateway', icon: '📲', path: 'sms-gateway' },
+          { id: 'admin-ledger', moduleCode: 'P5-04', label: 'Tamper-Proof Audit Ledger', icon: '🛡️', path: 'crypto-ledger' },
         ],
       },
       {
@@ -84,6 +109,16 @@ export const PORTALS: Record<PortalId, PortalMeta> = {
     color: '#F59E0B',
     accentClass: 'text-amber-400 border-amber-500/40 bg-amber-500/10',
     nav: [
+      {
+        section: 'Election Operations (Phase 2)',
+        items: [
+          { id: 'timeline', moduleCode: 'P2-01', label: 'Operational Timeline', icon: '⏱', path: 'timeline' },
+          { id: 'ec8a', moduleCode: 'P2-02', label: 'EC8A Evidence & Tally', icon: '📜', path: 'ec8a' },
+          { id: 'materials', moduleCode: 'P2-03', label: 'Sensitive Materials Log', icon: '📦', path: 'materials' },
+          { id: 'shifts', moduleCode: 'P2-04', label: 'Relief & Shift Handover', icon: '🔄', path: 'shifts' },
+          { id: 'logistics', moduleCode: 'P2-05', label: 'Logistics Requests', icon: '⛽', path: 'logistics' },
+        ],
+      },
       {
         section: 'Reporting',
         items: [
@@ -135,11 +170,32 @@ export const PORTALS: Record<PortalId, PortalMeta> = {
     accentClass: 'text-blue-400 border-blue-500/40 bg-blue-500/10',
     nav: [
       {
+        section: 'Election Operations (Phase 2)',
+        items: [
+          { id: 'mgmt-timeline', moduleCode: 'P2-01', label: 'Operational Timeline Rollup', icon: '⏱', path: 'timeline' },
+          { id: 'mgmt-ec8a', moduleCode: 'P2-02', label: 'EC8A Collation & Evidence', icon: '📜', path: 'ec8a-mirror' },
+          { id: 'mgmt-materials', moduleCode: 'P2-03', label: 'Materials Chain-of-Custody', icon: '📦', path: 'materials-chain' },
+          { id: 'mgmt-roster', moduleCode: 'P2-04', label: 'Deployment Roster & Gaps', icon: '👥', path: 'roster' },
+          { id: 'mgmt-logistics', moduleCode: 'P2-05', label: 'Logistics Tasking Board', icon: '⛽', path: 'logistics-board' },
+          { id: 'mgmt-qrf', moduleCode: 'P2-06', label: 'QRF Dispatch Board', icon: '⚡', path: 'qrf-board' },
+        ],
+      },
+      {
         section: 'Command view',
         items: [
           { id: 'dashboard', moduleCode: 'M18', label: 'Command Dashboard', icon: '◈', path: 'dashboard' },
           { id: 'map', moduleCode: 'M19', label: 'Operations Map', icon: '🗺', path: 'map' },
-          { id: 'sitrep', moduleCode: 'M20', label: 'Live SitRep Feed', icon: '📋', path: 'sitrep' },
+          { 
+            id: 'command-screens', 
+            moduleCode: 'EXT', 
+            label: 'Situation Room', 
+            icon: '📺', 
+            subItems: [
+              { id: 'situation-room', moduleCode: 'EXT-1', label: 'Situation Room 1', path: '/situation-room' },
+              { id: 'svg-monitor', moduleCode: 'EXT-2', label: 'Situation Room (Large Screen)', path: '/svg-monitor' }
+            ]
+          },
+          { id: 'sitrep', moduleCode: 'M20', label: 'Live SitRep Feed', icon: '📡', path: 'sitrep' },
         ],
       },
       {
@@ -164,6 +220,33 @@ export const PORTALS: Record<PortalId, PortalMeta> = {
         ],
       },
       {
+        section: 'Political & Intelligence (Phase 3)',
+        items: [
+          { id: 'mgmt-party-attr', moduleCode: 'P3-01', label: 'Partisan Incident Attribution', icon: '⚖', path: 'party-attribution' },
+          { id: 'mgmt-stakeholders', moduleCode: 'P3-02', label: 'Observer & Media Registry', icon: '🌐', path: 'stakeholders' },
+          { id: 'mgmt-scenarios', moduleCode: 'P3-03', label: 'Scenario Playbooks & Doctrines', icon: '🧭', path: 'scenarios' },
+          { id: 'mgmt-tribunal', moduleCode: 'P3-04', label: 'Tribunal Evidence Bundler', icon: '📜', path: 'tribunal-evidence' },
+        ],
+      },
+      {
+        section: 'Command & Inter-Agency (Phase 4)',
+        items: [
+          { id: 'mgmt-taskforce', moduleCode: 'P4-01', label: 'Inter-Agency Taskforce Board', icon: '🏛', path: 'taskforce' },
+          { id: 'mgmt-directives', moduleCode: 'P4-02', label: 'Command Directives & Signals', icon: '📡', path: 'directives' },
+          { id: 'mgmt-geofence', moduleCode: 'P4-03', label: 'Geofenced QRF Interceptor', icon: '🎯', path: 'geofence-qrf' },
+          { id: 'mgmt-wallsync', moduleCode: 'P4-04', label: 'Situation Room Wall Sync', icon: '📺', path: 'wall-sync' },
+        ],
+      },
+      {
+        section: 'Technology & Field Realities (Phase 5)',
+        items: [
+          { id: 'mgmt-offline', moduleCode: 'P5-01', label: 'Offline Sync & Outbox', icon: '📶', path: 'offline-sync' },
+          { id: 'mgmt-telemetry', moduleCode: 'P5-02', label: 'Device & Battery Fleet Status', icon: '🔋', path: 'device-telemetry' },
+          { id: 'mgmt-sms', moduleCode: 'P5-03', label: 'SMS & USSD Fallback Gateway', icon: '📲', path: 'sms-gateway' },
+          { id: 'mgmt-ledger', moduleCode: 'P5-04', label: 'Cryptographic Audit Ledger', icon: '🛡️', path: 'crypto-ledger' },
+        ],
+      },
+      {
         section: 'Account',
         items: [
           {
@@ -181,15 +264,52 @@ export const PORTALS: Record<PortalId, PortalMeta> = {
     id: 'igp',
     label: 'IGP Portal',
     shortLabel: 'Portal 04',
-    color: '#00C896',
-    accentClass: 'text-[#00C896] border-[#00C896]/40 bg-[#00C896]/10',
+    color: '#d9b64a',
+    accentClass: 'text-[#d9b64a] border-[#d9b64a]/40 bg-[#d9b64a]/10',
     nav: [
       {
         section: 'Executive view',
         items: [
           { id: 'overview', moduleCode: 'M26', label: 'National Overview', icon: '◈', path: 'overview' },
           { id: 'security', moduleCode: 'M27', label: 'Security Status', icon: '🛡', path: 'security' },
+          { 
+            id: 'command-screens', 
+            moduleCode: 'EXT', 
+            label: 'Situation Room', 
+            icon: '📺', 
+            subItems: [
+              { id: 'situation-room', moduleCode: 'EXT-1', label: 'Situation Room 1', path: '/situation-room' },
+              { id: 'svg-monitor', moduleCode: 'EXT-2', label: 'Situation Room (Large Screen)', path: '/svg-monitor' }
+            ]
+          },
           { id: 'results', moduleCode: 'M28', label: 'Election Results', icon: '📊', path: 'results' },
+        ],
+      },
+      {
+        section: 'Command & Communications (Phase 4)',
+        items: [
+          { id: 'igp-taskforce', moduleCode: 'P4-01', label: 'Inter-Agency Joint Command', icon: '🏛', path: 'taskforce' },
+          { id: 'igp-directives', moduleCode: 'P4-02', label: 'Flash Signals & Directives', icon: '📡', path: 'directives' },
+          { id: 'igp-geofence', moduleCode: 'P4-03', label: 'Geofenced Tactical Triangulation', icon: '🎯', path: 'geofence-qrf' },
+          { id: 'igp-wallsync', moduleCode: 'P4-04', label: 'Operations Video Wall Sync', icon: '📺', path: 'wall-sync' },
+        ],
+      },
+      {
+        section: 'Political & Situational Awareness (Phase 3)',
+        items: [
+          { id: 'igp-party-attr', moduleCode: 'P3-01', label: 'Partisan Threat Matrix', icon: '⚖', path: 'party-attribution' },
+          { id: 'igp-stakeholders', moduleCode: 'P3-02', label: 'Observer & Mission Registry', icon: '🌐', path: 'stakeholders' },
+          { id: 'igp-scenarios', moduleCode: 'P3-03', label: 'Post-Election Contingencies', icon: '🧭', path: 'scenarios' },
+          { id: 'igp-tribunal', moduleCode: 'P3-04', label: 'Tribunal Evidence Dossiers', icon: '📜', path: 'tribunal-evidence' },
+        ],
+      },
+      {
+        section: 'Technology & Zero-Trust Integrity (Phase 5)',
+        items: [
+          { id: 'igp-offline', moduleCode: 'P5-01', label: 'Resilient Offline Sync', icon: '📶', path: 'offline-sync' },
+          { id: 'igp-telemetry', moduleCode: 'P5-02', label: 'Device & Battery Health', icon: '🔋', path: 'device-telemetry' },
+          { id: 'igp-sms', moduleCode: 'P5-03', label: 'SMS / USSD Ingestion Gateway', icon: '📲', path: 'sms-gateway' },
+          { id: 'igp-ledger', moduleCode: 'P5-04', label: 'Zero-Trust Blockchain Ledger', icon: '🛡️', path: 'crypto-ledger' },
         ],
       },
       {

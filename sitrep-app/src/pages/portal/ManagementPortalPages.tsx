@@ -72,7 +72,7 @@ export function MgmtDashboard() {
 function Kpi({ label, value, hint, tone }: { label: string; value: string; hint: string; tone: string }) {
   const c =
     tone === 'green'
-      ? 'text-[#00C896]'
+      ? 'text-[#d9b64a]'
       : tone === 'blue'
         ? 'text-[#3B82F6]'
         : tone === 'amber'
@@ -139,7 +139,7 @@ export function MgmtResults() {
       {
         data: [38, 33, 24, 5, 0],
         backgroundColor: [chartColors.red, chartColors.blue, chartColors.amber, chartColors.purple, chartColors.border],
-        borderColor: '#0A1628',
+        borderColor: '#0a1510',
         borderWidth: 3,
       },
     ],
@@ -291,7 +291,7 @@ export function MgmtOrders() {
           <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">Message</span>
           <textarea rows={4} className="mt-1 w-full rounded-lg border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)] px-3 py-2 text-[var(--portal-fg)]" />
         </label>
-        <button type="button" className="mt-4 rounded-lg bg-[#00C896] px-4 py-2 text-sm font-semibold text-[#0A1628]">
+        <button type="button" className="mt-4 rounded-lg bg-[#d9b64a] px-4 py-2 text-sm font-semibold text-[#0a1510]">
           Broadcast order
         </button>
       </div>

@@ -18,7 +18,7 @@ export function ThemeToggle({ className = '', variant = 'default' }: Props) {
         'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition',
         'border-[color:var(--portal-border)] bg-[color:var(--theme-toggle-bg)] text-[var(--portal-muted)]',
         'hover:bg-[color:var(--theme-toggle-hover)] hover:text-[var(--portal-fg)]',
-        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0dccb0]',
+        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00c46a]',
         className,
       ].join(' ')}
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}

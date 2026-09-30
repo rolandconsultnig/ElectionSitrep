@@ -111,7 +111,7 @@ export function OnboardingPage() {
       </header>
 
       <main className="relative z-10 mx-auto max-w-3xl px-4 pb-20 pt-10 md:px-8 md:pb-28 md:pt-14">
-        <p className="font-(--font-mono) text-[10px] font-semibold uppercase tracking-[0.2em] text-[#0dccb0]">
+        <p className="font-(--font-mono) text-[10px] font-semibold uppercase tracking-[0.2em] text-[#00c46a]">
           First-time setup
         </p>
         <h1 className="sr-heading-page mt-2 font-(--font-display) text-2xl font-extrabold text-[var(--sr-heading)] md:text-3xl">
@@ -119,12 +119,12 @@ export function OnboardingPage() {
         </h1>
         <p className="mt-3 text-sm text-[var(--portal-muted)]">
           Signed in as{' '}
-          <span className="font-(--font-mono) text-[#0dccb0]">{user.username}</span> · Assigned portal{' '}
+          <span className="font-(--font-mono) text-[#00c46a]">{user.username}</span> · Assigned portal{' '}
           <strong className="text-[var(--sr-heading)]">{PORTALS[user.portalId].label}</strong>. Complete this page to enter
           your command workspace.
         </p>
 
-        <form onSubmit={handleSubmit} className="sr-card mt-10 space-y-6 border-[#0dccb0]/20">
+        <form onSubmit={handleSubmit} className="sr-card mt-10 space-y-6 border-[#00c46a]/20">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="sr-label" htmlFor="ob-firstname">

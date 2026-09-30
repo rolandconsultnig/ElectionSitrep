@@ -13,7 +13,6 @@ type BatchFromApi = {
   id: string
   batchId: string
   portalId: PortalId
-  rankLabel: string
   roleLabel: string
   createdAt: string
   credentials: IssuedRow[]
@@ -24,18 +23,23 @@ type CreateBatchResponse = {
     id: string
     batchId: string
     portalId: PortalId
-    rankLabel: string
     roleLabel: string
     createdAt: string
   }
   credentials: { username: string; password: string }[]
 }
 
+const DEFAULT_ROLES: Record<PortalId, string> = {
+  admin: 'System Admin',
+  field: 'Field Officer (PU)',
+  management: 'Situation room Command',
+  igp: 'IGP Executive',
+}
+
 export function AdminCredentialBatches() {
   const qc = useQueryClient()
   const [portalId, setPortalId] = useState<PortalId>('field')
-  const [rankLabel, setRankLabel] = useState('ASP')
-  const [roleLabel, setRoleLabel] = useState('Field SitRep officer')
+  const [roleLabel, setRoleLabel] = useState(DEFAULT_ROLES.field)
   const [count, setCount] = useState(5)
   /** Plaintext passwords returned once per batch generation (not stored in browser after refresh). */
   const [revealedByBatchKey, setRevealedByBatchKey] = useState<
@@ -51,7 +55,7 @@ export function AdminCredentialBatches() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (body: { portalId: PortalId; rankLabel: string; roleLabel: string; count: number }) =>
+    mutationFn: (body: { portalId: PortalId; roleLabel: string; count: number }) =>
       apiJson<CreateBatchResponse>('/api/admin/credential-batches', {
         method: 'POST',
         body: JSON.stringify(body),
@@ -66,7 +70,6 @@ export function AdminCredentialBatches() {
     const n = Math.min(50, Math.max(1, Math.floor(count)))
     createMutation.mutate({
       portalId,
-      rankLabel: rankLabel.trim() || '—',
       roleLabel: roleLabel.trim() || '—',
       count: n,
     })
@@ -105,7 +108,7 @@ export function AdminCredentialBatches() {
       <header>
         <h1 className="font-(--font-syne) text-2xl font-bold text-[var(--portal-fg)]">Credential batches</h1>
         <p className="mt-1 text-sm text-[var(--portal-muted)]">
-          Pick portal access (role tier), rank label, and batch size. Usernames and passwords are generated server-side and
+          Pick portal access (role tier) and batch size. Usernames and passwords are generated server-side and
           stored in PostgreSQL. Plaintext passwords are shown only once when you create a batch (copy before leaving this page).
         </p>
       </header>
@@ -125,7 +128,11 @@ export function AdminCredentialBatches() {
             <select
               id="portal"
               value={portalId}
-              onChange={(e) => setPortalId(e.target.value as PortalId)}
+              onChange={(e) => {
+                const p = e.target.value as PortalId
+                setPortalId(p)
+                setRoleLabel(DEFAULT_ROLES[p])
+              }}
               className="sr-input"
               disabled={createMutation.isPending}
             >
@@ -136,22 +143,9 @@ export function AdminCredentialBatches() {
               ))}
             </select>
           </div>
-          <div>
-            <label className="sr-label" htmlFor="rank">
-              Rank (label)
-            </label>
-            <input
-              id="rank"
-              value={rankLabel}
-              onChange={(e) => setRankLabel(e.target.value)}
-              className="sr-input"
-              placeholder="e.g. ASP, CSP"
-              disabled={createMutation.isPending}
-            />
-          </div>
-          <div>
+          <div className="sm:col-span-2">
             <label className="sr-label" htmlFor="role">
-              Role (label)
+              Role text
             </label>
             <input
               id="role"
@@ -207,7 +201,7 @@ export function AdminCredentialBatches() {
                   <p className="font-(--font-mono) text-[10px] uppercase tracking-wider text-[var(--portal-dim)]">{b.id}</p>
                   <p className="mt-1 font-(--font-display) font-bold text-[var(--portal-fg)]">{PORTALS[b.portalId].label}</p>
                   <p className="mt-1 text-sm text-[var(--portal-muted)]">
-                    Rank: {b.rankLabel} · Role: {b.roleLabel}
+                    Role: {b.roleLabel}
                   </p>
                   <p className="mt-1 font-(--font-mono) text-[10px] text-[var(--portal-dim)]">
                     {new Date(b.createdAt).toLocaleString('en-NG')}
@@ -231,7 +225,7 @@ export function AdminCredentialBatches() {
                       const pwd = passwordFor(b, c.username)
                       return (
                         <tr key={c.username} className="border-b border-[color:var(--portal-border)] last:border-0">
-                          <td className="px-3 py-2 text-[#0dccb0]">{c.username}</td>
+                          <td className="px-3 py-2 text-[#00c46a]">{c.username}</td>
                           <td className="px-3 py-2">
                             {pwd ?? (
                               <span className="text-[var(--portal-dim)]">Not shown (create batch to capture once)</span>

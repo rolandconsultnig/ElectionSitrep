@@ -7,10 +7,21 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills'
 // https://vite.dev/config/
 export default defineConfig({
   server: {
+    host: true,
     port: 5535,
     proxy: {
       '/api': {
-        target: 'http://localhost:5530',
+        target: 'http://127.0.0.1:5530',
+        changeOrigin: true,
+      },
+    },
+  },
+  preview: {
+    host: true,
+    port: 5535,
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:5530',
         changeOrigin: true,
       },
     },

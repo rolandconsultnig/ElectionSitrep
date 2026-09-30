@@ -72,7 +72,7 @@ export function OperationsMap({
 
   const stateStyle = useMemo(
     () => ({
-      color: '#0dccb0',
+      color: '#00c46a',
       weight: 2,
       fillOpacity: 0.06,
     }),
@@ -143,7 +143,7 @@ export function OperationsMap({
               >
                 <Popup>
                   <div className="text-xs">
-                    <div className="font-semibold text-[#0dccb0]">Active field · {p.displayName}</div>
+                    <div className="font-semibold text-[#00c46a]">Active field · {p.displayName}</div>
                     <div>{p.username}</div>
                     {p.serviceNumber ? <div className="font-(--font-mono)">{p.serviceNumber}</div> : null}
                     <div className="text-[var(--portal-dim)]">{p.stateHint}</div>
@@ -221,7 +221,7 @@ export function OperationsMap({
                 className="rounded-lg border border-[color:var(--portal-border)] bg-[color:var(--theme-toggle-bg)] px-3 py-2"
               >
                 <div className="font-medium text-[var(--portal-fg)]">{u.displayName}</div>
-                <div className="font-(--font-mono) text-[11px] text-[#0dccb0]">{u.username}</div>
+                <div className="font-(--font-mono) text-[11px] text-[#00c46a]">{u.username}</div>
                 {u.serviceNumber ? (
                   <div className="font-(--font-mono) text-[10px] text-[var(--portal-muted)]">{u.serviceNumber}</div>
                 ) : null}

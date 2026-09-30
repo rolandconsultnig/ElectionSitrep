@@ -30,10 +30,10 @@ export function BrandLogo({ src = '/police.png', className = '', size = 'md', wi
       />
       {withWordmark ? (
         <div className="min-w-0 text-left leading-tight">
-          <div className="font-(--font-display) text-xs font-bold uppercase tracking-[0.2em] text-[var(--portal-muted)]">
+          <div className="font-(--font-display) text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--portal-dim)]">
             Nigeria Police Force
           </div>
-          <div className="font-(--font-display) text-sm font-extrabold tracking-tight text-[var(--sr-heading)] md:text-base">
+          <div className="font-(--font-display) text-sm font-extrabold tracking-tight text-[#00c46a] md:text-base">
             Election SitRep
           </div>
         </div>

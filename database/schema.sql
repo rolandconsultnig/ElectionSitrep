@@ -56,7 +56,6 @@ CREATE TABLE IF NOT EXISTS credential_batches (
   batch_key VARCHAR(128) UNIQUE NOT NULL,
   portal VARCHAR(20) NOT NULL
     CHECK (portal IN ('admin', 'field', 'management', 'igp')),
-  rank_label TEXT,
   role_label TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

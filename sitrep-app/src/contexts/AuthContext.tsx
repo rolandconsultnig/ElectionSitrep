@@ -12,7 +12,7 @@ import { flushSync } from 'react-dom'
 import { apiFetch, apiJson, apiUrl, getAuthToken, setAuthToken } from '../lib/api'
 import { postLoginPath } from '../lib/navigation'
 import type { PortalId } from '../lib/navigation'
-import type { AuthUser, OfficerProfile } from './auth-types'
+import type { AuthUser, OfficerProfile, UserJurisdiction } from './auth-types'
 
 type ApiUser = {
   id: string
@@ -21,6 +21,7 @@ type ApiUser = {
   onboardingComplete: boolean
   passwordMustChange?: boolean
   profile?: OfficerProfile | null
+  jurisdiction?: UserJurisdiction
 }
 
 /** When the Vite proxy returns 5xx or fetch fails — backend not on 5530 or DB down */
@@ -38,6 +39,7 @@ function mapApiUser(u: ApiUser): AuthUser {
     onboardingComplete: Boolean(u.onboardingComplete),
     passwordMustChange: Boolean(u.passwordMustChange),
     profile: u.profile ?? null,
+    jurisdiction: u.jurisdiction ?? { level: 'national', stateId: null, stateName: null, lgaId: null, lgaName: null },
   }
 }
 

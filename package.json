@@ -2,7 +2,8 @@
   "name": "election-sitrep",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n api,web -c blue,green \"npm run dev --prefix server\" \"npm run dev --prefix sitrep-app\"",
+    "dev": "node scripts/dev.mjs",
+    "start": "concurrently --kill-others -n api,web -c blue,green \"npm run start --prefix server\" \"npm run preview --prefix sitrep-app\"",
     "build": "npm run build --prefix sitrep-app",
     "build:web": "npm run build --prefix sitrep-app"
   },

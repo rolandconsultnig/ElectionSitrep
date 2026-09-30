@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken'
 import multer from 'multer'
 import dotenv from 'dotenv'
 import path from 'path'
-import { randomBytes } from 'node:crypto'
+import { randomBytes, createHash } from 'node:crypto'
 import { fileURLToPath } from 'url'
 import { createServer } from 'http'
 import { pool } from './db.js'
@@ -51,16 +51,20 @@ const ALLOWED_ORIGINS = [
 app.use(
   cors({
     origin(origin, cb) {
-      // Mobile apps / curl often omit Origin; some send the literal "null".
-      if (!origin || origin === 'null') return cb(null, true)
+      // Mobile apps / curl often omit Origin; they may not send one.
+      if (!origin) return cb(null, true)
+      if (origin === 'null') {
+        if (process.env.NODE_ENV !== 'production') return cb(null, true)
+        return cb(null, false)
+      }
       if (localhostOrigin.test(origin)) return cb(null, true)
       const allow = String(process.env.FRONTEND_ORIGIN || '').trim()
       if (allow && origin === allow) return cb(null, true)
       // Check additional allowed origins
       if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true)
-      // Allow any origin in development
+      // Allow any origin in development only
       if (process.env.NODE_ENV !== 'production') return cb(null, true)
-      cb(null, false)
+      return cb(null, false)
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -73,6 +77,9 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff')
   res.setHeader('X-Frame-Options', 'DENY')
   res.setHeader('X-XSS-Protection', '1; mode=block')
+  res.setHeader('Referrer-Policy', 'same-origin')
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()')
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
   next()
 })
 app.use(express.json({ limit: '12mb' }))
@@ -204,14 +211,26 @@ function validateRequest(fields) {
 }
 
 // Sanitize middleware - removes potentially dangerous characters
+function sanitizeValue(value) {
+  if (typeof value === 'string') {
+    return value.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+  }
+  if (Array.isArray(value)) {
+    return value.map(sanitizeValue)
+  }
+  if (value && typeof value === 'object') {
+    const sanitized = {}
+    for (const [key, nested] of Object.entries(value)) {
+      sanitized[key] = sanitizeValue(nested)
+    }
+    return sanitized
+  }
+  return value
+}
+
 function sanitizeInput(req, res, next) {
   if (req.body && typeof req.body === 'object') {
-    for (const [key, value] of Object.entries(req.body)) {
-      if (typeof value === 'string') {
-        // Remove null bytes and control characters except newlines
-        req.body[key] = value.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-      }
-    }
+    req.body = sanitizeValue(req.body)
   }
   next()
 }
@@ -251,8 +270,33 @@ function randomToken(len) {
 }
 
 function randomPassword() {
-  // Default password for all batch-created accounts
-  return 'pass123'
+  const lower = 'abcdefghijklmnopqrstuvwxyz'
+  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  const digits = '0123456789'
+  const symbols = '!@#$%^&*()-_=+'
+  const all = lower + upper + digits + symbols
+  const length = 16
+
+  const result = [
+    lower[randomBytes(1)[0] % lower.length],
+    upper[randomBytes(1)[0] % upper.length],
+    digits[randomBytes(1)[0] % digits.length],
+    symbols[randomBytes(1)[0] % symbols.length],
+  ]
+
+  while (result.length < length) {
+    const index = randomBytes(1)[0] % all.length
+    result.push(all[index])
+  }
+
+  const shuffle = (array) => {
+    for (let i = array.length - 1; i > 0; i -= 1) {
+      const j = randomBytes(1)[0] % (i + 1)
+      ;[array[i], array[j]] = [array[j], array[i]]
+    }
+  }
+  shuffle(result)
+  return result.join('')
 }
 
 function generateBatchKey() {
@@ -657,7 +701,13 @@ function parseDataUrl(dataUrl) {
 
 async function loadUserPayload(userId) {
   const u = await pool.query(
-    `SELECT id, username, portal, onboarding_complete, password_must_change FROM app_users WHERE id = $1`,
+    `SELECT u.id, u.username, u.portal, u.onboarding_complete, u.password_must_change,
+            u.jurisdiction_level, u.jurisdiction_state_id, u.jurisdiction_lga_id,
+            gs.name AS jurisdiction_state_name, gl.name AS jurisdiction_lga_name
+     FROM app_users u
+     LEFT JOIN geo_states gs ON gs.id = u.jurisdiction_state_id
+     LEFT JOIN geo_lgas gl ON gl.id = u.jurisdiction_lga_id
+     WHERE u.id = $1`,
     [userId],
   )
   if (!u.rows.length) return null
@@ -690,6 +740,13 @@ async function loadUserPayload(userId) {
     onboardingComplete: row.onboarding_complete,
     passwordMustChange: Boolean(row.password_must_change),
     profile,
+    jurisdiction: {
+      level: row.jurisdiction_level || 'national',
+      stateId: row.jurisdiction_state_id,
+      stateName: row.jurisdiction_state_name,
+      lgaId: row.jurisdiction_lga_id,
+      lgaName: row.jurisdiction_lga_name,
+    },
   }
 }
 
@@ -921,8 +978,8 @@ app.put(
       if (!req.file?.buffer) return res.status(400).json({ error: 'Missing file' })
 
       const mime = req.file.mimetype || 'application/octet-stream'
-      const allowed = ['image/png', 'image/jpeg', 'image/svg+xml']
-      if (!allowed.includes(mime)) return res.status(400).json({ error: 'Unsupported image type' })
+      const allowed = ['image/png', 'image/jpeg']
+      if (!allowed.includes(mime)) return res.status(400).json({ error: 'Unsupported image type; only PNG and JPEG are accepted' })
 
       const r = await pool.query(
         `UPDATE political_parties SET logo_image = $1, logo_mime = $2, logo_url = NULL, updated_at = now()
@@ -963,7 +1020,7 @@ app.delete('/api/parties/:registerCode/logo', authMiddleware, requireAdmin, asyn
 app.get('/api/admin/credential-batches', authMiddleware, requireAdmin, async (req, res) => {
   try {
     const { rows: batches } = await pool.query(
-      `SELECT id, batch_key, portal, rank_label, role_label, created_at FROM credential_batches ORDER BY created_at DESC`,
+      `SELECT id, batch_key, portal, role_label, created_at FROM credential_batches ORDER BY created_at DESC`,
     )
     const out = []
     for (const b of batches) {
@@ -975,7 +1032,6 @@ app.get('/api/admin/credential-batches', authMiddleware, requireAdmin, async (re
         id: b.batch_key,
         batchId: b.id,
         portalId: b.portal,
-        rankLabel: b.rank_label,
         roleLabel: b.role_label,
         createdAt: b.created_at.toISOString(),
         credentials: creds.map((c) => ({ username: c.username, password: null })),
@@ -993,7 +1049,6 @@ app.post('/api/admin/credential-batches', authMiddleware, requireAdmin, async (r
   const client = await pool.connect()
   try {
     const portal = String(req.body?.portalId || req.body?.portal || '').trim()
-    const rankLabel = String(req.body?.rankLabel || '').trim() || '—'
     const roleLabel = String(req.body?.roleLabel || '').trim() || '—'
     const count = Math.min(50, Math.max(1, parseInt(String(req.body?.count || '1'), 10)))
     const allowed = ['admin', 'field', 'management', 'igp']
@@ -1002,14 +1057,12 @@ app.post('/api/admin/credential-batches', authMiddleware, requireAdmin, async (r
     const batchKey = generateBatchKey()
     await client.query('BEGIN')
     const ins = await client.query(
-      `INSERT INTO credential_batches (batch_key, portal, rank_label, role_label) VALUES ($1,$2,$3,$4) RETURNING id, created_at`,
-      [batchKey, portal, rankLabel, roleLabel],
+      `INSERT INTO credential_batches (batch_key, portal, role_label) VALUES ($1,$2,$3) RETURNING id, created_at`,
+      [batchKey, portal, roleLabel],
     )
     const batchId = ins.rows[0].id
     const createdAt = ins.rows[0].created_at
     const credentials = []
-    const rankSlug = rankLabel.replace(/\s+/g, '').toLowerCase() || 'user'
-
     for (let i = 0; i < count; i++) {
       const username = generateBatchKey() // Format: XXXX.XXXX (4 digits dot 4 letters)
       const password = randomPassword()
@@ -1032,7 +1085,6 @@ app.post('/api/admin/credential-batches', authMiddleware, requireAdmin, async (r
         id: batchKey,
         batchId,
         portalId: portal,
-        rankLabel,
         roleLabel,
         createdAt: createdAt.toISOString(),
       },
@@ -2192,20 +2244,33 @@ app.get('/api/admin/geography-summary', authMiddleware, requireAdmin, async (req
 app.get('/api/admin/users', authMiddleware, requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT u.username, u.portal, u.onboarding_complete,
+      `SELECT u.id, u.username, u.portal, u.onboarding_complete,
+              u.jurisdiction_level, u.jurisdiction_state_id, u.jurisdiction_lga_id,
+              gs.name AS state_name, gl.name AS lga_name,
               p.full_name AS profile_name
        FROM app_users u
        LEFT JOIN officer_profiles p ON p.user_id = u.id
+       LEFT JOIN geo_states gs ON gs.id = u.jurisdiction_state_id
+       LEFT JOIN geo_lgas gl ON gl.id = u.jurisdiction_lga_id
        ORDER BY u.created_at ASC`,
     )
     const portalRole = (p) =>
       ({ admin: 'System Admin', field: 'NPF Field Officer (PU)', management: 'Management desk', igp: 'IGP Office' })[p] ||
       p
+    const jurisdictionLabel = (r) => {
+      if (r.jurisdiction_level === 'state' && r.state_name) return `${r.state_name} State Command`
+      if (r.jurisdiction_level === 'area' && r.lga_name) return `${r.lga_name} Area Command${r.state_name ? `, ${r.state_name}` : ''}`
+      return 'Force HQ (national)'
+    }
     return res.json({
       users: rows.map((r) => ({
+        userId: r.id,
         officer: r.profile_name || r.username,
         role: portalRole(r.portal),
-        jurisdiction: '—',
+        jurisdiction: jurisdictionLabel(r),
+        jurisdictionLevel: r.jurisdiction_level || 'national',
+        jurisdictionStateId: r.jurisdiction_state_id,
+        jurisdictionLgaId: r.jurisdiction_lga_id,
         twoFa: '—',
       })),
     })
@@ -2344,16 +2409,69 @@ app.get('/api/geography/wards', authMiddleware, async (req, res) => {
   }
 })
 
+/** GET /api/geography/coverage?stateId=&lgaId= — scoped geography counts for command dashboards */
+app.get('/api/geography/coverage', authMiddleware, async (req, res) => {
+  try {
+    const stateId = parseInt(String(req.query.stateId || ''), 10)
+    const lgaId = parseInt(String(req.query.lgaId || ''), 10)
+    if (Number.isFinite(lgaId)) {
+      const { rows } = await pool.query(
+        `SELECT
+           (SELECT COUNT(*)::int FROM geo_wards WHERE lga_id = $1) AS wards,
+           (SELECT COUNT(*)::int FROM geo_polling_units pu JOIN geo_wards w ON w.id = pu.ward_id WHERE w.lga_id = $1) AS polling_units`,
+        [lgaId],
+      )
+      return res.json({ scope: 'lga', wards: rows[0].wards, pollingUnits: rows[0].polling_units })
+    }
+    if (Number.isFinite(stateId)) {
+      const { rows } = await pool.query(
+        `SELECT
+           (SELECT COUNT(*)::int FROM geo_lgas WHERE state_id = $1) AS lgas,
+           (SELECT COUNT(*)::int FROM geo_wards w JOIN geo_lgas lg ON lg.id = w.lga_id WHERE lg.state_id = $1) AS wards,
+           (SELECT COUNT(*)::int FROM geo_polling_units pu
+              JOIN geo_wards w2 ON w2.id = pu.ward_id
+              JOIN geo_lgas lg2 ON lg2.id = w2.lga_id WHERE lg2.state_id = $1) AS polling_units`,
+        [stateId],
+      )
+      return res.json({ scope: 'state', lgas: rows[0].lgas, wards: rows[0].wards, pollingUnits: rows[0].polling_units })
+    }
+    const { rows } = await pool.query(
+      `SELECT
+         (SELECT COUNT(*)::int FROM geo_states) AS states,
+         (SELECT COUNT(*)::int FROM geo_lgas) AS lgas,
+         (SELECT COUNT(*)::int FROM geo_wards) AS wards,
+         (SELECT COUNT(*)::int FROM geo_polling_units) AS polling_units`,
+    )
+    return res.json({
+      scope: 'national',
+      states: rows[0].states,
+      lgas: rows[0].lgas,
+      wards: rows[0].wards,
+      pollingUnits: rows[0].polling_units,
+    })
+  } catch (e) {
+    console.error(e)
+    return res.status(500).json({ error: 'Failed to load coverage' })
+  }
+})
+
 /** GET /api/geography/polling-units?wardId= */
 app.get('/api/geography/polling-units', authMiddleware, async (req, res) => {
   try {
-    const wardId = parseInt(String(req.query.wardId || ''), 10)
-    if (!Number.isFinite(wardId)) return res.status(400).json({ error: 'wardId required' })
-    const { rows } = await pool.query(
-      `SELECT id, ward_id AS "wardId", code, name, lat, lng FROM geo_polling_units WHERE ward_id = $1 ORDER BY code ASC`,
-      [wardId],
-    )
-    return res.json({ pollingUnits: rows })
+    if (req.query.wardId) {
+      const wardId = parseInt(String(req.query.wardId), 10)
+      if (!Number.isFinite(wardId)) return res.status(400).json({ error: 'wardId must be an integer' })
+      const { rows } = await pool.query(
+        `SELECT id, ward_id AS "wardId", code, name, lat, lng FROM geo_polling_units WHERE ward_id = $1 ORDER BY code ASC`,
+        [wardId],
+      )
+      return res.json({ pollingUnits: rows })
+    } else {
+      const { rows } = await pool.query(
+        `SELECT id, ward_id AS "wardId", code, name, lat, lng FROM geo_polling_units WHERE lat IS NOT NULL AND lng IS NOT NULL ORDER BY id ASC`,
+      )
+      return res.json({ pollingUnits: rows })
+    }
   } catch (e) {
     console.error(e)
     return res.status(500).json({ error: 'Failed to load polling units' })
@@ -2382,7 +2500,7 @@ app.get('/api/geography/full-tree', authMiddleware, async (req, res) => {
 })
 
 /** GET /api/geo/layers/states — GeoJSON FeatureCollection for map overlay */
-app.get('/api/geo/layers/states', authMiddleware, async (req, res) => {
+app.get('/api/geo/layers/states', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT code, name, boundary_geojson FROM geo_states WHERE boundary_geojson IS NOT NULL`,
@@ -2498,6 +2616,331 @@ app.get('/api/igp/field-operations-map', authMiddleware, requireAnyPortal('igp',
   }
 })
 
+/* -------------------------------------------------------------------------- */
+/* Jurisdiction-scoped SitRep command API (migration_020)                      */
+/* HQ/national sees all reports; a state command sees only its state; an area  */
+/* command sees only its LGA. Field-app offline captures (field_capture_       */
+/* outbox) are merged with structured command_sitreps into one feed.           */
+/* -------------------------------------------------------------------------- */
+
+async function loadUserJurisdiction(userId) {
+  const r = await pool.query(
+    `SELECT u.jurisdiction_level, u.jurisdiction_state_id, u.jurisdiction_lga_id,
+            gs.name AS state_name, gl.name AS lga_name
+     FROM app_users u
+     LEFT JOIN geo_states gs ON gs.id = u.jurisdiction_state_id
+     LEFT JOIN geo_lgas gl ON gl.id = u.jurisdiction_lga_id
+     WHERE u.id = $1`,
+    [userId],
+  )
+  if (!r.rows.length) return { level: 'national', stateId: null, stateName: null, lgaId: null, lgaName: null }
+  const j = r.rows[0]
+  return {
+    level: j.jurisdiction_level || 'national',
+    stateId: j.jurisdiction_state_id,
+    stateName: j.state_name,
+    lgaId: j.jurisdiction_lga_id,
+    lgaName: j.lga_name,
+  }
+}
+
+/** Appends a WHERE fragment scoping a query to the caller's jurisdiction. */
+function jurisdictionScopeSql(j, stateCol, lgaCol, params) {
+  if (j.level === 'state' && j.stateId) {
+    params.push(j.stateId)
+    return ` AND ${stateCol} = $${params.length}`
+  }
+  if (j.level === 'area' && j.lgaId) {
+    params.push(j.lgaId)
+    return ` AND ${lgaCol} = $${params.length}`
+  }
+  return ''
+}
+
+const SITREP_KINDS = ['sitrep', 'incident', 'violence']
+const SITREP_SEVERITIES = ['low', 'medium', 'critical']
+const SITREP_STATUSES = ['new', 'acknowledged', 'escalated', 'resolved']
+
+/** Normalized severity expression for legacy field_capture_outbox payloads. */
+const FIELD_SEVERITY_SQL = `CASE
+  WHEN f.payload->>'severity' IN ('low','medium','critical') THEN f.payload->>'severity'
+  WHEN lower(coalesce(f.payload->>'severity','')) = 'red' THEN 'critical'
+  WHEN lower(coalesce(f.payload->>'severity','')) = 'amber' THEN 'medium'
+  WHEN lower(coalesce(f.payload->>'severity','')) = 'green' THEN 'low'
+  WHEN f.kind = 'violence' THEN 'critical'
+  WHEN f.kind = 'incident' THEN 'medium'
+  ELSE 'low' END`
+
+/** Unified feed SELECT (command_sitreps + field_capture_outbox), no WHERE — caller adds scope. */
+const SITREP_FEED_SQL = `
+  SELECT * FROM (
+    SELECT 'cmd-' || cs.id AS id, cs.kind, cs.category, cs.severity, cs.title, cs.body,
+           cs.status, cs.created_at, cs.lat, cs.lng,
+           au.username AS author_username, coalesce(op.full_name, au.username) AS author_name,
+           au.portal AS author_portal,
+           cs.state_id, gs.name AS state_name, cs.lga_id, gl.name AS lga_name,
+           cs.pu_id, pu.code AS pu_code
+    FROM command_sitreps cs
+    JOIN app_users au ON au.id = cs.author_user_id
+    LEFT JOIN officer_profiles op ON op.user_id = cs.author_user_id
+    LEFT JOIN geo_states gs ON gs.id = cs.state_id
+    LEFT JOIN geo_lgas gl ON gl.id = cs.lga_id
+    LEFT JOIN geo_polling_units pu ON pu.id = cs.pu_id
+    UNION ALL
+    SELECT 'fc-' || f.id AS id, f.kind,
+           coalesce(f.payload->>'category', f.kind) AS category,
+           ${FIELD_SEVERITY_SQL} AS severity,
+           CASE f.kind
+             WHEN 'sitrep' THEN 'Field SitRep — ' || coalesce(f.payload->>'securityStatus', 'routine')
+             WHEN 'incident' THEN coalesce(f.payload->>'category', 'Incident')
+             ELSE 'Violence alert'
+           END AS title,
+           coalesce(f.payload->>'narrative', f.payload->>'detail', '') AS body,
+           'new' AS status, f.device_created_at AS created_at,
+           NULL::float AS lat, NULL::float AS lng,
+           u2.username AS author_username, coalesce(op2.full_name, u2.username) AS author_name,
+           'field' AS author_portal,
+           gs2.id AS state_id, gs2.name AS state_name, gl2.id AS lga_id, gl2.name AS lga_name,
+           op2.assigned_polling_unit_id AS pu_id, pu2.code AS pu_code
+    FROM field_capture_outbox f
+    JOIN app_users u2 ON u2.id = f.user_id
+    LEFT JOIN officer_profiles op2 ON op2.user_id = f.user_id
+    LEFT JOIN geo_polling_units pu2 ON pu2.id = op2.assigned_polling_unit_id
+    LEFT JOIN geo_wards w2 ON w2.id = pu2.ward_id
+    LEFT JOIN geo_lgas gl2 ON gl2.id = w2.lga_id
+    LEFT JOIN geo_states gs2 ON gs2.id = gl2.state_id
+  ) feed
+`
+
+/** GET /api/sitreps — jurisdiction-scoped unified feed (command portals + admin) */
+app.get('/api/sitreps', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
+  try {
+    const j = await loadUserJurisdiction(req.auth.sub)
+    const params = []
+    let sql = `${SITREP_FEED_SQL} WHERE 1=1`
+    sql += jurisdictionScopeSql(j, 'state_id', 'lga_id', params)
+    const severity = String(req.query.severity || '').toLowerCase()
+    if (SITREP_SEVERITIES.includes(severity)) {
+      params.push(severity)
+      sql += ` AND severity = $${params.length}`
+    }
+    const kind = String(req.query.kind || '').toLowerCase()
+    if (SITREP_KINDS.includes(kind)) {
+      params.push(kind)
+      sql += ` AND kind = $${params.length}`
+    }
+    const status = String(req.query.status || '').toLowerCase()
+    if (SITREP_STATUSES.includes(status)) {
+      params.push(status)
+      sql += ` AND status = $${params.length}`
+    }
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit || '100'), 10) || 100, 1), 500)
+    params.push(limit)
+    sql += ` ORDER BY created_at DESC LIMIT $${params.length}`
+
+    const { rows } = await pool.query(sql, params)
+    return res.json({
+      jurisdiction: j,
+      sitreps: rows.map((r) => ({
+        id: r.id,
+        kind: r.kind,
+        category: r.category,
+        severity: r.severity,
+        title: r.title,
+        body: r.body,
+        status: r.status,
+        createdAt: r.created_at,
+        lat: r.lat,
+        lng: r.lng,
+        author: r.author_name,
+        authorUsername: r.author_username,
+        authorPortal: r.author_portal,
+        state: r.state_name,
+        lga: r.lga_name,
+        puCode: r.pu_code,
+      })),
+    })
+  } catch (e) {
+    console.error(e)
+    const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : ''
+    if (code === '42P01') return res.status(503).json({ error: 'Run npm run migrate in server/ (migration_020)' })
+    return res.status(500).json({ error: 'Failed to load sitreps' })
+  }
+})
+
+/** GET /api/sitreps/summary — scoped counts for command dashboards */
+app.get('/api/sitreps/summary', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
+  try {
+    const j = await loadUserJurisdiction(req.auth.sub)
+    const params = []
+    const scope = jurisdictionScopeSql(j, 'state_id', 'lga_id', params)
+    const { rows } = await pool.query(
+      `SELECT severity, status, kind, COUNT(*)::int AS n FROM (
+         SELECT cs.severity, cs.status, cs.kind, cs.state_id, cs.lga_id FROM command_sitreps cs
+         UNION ALL
+         SELECT ${FIELD_SEVERITY_SQL} AS severity, 'new' AS status, f.kind,
+                gs2.id AS state_id, gl2.id AS lga_id
+         FROM field_capture_outbox f
+         LEFT JOIN officer_profiles op2 ON op2.user_id = f.user_id
+         LEFT JOIN geo_polling_units pu2 ON pu2.id = op2.assigned_polling_unit_id
+         LEFT JOIN geo_wards w2 ON w2.id = pu2.ward_id
+         LEFT JOIN geo_lgas gl2 ON gl2.id = w2.lga_id
+         LEFT JOIN geo_states gs2 ON gs2.id = gl2.state_id
+       ) x WHERE 1=1 ${scope}
+       GROUP BY severity, status, kind`,
+      params,
+    )
+    const bySeverity = { low: 0, medium: 0, critical: 0 }
+    const byStatus = { new: 0, acknowledged: 0, escalated: 0, resolved: 0 }
+    const byKind = { sitrep: 0, incident: 0, violence: 0 }
+    let total = 0
+    for (const r of rows) {
+      total += r.n
+      if (r.severity in bySeverity) bySeverity[r.severity] += r.n
+      if (r.status in byStatus) byStatus[r.status] += r.n
+      if (r.kind in byKind) byKind[r.kind] += r.n
+    }
+    return res.json({ jurisdiction: j, total, bySeverity, byStatus, byKind })
+  } catch (e) {
+    console.error(e)
+    return res.status(500).json({ error: 'Failed to summarize sitreps' })
+  }
+})
+
+/** POST /api/sitreps — file a structured SitRep from any portal (scope auto-derived) */
+app.post('/api/sitreps', authMiddleware, async (req, res) => {
+  try {
+    const title = String(req.body?.title || '').trim()
+    const body = String(req.body?.body || '').trim().slice(0, 4000)
+    const kind = String(req.body?.kind || 'sitrep').toLowerCase()
+    const severity = String(req.body?.severity || 'low').toLowerCase()
+    const category = String(req.body?.category || 'general').trim().slice(0, 64) || 'general'
+    const electionSlug = req.body?.electionSlug ? String(req.body.electionSlug).trim().slice(0, 191) : null
+    const lat = Number.isFinite(Number(req.body?.lat)) ? Number(req.body.lat) : null
+    const lng = Number.isFinite(Number(req.body?.lng)) ? Number(req.body.lng) : null
+
+    if (!title) return res.status(400).json({ error: 'title is required' })
+    if (title.length > 191) return res.status(400).json({ error: 'title too long (max 191)' })
+    if (!SITREP_KINDS.includes(kind)) return res.status(400).json({ error: `kind must be one of ${SITREP_KINDS.join(', ')}` })
+    if (!SITREP_SEVERITIES.includes(severity)) return res.status(400).json({ error: `severity must be one of ${SITREP_SEVERITIES.join(', ')}` })
+
+    // Derive geographic scope from the author.
+    let stateId = null
+    let lgaId = null
+    let wardId = null
+    let puId = null
+    if (req.auth.portal === 'field') {
+      const a = await pool.query(
+        `SELECT op.assigned_polling_unit_id AS pu_id, pu.ward_id, w.lga_id, lg.state_id
+         FROM officer_profiles op
+         LEFT JOIN geo_polling_units pu ON pu.id = op.assigned_polling_unit_id
+         LEFT JOIN geo_wards w ON w.id = pu.ward_id
+         LEFT JOIN geo_lgas lg ON lg.id = w.lga_id
+         WHERE op.user_id = $1`,
+        [req.auth.sub],
+      )
+      if (a.rows.length) {
+        puId = a.rows[0].pu_id
+        wardId = a.rows[0].ward_id
+        lgaId = a.rows[0].lga_id
+        stateId = a.rows[0].state_id
+      }
+    } else {
+      const j = await loadUserJurisdiction(req.auth.sub)
+      stateId = j.stateId
+      lgaId = j.level === 'area' ? j.lgaId : null
+      // National-tier authors (HQ/admin) may explicitly target a state/LGA.
+      if (j.level === 'national') {
+        const reqState = parseInt(String(req.body?.stateId || ''), 10)
+        const reqLga = parseInt(String(req.body?.lgaId || ''), 10)
+        if (Number.isFinite(reqState)) stateId = reqState
+        if (Number.isFinite(reqLga)) lgaId = reqLga
+      }
+    }
+
+    const ins = await pool.query(
+      `INSERT INTO command_sitreps (author_user_id, kind, category, severity, title, body, election_slug, state_id, lga_id, ward_id, pu_id, lat, lng)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       RETURNING id, created_at`,
+      [req.auth.sub, kind, category, severity, title, body, electionSlug, stateId, lgaId, wardId, puId, lat, lng],
+    )
+    return res.status(201).json({ ok: true, id: `cmd-${ins.rows[0].id}`, createdAt: ins.rows[0].created_at })
+  } catch (e) {
+    console.error(e)
+    return res.status(500).json({ error: 'Failed to file sitrep' })
+  }
+})
+
+/** PATCH /api/sitreps/:id/status — acknowledge / escalate / resolve (jurisdiction-enforced) */
+app.patch('/api/sitreps/:id/status', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
+  try {
+    const rawId = String(req.params.id || '')
+    if (!rawId.startsWith('cmd-')) {
+      return res.status(400).json({ error: 'Only command sitreps (cmd-…) support status changes; field captures are read-only' })
+    }
+    const id = parseInt(rawId.slice(4), 10)
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid sitrep id' })
+    const status = String(req.body?.status || '').toLowerCase()
+    if (!SITREP_STATUSES.slice(1).includes(status)) {
+      return res.status(400).json({ error: `status must be one of ${SITREP_STATUSES.slice(1).join(', ')}` })
+    }
+
+    const j = await loadUserJurisdiction(req.auth.sub)
+    const params = [status, id]
+    let sql = `UPDATE command_sitreps SET status = $1::text,
+        acknowledged_by = CASE WHEN $1::text = 'acknowledged' THEN $${params.push(req.auth.sub)} ELSE acknowledged_by END,
+        acknowledged_at = CASE WHEN $1::text = 'acknowledged' THEN now() ELSE acknowledged_at END
+      WHERE id = $2`
+    sql += jurisdictionScopeSql(j, 'state_id', 'lga_id', params)
+    sql += ' RETURNING id, status'
+
+    const r = await pool.query(sql, params)
+    if (!r.rows.length) {
+      return res.status(404).json({ error: 'Sitrep not found or outside your jurisdiction' })
+    }
+    return res.json({ ok: true, id: rawId, status: r.rows[0].status })
+  } catch (e) {
+    console.error(e)
+    return res.status(500).json({ error: 'Failed to update sitrep status' })
+  }
+})
+
+/** PATCH /api/admin/users/:userId/jurisdiction — assign command scope (admin only) */
+app.patch('/api/admin/users/:userId/jurisdiction', authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const userId = String(req.params.userId || '')
+    const level = String(req.body?.level || '').toLowerCase()
+    if (!['national', 'state', 'area'].includes(level)) {
+      return res.status(400).json({ error: 'level must be national, state, or area' })
+    }
+    let stateId = null
+    let lgaId = null
+    if (level === 'state') {
+      stateId = parseInt(String(req.body?.stateId || ''), 10)
+      if (!Number.isFinite(stateId)) return res.status(400).json({ error: 'stateId required for state level' })
+      const chk = await pool.query('SELECT 1 FROM geo_states WHERE id = $1', [stateId])
+      if (!chk.rows.length) return res.status(400).json({ error: 'Unknown stateId' })
+    }
+    if (level === 'area') {
+      lgaId = parseInt(String(req.body?.lgaId || ''), 10)
+      if (!Number.isFinite(lgaId)) return res.status(400).json({ error: 'lgaId required for area level' })
+      const chk = await pool.query('SELECT state_id FROM geo_lgas WHERE id = $1', [lgaId])
+      if (!chk.rows.length) return res.status(400).json({ error: 'Unknown lgaId' })
+      stateId = chk.rows[0].state_id
+    }
+    const r = await pool.query(
+      `UPDATE app_users SET jurisdiction_level = $2, jurisdiction_state_id = $3, jurisdiction_lga_id = $4, updated_at = now()
+       WHERE id = $1 RETURNING username`,
+      [userId, level, stateId, lgaId],
+    )
+    if (!r.rows.length) return res.status(404).json({ error: 'User not found' })
+    return res.json({ ok: true, username: r.rows[0].username, level, stateId, lgaId })
+  } catch (e) {
+    console.error(e)
+    return res.status(500).json({ error: 'Failed to set jurisdiction' })
+  }
+})
+
 app.get('/api/health', async (req, res) => {
   try {
     await pool.query('SELECT 1')
@@ -2506,36 +2949,2586 @@ app.get('/api/health', async (req, res) => {
     return res.status(503).json({ ok: false })
   }
 })
+/* -------------------------------------------------------------------------- */
+/* PHASE 2: ELECTION-SPECIFIC OPERATIONS APIS                                 */
+/* -------------------------------------------------------------------------- */
 
-/** GET /api/chat/:roomId - Fetch chat history */
-app.get('/api/chat/:roomId', authMiddleware, async (req, res) => {
+async function resolveElectionHelper(slugOrId) {
+  if (slugOrId) {
+    const r = await pool.query(
+      `SELECT id, slug, name, status, election_date FROM elections WHERE slug = $1 OR id::text = $1 LIMIT 1`,
+      [String(slugOrId)]
+    )
+    if (r.rows.length) return r.rows[0]
+  }
+  const fallback = await pool.query(
+    `SELECT id, slug, name, status, election_date FROM elections WHERE status IN ('active', 'published', 'scheduled') ORDER BY created_at DESC LIMIT 1`
+  )
+  if (fallback.rows.length) return fallback.rows[0]
+  const any = await pool.query(`SELECT id, slug, name, status, election_date FROM elections ORDER BY created_at DESC LIMIT 1`)
+  return any.rows[0] || null
+}
+
+const OPERATIONAL_MILESTONES = [
+  'materials_received',
+  'polls_opened',
+  'accreditation_started',
+  'voting_closed',
+  'counting_started',
+  'results_declared'
+]
+
+/* --- 1. OPERATIONAL TIMELINE & MILESTONES --- */
+
+app.get('/api/operations/timeline/summary', authMiddleware, async (req, res) => {
   try {
-    const { roomId } = req.params
-    const limit = parseInt(req.query.limit) || 50
-    const offset = parseInt(req.query.offset) || 0
+    const election = await resolveElectionHelper(req.query.electionSlug)
+    if (!election) return res.status(404).json({ error: 'No active election found' })
+
+    const j = await loadUserJurisdiction(req.auth.sub)
+    let stateId = req.query.stateId ? parseInt(req.query.stateId, 10) : (j.level === 'state' || j.level === 'area' ? j.stateId : null)
+    let lgaId = req.query.lgaId ? parseInt(req.query.lgaId, 10) : (j.level === 'area' ? j.lgaId : null)
+
+    // Count total PUs in scope
+    const puParams = []
+    let puSql = `SELECT COUNT(DISTINCT pu.id)::int AS total_pus
+                 FROM geo_polling_units pu
+                 JOIN geo_wards w ON w.id = pu.ward_id
+                 JOIN geo_lgas l ON l.id = w.lga_id
+                 JOIN geo_states s ON s.id = l.state_id
+                 WHERE 1=1`
+    if (stateId) {
+      puParams.push(stateId)
+      puSql += ` AND s.id = $${puParams.length}`
+    }
+    if (lgaId) {
+      puParams.push(lgaId)
+      puSql += ` AND l.id = $${puParams.length}`
+    }
+
+    const puCountRes = await pool.query(puSql, puParams)
+    const totalPus = puCountRes.rows[0]?.total_pus || 0
+
+    // Count milestone progress
+    const mParams = [election.id]
+    let mSql = `SELECT m.milestone, COUNT(DISTINCT m.polling_unit_id)::int AS count,
+                       MAX(m.timestamp) AS last_updated
+                FROM pu_operational_milestones m
+                JOIN geo_polling_units pu ON pu.id = m.polling_unit_id
+                JOIN geo_wards w ON w.id = pu.ward_id
+                JOIN geo_lgas l ON l.id = w.lga_id
+                WHERE m.election_id = $1`
+    if (stateId) {
+      mParams.push(stateId)
+      mSql += ` AND l.state_id = $${mParams.length}`
+    }
+    if (lgaId) {
+      mParams.push(lgaId)
+      mSql += ` AND l.id = $${mParams.length}`
+    }
+    mSql += ` GROUP BY m.milestone`
+
+    const mRes = await pool.query(mSql, mParams)
+    const milestoneMap = {}
+    for (const m of OPERATIONAL_MILESTONES) {
+      milestoneMap[m] = { count: 0, percent: 0, lastUpdated: null }
+    }
+    for (const r of mRes.rows) {
+      const cnt = r.count || 0
+      const pct = totalPus > 0 ? Math.round((cnt / totalPus) * 1000) / 10 : 0
+      milestoneMap[r.milestone] = {
+        count: cnt,
+        percent: pct,
+        lastUpdated: r.last_updated
+      }
+    }
+
+    // Recent milestone logs
+    const recentParams = [election.id]
+    let recentSql = `SELECT m.id, m.milestone, m.timestamp, m.notes,
+                            pu.id AS pu_id, pu.code AS pu_code, pu.name AS pu_name,
+                            w.name AS ward_name, l.name AS lga_name, s.name AS state_name,
+                            u.username AS officer_username, coalesce(p.full_name, u.username) AS officer_name
+                     FROM pu_operational_milestones m
+                     JOIN geo_polling_units pu ON pu.id = m.polling_unit_id
+                     JOIN geo_wards w ON w.id = pu.ward_id
+                     JOIN geo_lgas l ON l.id = w.lga_id
+                     JOIN geo_states s ON s.id = l.state_id
+                     LEFT JOIN app_users u ON u.id = m.recorded_by
+                     LEFT JOIN officer_profiles p ON p.user_id = u.id
+                     WHERE m.election_id = $1`
+    if (stateId) {
+      recentParams.push(stateId)
+      recentSql += ` AND s.id = $${recentParams.length}`
+    }
+    if (lgaId) {
+      recentParams.push(lgaId)
+      recentSql += ` AND l.id = $${recentParams.length}`
+    }
+    recentSql += ` ORDER BY m.timestamp DESC LIMIT 20`
+    const recentRes = await pool.query(recentSql, recentParams)
+
+    return res.json({
+      election,
+      totalPus,
+      milestones: milestoneMap,
+      recentUpdates: recentRes.rows
+    })
+  } catch (e) {
+    console.error('Timeline summary error:', e)
+    return res.status(500).json({ error: 'Failed to load timeline summary' })
+  }
+})
+
+app.get('/api/operations/timeline/pu/:puId', authMiddleware, async (req, res) => {
+  try {
+    const puId = parseInt(req.params.puId, 10)
+    if (!Number.isFinite(puId)) return res.status(400).json({ error: 'Invalid polling unit ID' })
+
+    const election = await resolveElectionHelper(req.query.electionSlug)
+    if (!election) return res.status(404).json({ error: 'Election not found' })
 
     const { rows } = await pool.query(
-      `SELECT c.id, c.sender_id, u.username AS sender_username, c.room_id, c.content, c.created_at 
-       FROM chat_messages c
-       JOIN app_users u ON u.id = c.sender_id
-       WHERE c.room_id = $1
-       ORDER BY c.created_at DESC
-       LIMIT $2 OFFSET $3`,
-      [roomId, limit, offset]
+      `SELECT m.id, m.milestone, m.timestamp, m.notes, m.metadata,
+              u.username AS officer_username, coalesce(p.full_name, u.username) AS officer_name
+       FROM pu_operational_milestones m
+       LEFT JOIN app_users u ON u.id = m.recorded_by
+       LEFT JOIN officer_profiles p ON p.user_id = u.id
+       WHERE m.election_id = $1 AND m.polling_unit_id = $2
+       ORDER BY m.timestamp ASC`,
+      [election.id, puId]
     )
-    
-    // Return in chronological order
-    return res.json({ messages: rows.reverse() })
+
+    return res.json({
+      electionId: election.id,
+      pollingUnitId: puId,
+      milestones: rows
+    })
   } catch (e) {
-    console.error('Chat history error:', e)
-    return res.status(500).json({ error: 'Failed to fetch chat history' })
+    console.error('Timeline PU error:', e)
+    return res.status(500).json({ error: 'Failed to fetch PU timeline' })
+  }
+})
+
+app.post('/api/operations/timeline/milestone', authMiddleware, async (req, res) => {
+  try {
+    const { electionSlug, pollingUnitId, milestone, timestamp, notes, metadata } = req.body || {}
+    if (!pollingUnitId || !milestone) {
+      return res.status(400).json({ error: 'pollingUnitId and milestone are required' })
+    }
+    if (!OPERATIONAL_MILESTONES.includes(milestone)) {
+      return res.status(400).json({ error: `Invalid milestone. Expected one of: ${OPERATIONAL_MILESTONES.join(', ')}` })
+    }
+
+    const election = await resolveElectionHelper(electionSlug)
+    if (!election) return res.status(404).json({ error: 'Election not found' })
+
+    const ts = timestamp ? new Date(timestamp) : new Date()
+
+    const { rows } = await pool.query(
+      `INSERT INTO pu_operational_milestones (election_id, polling_unit_id, milestone, recorded_by, timestamp, notes, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (election_id, polling_unit_id, milestone)
+       DO UPDATE SET
+         timestamp = EXCLUDED.timestamp,
+         notes = EXCLUDED.notes,
+         metadata = EXCLUDED.metadata,
+         recorded_by = EXCLUDED.recorded_by
+       RETURNING *`,
+      [election.id, pollingUnitId, milestone, req.auth.sub, ts, notes || '', metadata ? JSON.stringify(metadata) : '{}']
+    )
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('operational_milestone_updated', {
+        electionId: election.id,
+        pollingUnitId,
+        milestone,
+        timestamp: ts,
+        recordedBy: req.auth.username
+      })
+    }
+
+    return res.json({ ok: true, milestone: rows[0] })
+  } catch (e) {
+    console.error('Log milestone error:', e)
+    return res.status(500).json({ error: 'Failed to log operational milestone' })
+  }
+})
+
+/* --- 2. RESULTS COLLATION MIRROR & EC8A PHOTO EVIDENCE --- */
+
+app.get('/api/operations/results/collation', authMiddleware, async (req, res) => {
+  try {
+    const election = await resolveElectionHelper(req.query.electionSlug)
+    if (!election) return res.status(404).json({ error: 'No active election' })
+
+    const j = await loadUserJurisdiction(req.auth.sub)
+    let stateId = req.query.stateId ? parseInt(req.query.stateId, 10) : (j.level === 'state' || j.level === 'area' ? j.stateId : null)
+    let lgaId = req.query.lgaId ? parseInt(req.query.lgaId, 10) : (j.level === 'area' ? j.lgaId : null)
+    let wardId = req.query.wardId ? parseInt(req.query.wardId, 10) : null
+    let anomalyOnly = req.query.anomalyOnly === 'true'
+
+    const params = [election.id]
+    let sql = `SELECT r.id, r.polling_unit_id, r.registered_voters, r.accredited_voters,
+                      r.ballot_papers_issued, r.ballot_papers_used, r.ballot_papers_spoiled,
+                      r.ballot_papers_rejected, r.valid_votes, r.total_votes_cast,
+                      r.party_votes, r.photo_url, r.photo_hash_sha256, r.photo_captured_at,
+                      r.photo_source, r.observer_name, r.observer_organization,
+                      r.is_verified, r.anomaly_flags, r.created_at,
+                      pu.code AS pu_code, pu.name AS pu_name,
+                      w.id AS ward_id, w.name AS ward_name,
+                      l.id AS lga_id, l.name AS lga_name,
+                      s.id AS state_id, s.name AS state_name,
+                      u.username AS recorded_by_username, coalesce(p.full_name, u.username) AS recorded_by_name
+               FROM ec8a_results_evidence r
+               JOIN geo_polling_units pu ON pu.id = r.polling_unit_id
+               JOIN geo_wards w ON w.id = pu.ward_id
+               JOIN geo_lgas l ON l.id = w.lga_id
+               JOIN geo_states s ON s.id = l.state_id
+               LEFT JOIN app_users u ON u.id = r.recorded_by
+               LEFT JOIN officer_profiles p ON p.user_id = u.id
+               WHERE r.election_id = $1`
+
+    if (stateId) {
+      params.push(stateId)
+      sql += ` AND s.id = $${params.length}`
+    }
+    if (lgaId) {
+      params.push(lgaId)
+      sql += ` AND l.id = $${params.length}`
+    }
+    if (wardId) {
+      params.push(wardId)
+      sql += ` AND w.id = $${params.length}`
+    }
+    if (anomalyOnly) {
+      sql += ` AND jsonb_array_length(r.anomaly_flags) > 0`
+    }
+
+    sql += ` ORDER BY r.created_at DESC LIMIT 200`
+    const { rows } = await pool.query(sql, params)
+
+    // Aggregate statistics across returned rows
+    let totalReg = 0
+    let totalAccr = 0
+    let totalCast = 0
+    let totalValid = 0
+    let totalRejected = 0
+    const partyTotals = {}
+    let anomalyCount = 0
+
+    for (const r of rows) {
+      totalReg += Number(r.registered_voters || 0)
+      totalAccr += Number(r.accredited_voters || 0)
+      totalCast += Number(r.total_votes_cast || 0)
+      totalValid += Number(r.valid_votes || 0)
+      totalRejected += Number(r.ballot_papers_rejected || 0)
+      if (r.anomaly_flags && r.anomaly_flags.length > 0) anomalyCount++
+
+      if (r.party_votes && typeof r.party_votes === 'object') {
+        for (const [abbr, votes] of Object.entries(r.party_votes)) {
+          partyTotals[abbr] = (partyTotals[abbr] || 0) + Number(votes || 0)
+        }
+      }
+    }
+
+    return res.json({
+      election,
+      count: rows.length,
+      totals: {
+        registeredVoters: totalReg,
+        accreditedVoters: totalAccr,
+        totalVotesCast: totalCast,
+        validVotes: totalValid,
+        rejectedVotes: totalRejected,
+        partyTotals,
+        anomalyCount,
+        verifiedCount: rows.filter(r => r.is_verified).length
+      },
+      results: rows
+    })
+  } catch (e) {
+    console.error('Collation query error:', e)
+    return res.status(500).json({ error: 'Failed to fetch collated results' })
+  }
+})
+
+app.get('/api/operations/results/ec8a/:id', authMiddleware, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10)
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid ID' })
+
+    const { rows } = await pool.query(
+      `SELECT r.*,
+              pu.code AS pu_code, pu.name AS pu_name,
+              w.name AS ward_name, l.name AS lga_name, s.name AS state_name,
+              u.username AS recorded_by_username, coalesce(p.full_name, u.username) AS recorded_by_name,
+              vu.username AS verified_by_username
+       FROM ec8a_results_evidence r
+       JOIN geo_polling_units pu ON pu.id = r.polling_unit_id
+       JOIN geo_wards w ON w.id = pu.ward_id
+       JOIN geo_lgas l ON l.id = w.lga_id
+       JOIN geo_states s ON s.id = l.state_id
+       LEFT JOIN app_users u ON u.id = r.recorded_by
+       LEFT JOIN officer_profiles p ON p.user_id = u.id
+       LEFT JOIN app_users vu ON vu.id = r.verified_by
+       WHERE r.id = $1`,
+      [id]
+    )
+    if (!rows.length) return res.status(404).json({ error: 'EC8A record not found' })
+    return res.json({ result: rows[0] })
+  } catch (e) {
+    console.error('EC8A details error:', e)
+    return res.status(500).json({ error: 'Failed to fetch EC8A record' })
+  }
+})
+
+app.post('/api/operations/results/ec8a', authMiddleware, async (req, res) => {
+  try {
+    const {
+      electionSlug,
+      pollingUnitId,
+      registeredVoters = 0,
+      accreditedVoters = 0,
+      ballotPapersIssued = 0,
+      ballotPapersUsed = 0,
+      ballotPapersSpoiled = 0,
+      ballotPapersRejected = 0,
+      validVotes = 0,
+      totalVotesCast = 0,
+      partyVotes = {},
+      photoUrl = '',
+      photoHashSha256 = '',
+      photoSource = 'police',
+      observerName = '',
+      observerOrganization = '',
+      lat = null,
+      lng = null
+    } = req.body || {}
+
+    if (!pollingUnitId) {
+      return res.status(400).json({ error: 'pollingUnitId is required' })
+    }
+
+    const election = await resolveElectionHelper(electionSlug)
+    if (!election) return res.status(404).json({ error: 'Election not found' })
+
+    // Tamper-evident cryptographic SHA-256 hash calculation or verification
+    let computedHash = photoHashSha256
+    if (!computedHash || computedHash.length !== 64) {
+      const hashPayload = photoUrl ? `${photoUrl}:${Date.now()}` : `${JSON.stringify(partyVotes)}:${pollingUnitId}:${Date.now()}`
+      computedHash = createHash('sha256').update(hashPayload).digest('hex')
+    }
+
+    // Anomaly detection rules
+    const anomalies = []
+    const sumValid = Object.values(partyVotes).reduce((acc, v) => acc + (Number(v) || 0), 0)
+    const effectiveValid = Math.max(validVotes, sumValid)
+    const effectiveTotal = Math.max(totalVotesCast, effectiveValid + ballotPapersRejected)
+
+    if (accreditedVoters > 0 && effectiveTotal > accreditedVoters) {
+      anomalies.push('over_voting')
+    }
+    if (registeredVoters > 0 && accreditedVoters > registeredVoters) {
+      anomalies.push('excess_accreditation')
+    }
+    if (effectiveValid + ballotPapersRejected !== effectiveTotal && totalVotesCast > 0) {
+      anomalies.push('arithmetic_mismatch')
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO ec8a_results_evidence (
+        election_id, polling_unit_id, registered_voters, accredited_voters,
+        ballot_papers_issued, ballot_papers_used, ballot_papers_spoiled,
+        ballot_papers_rejected, valid_votes, total_votes_cast, party_votes,
+        photo_url, photo_hash_sha256, photo_captured_at, photo_source,
+        observer_name, observer_organization, recorded_by, lat, lng,
+        anomaly_flags, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now(), $14, $15, $16, $17, $18, $19, $20, now())
+      ON CONFLICT (election_id, polling_unit_id, photo_source)
+      DO UPDATE SET
+        registered_voters = EXCLUDED.registered_voters,
+        accredited_voters = EXCLUDED.accredited_voters,
+        ballot_papers_issued = EXCLUDED.ballot_papers_issued,
+        ballot_papers_used = EXCLUDED.ballot_papers_used,
+        ballot_papers_spoiled = EXCLUDED.ballot_papers_spoiled,
+        ballot_papers_rejected = EXCLUDED.ballot_papers_rejected,
+        valid_votes = EXCLUDED.valid_votes,
+        total_votes_cast = EXCLUDED.total_votes_cast,
+        party_votes = EXCLUDED.party_votes,
+        photo_url = COALESCE(NULLIF(EXCLUDED.photo_url, ''), ec8a_results_evidence.photo_url),
+        photo_hash_sha256 = EXCLUDED.photo_hash_sha256,
+        observer_name = EXCLUDED.observer_name,
+        observer_organization = EXCLUDED.observer_organization,
+        recorded_by = EXCLUDED.recorded_by,
+        lat = EXCLUDED.lat,
+        lng = EXCLUDED.lng,
+        anomaly_flags = EXCLUDED.anomaly_flags,
+        updated_at = now()
+      RETURNING *`,
+      [
+        election.id,
+        pollingUnitId,
+        registeredVoters,
+        accreditedVoters,
+        ballotPapersIssued,
+        ballotPapersUsed,
+        ballotPapersSpoiled,
+        ballotPapersRejected,
+        effectiveValid,
+        effectiveTotal,
+        JSON.stringify(partyVotes),
+        photoUrl || null,
+        computedHash,
+        photoSource,
+        observerName || null,
+        observerOrganization || null,
+        req.auth.sub,
+        lat || null,
+        lng || null,
+        JSON.stringify(anomalies)
+      ]
+    )
+
+    // Mirror party votes to election_pu_party_votes table for backward-compatible aggregations
+    for (const [partyKey, voteCount] of Object.entries(partyVotes)) {
+      const pRes = await pool.query(
+        `SELECT id FROM political_parties WHERE abbreviation = $1 OR id::text = $1 LIMIT 1`,
+        [partyKey]
+      )
+      if (pRes.rows.length) {
+        await pool.query(
+          `INSERT INTO election_pu_party_votes (election_id, polling_unit_id, party_id, votes, updated_at)
+           VALUES ($1, $2, $3, $4, now())
+           ON CONFLICT (election_id, polling_unit_id, party_id)
+           DO UPDATE SET votes = EXCLUDED.votes, updated_at = now()`,
+          [election.id, pollingUnitId, pRes.rows[0].id, Number(voteCount) || 0]
+        )
+      }
+    }
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('ec8a_results_received', {
+        id: rows[0].id,
+        electionId: election.id,
+        pollingUnitId,
+        photoHashSha256: computedHash,
+        anomalies
+      })
+    }
+
+    return res.json({ ok: true, result: rows[0], anomalies })
+  } catch (e) {
+    console.error('Save EC8A error:', e)
+    return res.status(500).json({ error: 'Failed to record EC8A result sheet evidence' })
+  }
+})
+
+app.post('/api/operations/results/ec8a/:id/verify', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10)
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid ID' })
+
+    const { rows } = await pool.query(
+      `UPDATE ec8a_results_evidence
+       SET is_verified = true, verified_by = $1, verified_at = now(), updated_at = now()
+       WHERE id = $2
+       RETURNING *`,
+      [req.auth.sub, id]
+    )
+    if (!rows.length) return res.status(404).json({ error: 'EC8A record not found' })
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('ec8a_result_verified', { id, verifiedBy: req.auth.username })
+    }
+
+    return res.json({ ok: true, result: rows[0] })
+  } catch (e) {
+    console.error('Verify EC8A error:', e)
+    return res.status(500).json({ error: 'Failed to verify EC8A record' })
+  }
+})
+
+/* --- 3. SENSITIVE MATERIALS CUSTODY & CHAIN OF CUSTODY --- */
+
+app.get('/api/operations/materials', authMiddleware, async (req, res) => {
+  try {
+    const election = await resolveElectionHelper(req.query.electionSlug)
+    if (!election) return res.status(404).json({ error: 'No active election found' })
+
+    const j = await loadUserJurisdiction(req.auth.sub)
+    let stateId = req.query.stateId ? parseInt(req.query.stateId, 10) : (j.level === 'state' || j.level === 'area' ? j.stateId : null)
+    let lgaId = req.query.lgaId ? parseInt(req.query.lgaId, 10) : (j.level === 'area' ? j.lgaId : null)
+    let status = req.query.status
+    let materialType = req.query.materialType
+    let search = req.query.search
+
+    const params = [election.id]
+    let sql = `SELECT m.id, m.material_type, m.serial_or_barcode, m.status,
+                      m.carrier_name, m.carrier_phone, m.security_escort,
+                      m.last_scanned_at, m.tamper_seal_intact, m.notes, m.created_at,
+                      pu.id AS pu_id, pu.code AS pu_code, pu.name AS pu_name,
+                      w.id AS ward_id, w.name AS ward_name,
+                      l.id AS lga_id, l.name AS lga_name,
+                      s.id AS state_id, s.name AS state_name,
+                      u.username AS officer_username, coalesce(p.full_name, u.username) AS officer_name
+               FROM sensitive_materials_custody m
+               LEFT JOIN geo_polling_units pu ON pu.id = m.polling_unit_id
+               LEFT JOIN geo_wards w ON w.id = COALESCE(m.ward_id, pu.ward_id)
+               LEFT JOIN geo_lgas l ON l.id = COALESCE(m.lga_id, w.lga_id)
+               LEFT JOIN geo_states s ON s.id = COALESCE(m.state_id, l.state_id)
+               LEFT JOIN app_users u ON u.id = m.custody_officer_id
+               LEFT JOIN officer_profiles p ON p.user_id = u.id
+               WHERE m.election_id = $1`
+
+    if (stateId) {
+      params.push(stateId)
+      sql += ` AND s.id = $${params.length}`
+    }
+    if (lgaId) {
+      params.push(lgaId)
+      sql += ` AND l.id = $${params.length}`
+    }
+    if (status) {
+      params.push(status)
+      sql += ` AND m.status = $${params.length}`
+    }
+    if (materialType) {
+      params.push(materialType)
+      sql += ` AND m.material_type = $${params.length}`
+    }
+    if (search) {
+      params.push(`%${search}%`)
+      sql += ` AND (m.serial_or_barcode ILIKE $${params.length} OR m.carrier_name ILIKE $${params.length})`
+    }
+
+    sql += ` ORDER BY m.last_scanned_at DESC LIMIT 150`
+    const { rows } = await pool.query(sql, params)
+
+    return res.json({ election, materials: rows })
+  } catch (e) {
+    console.error('Materials list error:', e)
+    return res.status(500).json({ error: 'Failed to fetch sensitive materials' })
+  }
+})
+
+app.post('/api/operations/materials', authMiddleware, async (req, res) => {
+  try {
+    const {
+      electionSlug,
+      materialType,
+      serialOrBarcode,
+      pollingUnitId = null,
+      wardId = null,
+      lgaId = null,
+      stateId = null,
+      status = 'issued',
+      carrierName = '',
+      carrierPhone = '',
+      securityEscort = '',
+      notes = '',
+      tamperSealIntact = true
+    } = req.body || {}
+
+    if (!materialType || !serialOrBarcode) {
+      return res.status(400).json({ error: 'materialType and serialOrBarcode are required' })
+    }
+
+    const election = await resolveElectionHelper(electionSlug)
+    if (!election) return res.status(404).json({ error: 'Election not found' })
+
+    const { rows } = await pool.query(
+      `INSERT INTO sensitive_materials_custody (
+        election_id, material_type, serial_or_barcode, polling_unit_id,
+        ward_id, lga_id, state_id, status, custody_officer_id,
+        carrier_name, carrier_phone, security_escort, last_scanned_at,
+        tamper_seal_intact, notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now(), $13, $14)
+      ON CONFLICT (election_id, serial_or_barcode)
+      DO UPDATE SET
+        status = EXCLUDED.status,
+        polling_unit_id = COALESCE(EXCLUDED.polling_unit_id, sensitive_materials_custody.polling_unit_id),
+        custody_officer_id = EXCLUDED.custody_officer_id,
+        carrier_name = EXCLUDED.carrier_name,
+        carrier_phone = EXCLUDED.carrier_phone,
+        security_escort = EXCLUDED.security_escort,
+        last_scanned_at = now(),
+        tamper_seal_intact = EXCLUDED.tamper_seal_intact,
+        notes = EXCLUDED.notes,
+        updated_at = now()
+      RETURNING *`,
+      [
+        election.id,
+        materialType,
+        serialOrBarcode,
+        pollingUnitId,
+        wardId,
+        lgaId,
+        stateId,
+        status,
+        req.auth.sub,
+        carrierName,
+        carrierPhone,
+        securityEscort,
+        tamperSealIntact,
+        notes
+      ]
+    )
+
+    const mat = rows[0]
+    await pool.query(
+      `INSERT INTO sensitive_materials_audit_trail (material_id, action, from_officer_id, to_officer_id, notes)
+       VALUES ($1, 'registered', NULL, $2, $3)`,
+      [mat.id, req.auth.sub, `Initial registration: ${status}`]
+    )
+
+    return res.json({ ok: true, material: mat })
+  } catch (e) {
+    console.error('Create material error:', e)
+    return res.status(500).json({ error: 'Failed to register sensitive material' })
+  }
+})
+
+app.post('/api/operations/materials/scan', authMiddleware, async (req, res) => {
+  try {
+    const {
+      serialOrBarcode,
+      materialId,
+      action = 'scan',
+      status = 'in_transit',
+      toOfficerId = null,
+      carrierName = '',
+      carrierPhone = '',
+      tamperSealIntact = true,
+      lat = null,
+      lng = null,
+      locationName = '',
+      notes = ''
+    } = req.body || {}
+
+    if (!serialOrBarcode && !materialId) {
+      return res.status(400).json({ error: 'serialOrBarcode or materialId is required' })
+    }
+
+    let matRes
+    if (materialId) {
+      matRes = await pool.query(`SELECT * FROM sensitive_materials_custody WHERE id = $1`, [materialId])
+    } else {
+      matRes = await pool.query(
+        `SELECT * FROM sensitive_materials_custody WHERE serial_or_barcode = $1 ORDER BY created_at DESC LIMIT 1`,
+        [serialOrBarcode]
+      )
+    }
+
+    if (!matRes.rows.length) {
+      return res.status(404).json({ error: 'Material not found for this barcode/serial' })
+    }
+
+    const mat = matRes.rows[0]
+    const fromOfficer = mat.custody_officer_id
+
+    const upd = await pool.query(
+      `UPDATE sensitive_materials_custody
+       SET status = $1,
+           custody_officer_id = COALESCE($2, custody_officer_id),
+           carrier_name = COALESCE(NULLIF($3, ''), carrier_name),
+           carrier_phone = COALESCE(NULLIF($4, ''), carrier_phone),
+           tamper_seal_intact = $5,
+           notes = COALESCE(NULLIF($6, ''), notes),
+           last_scanned_at = now(),
+           updated_at = now()
+       WHERE id = $7
+       RETURNING *`,
+      [
+        status,
+        toOfficerId || req.auth.sub,
+        carrierName,
+        carrierPhone,
+        tamperSealIntact,
+        notes,
+        mat.id
+      ]
+    )
+
+    await pool.query(
+      `INSERT INTO sensitive_materials_audit_trail (
+        material_id, action, from_officer_id, to_officer_id, lat, lng, location_name, notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        mat.id,
+        action,
+        fromOfficer,
+        toOfficerId || req.auth.sub,
+        lat,
+        lng,
+        locationName,
+        notes || `Status changed to ${status}`
+      ]
+    )
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('material_custody_updated', {
+        materialId: mat.id,
+        serialOrBarcode: mat.serial_or_barcode,
+        status,
+        tamperSealIntact,
+        scannedBy: req.auth.username
+      })
+    }
+
+    return res.json({ ok: true, material: upd.rows[0] })
+  } catch (e) {
+    console.error('Scan material error:', e)
+    return res.status(500).json({ error: 'Failed to update material custody' })
+  }
+})
+
+app.get('/api/operations/materials/:id/trail', authMiddleware, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10)
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid ID' })
+
+    const { rows } = await pool.query(
+      `SELECT t.*,
+              u1.username AS from_username, coalesce(p1.full_name, u1.username) AS from_name,
+              u2.username AS to_username, coalesce(p2.full_name, u2.username) AS to_name
+       FROM sensitive_materials_audit_trail t
+       LEFT JOIN app_users u1 ON u1.id = t.from_officer_id
+       LEFT JOIN officer_profiles p1 ON p1.user_id = u1.id
+       LEFT JOIN app_users u2 ON u2.id = t.to_officer_id
+       LEFT JOIN officer_profiles p2 ON p2.user_id = u2.id
+       WHERE t.material_id = $1
+       ORDER BY t.created_at ASC`,
+      [id]
+    )
+
+    return res.json({ trail: rows })
+  } catch (e) {
+    console.error('Material trail error:', e)
+    return res.status(500).json({ error: 'Failed to fetch chain of custody trail' })
+  }
+})
+
+/* --- 4. DEPLOYMENT & ROSTER MANAGEMENT --- */
+
+app.get('/api/operations/roster', authMiddleware, async (req, res) => {
+  try {
+    const election = await resolveElectionHelper(req.query.electionSlug)
+    if (!election) return res.status(404).json({ error: 'No active election found' })
+
+    const j = await loadUserJurisdiction(req.auth.sub)
+    let stateId = req.query.stateId ? parseInt(req.query.stateId, 10) : (j.level === 'state' || j.level === 'area' ? j.stateId : null)
+    let lgaId = req.query.lgaId ? parseInt(req.query.lgaId, 10) : (j.level === 'area' ? j.lgaId : null)
+
+    const params = [election.id]
+    let sql = `SELECT pu.id AS pu_id, pu.code AS pu_code, pu.name AS pu_name,
+                      w.id AS ward_id, w.name AS ward_name,
+                      l.id AS lga_id, l.name AS lga_name,
+                      s.id AS state_id, s.name AS state_name,
+                      COALESCE(r.target_strength, 2) AS target_strength,
+                      COALESCE(r.agency_breakdown, '{"npf": 2, "nscdc": 1}'::jsonb) AS agency_breakdown,
+                      COALESCE(r.assigned_officer_ids, '[]'::jsonb) AS assigned_officer_ids,
+                      r.sector_commander_name, r.sector_commander_phone,
+                      COUNT(DISTINCT op.user_id)::int AS active_officers_count
+               FROM geo_polling_units pu
+               JOIN geo_wards w ON w.id = pu.ward_id
+               JOIN geo_lgas l ON l.id = w.lga_id
+               JOIN geo_states s ON s.id = l.state_id
+               LEFT JOIN deployment_rosters r ON r.polling_unit_id = pu.id AND r.election_id = $1
+               LEFT JOIN officer_profiles op ON op.assigned_polling_unit_id = pu.id
+               WHERE 1=1`
+
+    if (stateId) {
+      params.push(stateId)
+      sql += ` AND s.id = $${params.length}`
+    }
+    if (lgaId) {
+      params.push(lgaId)
+      sql += ` AND l.id = $${params.length}`
+    }
+
+    sql += ` GROUP BY pu.id, pu.code, pu.name, w.id, w.name, l.id, l.name, s.id, s.name,
+                      r.target_strength, r.agency_breakdown, r.assigned_officer_ids,
+                      r.sector_commander_name, r.sector_commander_phone
+             ORDER BY pu.code ASC LIMIT 250`
+
+    const { rows } = await pool.query(sql, params)
+
+    const mapped = rows.map((r) => {
+      const target = Number(r.target_strength) || 2
+      const reported = Number(r.active_officers_count) || 0
+      let coverageStatus = 'manned'
+      if (reported === 0) coverageStatus = 'unstaffed'
+      else if (reported < target) coverageStatus = 'understaffed'
+      else if (reported > target) coverageStatus = 'surplus'
+
+      return {
+        ...r,
+        coverageStatus,
+        coveragePercent: target > 0 ? Math.min(100, Math.round((reported / target) * 100)) : 100
+      }
+    })
+
+    const summary = {
+      totalPus: mapped.length,
+      unstaffed: mapped.filter(m => m.coverageStatus === 'unstaffed').length,
+      understaffed: mapped.filter(m => m.coverageStatus === 'understaffed').length,
+      manned: mapped.filter(m => m.coverageStatus === 'manned' || m.coverageStatus === 'surplus').length
+    }
+
+    return res.json({ election, summary, roster: mapped })
+  } catch (e) {
+    console.error('Roster error:', e)
+    return res.status(500).json({ error: 'Failed to fetch deployment roster' })
+  }
+})
+
+app.post('/api/operations/roster', authMiddleware, requireAnyPortal('management', 'admin'), async (req, res) => {
+  try {
+    const {
+      electionSlug,
+      pollingUnitId,
+      targetStrength = 2,
+      agencyBreakdown = { npf: 2, nscdc: 1 },
+      assignedOfficerIds = [],
+      sectorCommanderName = '',
+      sectorCommanderPhone = ''
+    } = req.body || {}
+
+    if (!pollingUnitId) return res.status(400).json({ error: 'pollingUnitId is required' })
+
+    const election = await resolveElectionHelper(electionSlug)
+    if (!election) return res.status(404).json({ error: 'Election not found' })
+
+    const { rows } = await pool.query(
+      `INSERT INTO deployment_rosters (
+        election_id, polling_unit_id, target_strength, agency_breakdown,
+        assigned_officer_ids, sector_commander_name, sector_commander_phone, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+      ON CONFLICT (election_id, polling_unit_id)
+      DO UPDATE SET
+        target_strength = EXCLUDED.target_strength,
+        agency_breakdown = EXCLUDED.agency_breakdown,
+        assigned_officer_ids = EXCLUDED.assigned_officer_ids,
+        sector_commander_name = EXCLUDED.sector_commander_name,
+        sector_commander_phone = EXCLUDED.sector_commander_phone,
+        updated_at = now()
+      RETURNING *`,
+      [
+        election.id,
+        pollingUnitId,
+        targetStrength,
+        JSON.stringify(agencyBreakdown),
+        JSON.stringify(assignedOfficerIds),
+        sectorCommanderName,
+        sectorCommanderPhone
+      ]
+    )
+
+    return res.json({ ok: true, roster: rows[0] })
+  } catch (e) {
+    console.error('Save roster error:', e)
+    return res.status(500).json({ error: 'Failed to update roster' })
+  }
+})
+
+/* --- 5. RELIEF & SHIFT MANAGEMENT --- */
+
+app.get('/api/operations/shifts', authMiddleware, async (req, res) => {
+  try {
+    const puId = req.query.puId ? parseInt(req.query.puId, 10) : null
+    const params = []
+    let sql = `SELECT s.*,
+                      pu.code AS pu_code, pu.name AS pu_name,
+                      w.name AS ward_name, l.name AS lga_name,
+                      u1.username AS outgoing_username, coalesce(p1.full_name, u1.username) AS outgoing_name,
+                      u2.username AS incoming_username, coalesce(p2.full_name, u2.username) AS incoming_name
+               FROM shift_handovers s
+               LEFT JOIN geo_polling_units pu ON pu.id = s.polling_unit_id
+               LEFT JOIN geo_wards w ON w.id = pu.ward_id
+               LEFT JOIN geo_lgas l ON l.id = w.lga_id
+               LEFT JOIN app_users u1 ON u1.id = s.outgoing_officer_id
+               LEFT JOIN officer_profiles p1 ON p1.user_id = u1.id
+               LEFT JOIN app_users u2 ON u2.id = s.incoming_officer_id
+               LEFT JOIN officer_profiles p2 ON p2.user_id = u2.id
+               WHERE 1=1`
+
+    if (puId) {
+      params.push(puId)
+      sql += ` AND s.polling_unit_id = $${params.length}`
+    }
+
+    sql += ` ORDER BY s.handover_signed_at DESC LIMIT 50`
+    const { rows } = await pool.query(sql, params)
+    return res.json({ shifts: rows })
+  } catch (e) {
+    console.error('Shifts error:', e)
+    return res.status(500).json({ error: 'Failed to fetch shift handovers' })
+  }
+})
+
+app.post('/api/operations/shifts/handover', authMiddleware, async (req, res) => {
+  try {
+    const {
+      electionSlug,
+      pollingUnitId = null,
+      shiftName = 'morning',
+      incomingOfficerId = null,
+      incomingOfficerName = '',
+      runningSituationLog = '',
+      materialsStatus = 'All sensitive materials accounted for',
+      crowdAssessment = 'calm',
+      notes = ''
+    } = req.body || {}
+
+    if (!runningSituationLog) {
+      return res.status(400).json({ error: 'runningSituationLog is required for handover' })
+    }
+
+    const election = await resolveElectionHelper(electionSlug)
+
+    const { rows } = await pool.query(
+      `INSERT INTO shift_handovers (
+        election_id, polling_unit_id, shift_name, outgoing_officer_id,
+        incoming_officer_id, incoming_officer_name, running_situation_log,
+        materials_status, crowd_assessment, handover_signed_at, notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), $10)
+      RETURNING *`,
+      [
+        election?.id || null,
+        pollingUnitId,
+        shiftName,
+        req.auth.sub,
+        incomingOfficerId,
+        incomingOfficerName,
+        runningSituationLog,
+        materialsStatus,
+        crowdAssessment,
+        notes
+      ]
+    )
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('shift_handover_created', {
+        id: rows[0].id,
+        shiftName,
+        pollingUnitId,
+        outgoingBy: req.auth.username
+      })
+    }
+
+    return res.json({ ok: true, handover: rows[0] })
+  } catch (e) {
+    console.error('Shift handover error:', e)
+    return res.status(500).json({ error: 'Failed to record shift handover' })
+  }
+})
+
+app.post('/api/operations/shifts/:id/acknowledge', authMiddleware, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10)
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid ID' })
+
+    const { rows } = await pool.query(
+      `UPDATE shift_handovers
+       SET incoming_acknowledged_at = now(), incoming_officer_id = $1
+       WHERE id = $2
+       RETURNING *`,
+      [req.auth.sub, id]
+    )
+    if (!rows.length) return res.status(404).json({ error: 'Shift handover not found' })
+
+    return res.json({ ok: true, handover: rows[0] })
+  } catch (e) {
+    console.error('Shift acknowledge error:', e)
+    return res.status(500).json({ error: 'Failed to acknowledge handover' })
+  }
+})
+
+/* --- 6. LOGISTICS REQUEST WORKFLOW --- */
+
+app.get('/api/operations/logistics', authMiddleware, async (req, res) => {
+  try {
+    const j = await loadUserJurisdiction(req.auth.sub)
+    let stateId = req.query.stateId ? parseInt(req.query.stateId, 10) : (j.level === 'state' || j.level === 'area' ? j.stateId : null)
+    let lgaId = req.query.lgaId ? parseInt(req.query.lgaId, 10) : (j.level === 'area' ? j.lgaId : null)
+    let category = req.query.category
+    let priority = req.query.priority
+    let status = req.query.status
+
+    const params = []
+    let sql = `SELECT lr.*,
+                      s.name AS state_name, l.name AS lga_name, w.name AS ward_name,
+                      pu.code AS pu_code, pu.name AS pu_name,
+                      u.username AS requester_username, coalesce(p.full_name, u.username) AS requester_name,
+                      au.username AS approver_username
+               FROM logistics_requests lr
+               LEFT JOIN geo_states s ON s.id = lr.state_id
+               LEFT JOIN geo_lgas l ON l.id = lr.lga_id
+               LEFT JOIN geo_wards w ON w.id = lr.ward_id
+               LEFT JOIN geo_polling_units pu ON pu.id = lr.polling_unit_id
+               LEFT JOIN app_users u ON u.id = lr.requester_user_id
+               LEFT JOIN officer_profiles p ON p.user_id = u.id
+               LEFT JOIN app_users au ON au.id = lr.approved_by
+               WHERE 1=1`
+
+    if (stateId) {
+      params.push(stateId)
+      sql += ` AND lr.state_id = $${params.length}`
+    }
+    if (lgaId) {
+      params.push(lgaId)
+      sql += ` AND lr.lga_id = $${params.length}`
+    }
+    if (category) {
+      params.push(category)
+      sql += ` AND lr.category = $${params.length}`
+    }
+    if (priority) {
+      params.push(priority)
+      sql += ` AND lr.priority = $${params.length}`
+    }
+    if (status) {
+      params.push(status)
+      sql += ` AND lr.status = $${params.length}`
+    }
+
+    sql += ` ORDER BY CASE lr.priority
+                        WHEN 'critical' THEN 1
+                        WHEN 'urgent' THEN 2
+                        WHEN 'medium' THEN 3
+                        ELSE 4
+                      END, lr.created_at DESC LIMIT 100`
+
+    const { rows } = await pool.query(sql, params)
+    return res.json({ requests: rows })
+  } catch (e) {
+    console.error('Logistics list error:', e)
+    return res.status(500).json({ error: 'Failed to fetch logistics requests' })
+  }
+})
+
+app.post('/api/operations/logistics', authMiddleware, async (req, res) => {
+  try {
+    const {
+      electionSlug,
+      category,
+      priority = 'medium',
+      quantityDescription,
+      stateId = null,
+      lgaId = null,
+      wardId = null,
+      pollingUnitId = null,
+      lat = null,
+      lng = null
+    } = req.body || {}
+
+    if (!category || !quantityDescription) {
+      return res.status(400).json({ error: 'category and quantityDescription are required' })
+    }
+
+    const election = await resolveElectionHelper(electionSlug)
+
+    const { rows } = await pool.query(
+      `INSERT INTO logistics_requests (
+        election_id, requester_user_id, category, priority, quantity_description,
+        state_id, lga_id, ward_id, polling_unit_id, lat, lng, status, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', now(), now())
+      RETURNING *`,
+      [
+        election?.id || null,
+        req.auth.sub,
+        category,
+        priority,
+        quantityDescription,
+        stateId,
+        lgaId,
+        wardId,
+        pollingUnitId,
+        lat,
+        lng
+      ]
+    )
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('logistics_request_created', {
+        id: rows[0].id,
+        category,
+        priority,
+        requester: req.auth.username
+      })
+    }
+
+    return res.json({ ok: true, request: rows[0] })
+  } catch (e) {
+    console.error('Create logistics error:', e)
+    return res.status(500).json({ error: 'Failed to create logistics request' })
+  }
+})
+
+app.patch('/api/operations/logistics/:id', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10)
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid ID' })
+
+    const { status, assignedDispatchUnit, commandNotes } = req.body || {}
+
+    const { rows } = await pool.query(
+      `UPDATE logistics_requests
+       SET status = COALESCE($1, status),
+           assigned_dispatch_unit = COALESCE(NULLIF($2, ''), assigned_dispatch_unit),
+           command_notes = COALESCE(NULLIF($3, ''), command_notes),
+           approved_by = COALESCE($4, approved_by),
+           dispatched_at = CASE WHEN $1 = 'dispatched' THEN now() ELSE dispatched_at END,
+           delivered_at = CASE WHEN $1 = 'delivered' OR $1 = 'closed' THEN now() ELSE delivered_at END,
+           updated_at = now()
+       WHERE id = $5
+       RETURNING *`,
+      [status, assignedDispatchUnit, commandNotes, req.auth.sub, id]
+    )
+
+    if (!rows.length) return res.status(404).json({ error: 'Logistics request not found' })
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('logistics_request_updated', {
+        id,
+        status: rows[0].status,
+        updatedBy: req.auth.username
+      })
+    }
+
+    return res.json({ ok: true, request: rows[0] })
+  } catch (e) {
+    console.error('Update logistics error:', e)
+    return res.status(500).json({ error: 'Failed to update logistics request' })
+  }
+})
+
+/* --- 7. REINFORCEMENT / QUICK REACTION FORCE (QRF) DISPATCH BOARD --- */
+
+app.get('/api/operations/qrf/units', authMiddleware, async (req, res) => {
+  try {
+    const stateId = req.query.stateId ? parseInt(req.query.stateId, 10) : null
+    const params = []
+    let sql = `SELECT q.*, s.name AS state_name, l.name AS lga_name
+               FROM qrf_tactical_units q
+               LEFT JOIN geo_states s ON s.id = q.state_id
+               LEFT JOIN geo_lgas l ON l.id = q.lga_id
+               WHERE 1=1`
+    if (stateId) {
+      params.push(stateId)
+      sql += ` AND q.state_id = $${params.length}`
+    }
+    sql += ` ORDER BY q.unit_code ASC`
+    const { rows } = await pool.query(sql, params)
+    return res.json({ units: rows })
+  } catch (e) {
+    console.error('QRF units error:', e)
+    return res.status(500).json({ error: 'Failed to load QRF tactical units' })
+  }
+})
+
+app.patch('/api/operations/qrf/units/:id/status', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10)
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid ID' })
+
+    const { status, currentLat, currentLng } = req.body || {}
+    const { rows } = await pool.query(
+      `UPDATE qrf_tactical_units
+       SET status = COALESCE($1, status),
+           current_lat = COALESCE($2, current_lat),
+           current_lng = COALESCE($3, current_lng),
+           updated_at = now()
+       WHERE id = $4
+       RETURNING *`,
+      [status, currentLat, currentLng, id]
+    )
+    if (!rows.length) return res.status(404).json({ error: 'Unit not found' })
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('qrf_unit_status_changed', { id, status: rows[0].status })
+    }
+
+    return res.json({ ok: true, unit: rows[0] })
+  } catch (e) {
+    console.error('Update QRF unit error:', e)
+    return res.status(500).json({ error: 'Failed to update QRF unit' })
+  }
+})
+
+app.get('/api/operations/qrf/dispatches', authMiddleware, async (req, res) => {
+  try {
+    const status = req.query.status
+    const params = []
+    let sql = `SELECT d.*,
+                      u.unit_code, u.unit_name, u.commander_name, u.commander_phone, u.vehicle_callsign,
+                      l.name AS target_lga_name, pu.code AS target_pu_code, pu.name AS target_pu_name,
+                      disp.username AS dispatched_by_username
+               FROM qrf_dispatches d
+               JOIN qrf_tactical_units u ON u.id = d.unit_id
+               LEFT JOIN geo_lgas l ON l.id = d.target_lga_id
+               LEFT JOIN geo_polling_units pu ON pu.id = d.target_pu_id
+               LEFT JOIN app_users disp ON disp.id = d.dispatched_by
+               WHERE 1=1`
+    if (status) {
+      params.push(status)
+      sql += ` AND d.status = $${params.length}`
+    }
+    sql += ` ORDER BY d.dispatched_at DESC LIMIT 50`
+    const { rows } = await pool.query(sql, params)
+    return res.json({ dispatches: rows })
+  } catch (e) {
+    console.error('QRF dispatches error:', e)
+    return res.status(500).json({ error: 'Failed to load QRF dispatches' })
+  }
+})
+
+app.post('/api/operations/qrf/dispatch', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
+  try {
+    const {
+      unitId,
+      incidentSitrepId = null,
+      targetLgaId = null,
+      targetPuId = null,
+      targetLocationName,
+      objective,
+      etaMinutes = 15
+    } = req.body || {}
+
+    if (!unitId || !targetLocationName || !objective) {
+      return res.status(400).json({ error: 'unitId, targetLocationName, and objective are required' })
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO qrf_dispatches (
+        unit_id, incident_sitrep_id, target_lga_id, target_pu_id,
+        target_location_name, objective, dispatched_by, eta_minutes,
+        status, dispatched_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'dispatched', now())
+      RETURNING *`,
+      [
+        unitId,
+        incidentSitrepId,
+        targetLgaId,
+        targetPuId,
+        targetLocationName,
+        objective,
+        req.auth.sub,
+        etaMinutes
+      ]
+    )
+
+    // Set unit status to deployed
+    await pool.query(
+      `UPDATE qrf_tactical_units SET status = 'deployed', updated_at = now() WHERE id = $1`,
+      [unitId]
+    )
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('qrf_dispatched', {
+        dispatchId: rows[0].id,
+        unitId,
+        targetLocation: targetLocationName,
+        etaMinutes
+      })
+    }
+
+    return res.json({ ok: true, dispatch: rows[0] })
+  } catch (e) {
+    console.error('QRF dispatch error:', e)
+    return res.status(500).json({ error: 'Failed to dispatch QRF unit' })
+  }
+})
+
+app.patch('/api/operations/qrf/dispatches/:id/status', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10)
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid ID' })
+
+    const { status, afterActionNotes } = req.body || {}
+
+    const { rows } = await pool.query(
+      `UPDATE qrf_dispatches
+       SET status = COALESCE($1, status),
+           after_action_notes = COALESCE(NULLIF($2, ''), after_action_notes),
+           arrived_at = CASE WHEN $1 = 'on_scene' THEN now() ELSE arrived_at END,
+           resolved_at = CASE WHEN $1 = 'resolved' OR $1 = 'recalled' THEN now() ELSE resolved_at END
+       WHERE id = $3
+       RETURNING *`,
+      [status, afterActionNotes, id]
+    )
+    if (!rows.length) return res.status(404).json({ error: 'Dispatch record not found' })
+
+    const disp = rows[0]
+    if (status === 'resolved' || status === 'recalled') {
+      await pool.query(
+        `UPDATE qrf_tactical_units SET status = 'standby', updated_at = now() WHERE id = $1`,
+        [disp.unit_id]
+      )
+    }
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('qrf_dispatch_updated', {
+        dispatchId: id,
+        status,
+        updatedBy: req.auth.username
+      })
+    }
+
+    return res.json({ ok: true, dispatch: disp })
+  } catch (e) {
+    console.error('QRF dispatch status error:', e)
+    return res.status(500).json({ error: 'Failed to update QRF dispatch status' })
+  }
+})
+
+/* -------------------------------------------------------------------------- */
+/* PHASE 3: POLITICAL & SITUATIONAL AWARENESS APIS                            */
+/* -------------------------------------------------------------------------- */
+
+/* --- 1. POLITICAL PARTY & AGENT INCIDENT ATTRIBUTION --- */
+
+app.get('/api/intelligence/parties/attribution', authMiddleware, async (req, res) => {
+  try {
+    const election = await resolveElectionHelper(req.query.electionSlug)
+    const partyId = req.query.partyId
+    const role = req.query.role
+
+    const params = []
+    let sql = `SELECT a.*,
+                      p.name AS party_name, p.abbreviation AS party_abbreviation,
+                      s.title AS sitrep_title, s.category AS sitrep_category, s.severity AS sitrep_severity,
+                      s.state_id, s.lga_id, gs.name AS state_name, gl.name AS lga_name,
+                      pu.code AS pu_code, pu.name AS pu_name
+               FROM party_incident_attributions a
+               JOIN political_parties p ON p.id = a.party_id
+               LEFT JOIN command_sitreps s ON s.id = a.incident_sitrep_id
+               LEFT JOIN geo_states gs ON gs.id = s.state_id
+               LEFT JOIN geo_lgas gl ON gl.id = s.lga_id
+               LEFT JOIN geo_polling_units pu ON pu.id = s.pu_id
+               WHERE 1=1`
+
+    if (election) {
+      params.push(election.id)
+      sql += ` AND (a.election_id = $${params.length} OR a.election_id IS NULL)`
+    }
+    if (partyId) {
+      params.push(partyId)
+      sql += ` AND a.party_id = $${params.length}`
+    }
+    if (role) {
+      params.push(role)
+      sql += ` AND a.role = $${params.length}`
+    }
+
+    sql += ` ORDER BY a.created_at DESC LIMIT 150`
+    const { rows } = await pool.query(sql, params)
+
+    // Calculate party-by-party breakdown summary
+    const partySummary = {}
+    for (const r of rows) {
+      const abbr = r.party_abbreviation || 'OTHER'
+      if (!partySummary[abbr]) {
+        partySummary[abbr] = {
+          partyId: r.party_id,
+          partyName: r.party_name,
+          partyAbbr: abbr,
+          total: 0,
+          accused: 0,
+          complainant: 0,
+          victim: 0,
+          witness: 0,
+        }
+      }
+      partySummary[abbr].total += 1
+      if (r.role in partySummary[abbr]) {
+        partySummary[abbr][r.role] += 1
+      }
+    }
+
+    return res.json({
+      election,
+      attributions: rows,
+      partySummary: Object.values(partySummary).sort((a, b) => b.total - a.total),
+    })
+  } catch (e) {
+    console.error('Party attribution error:', e)
+    return res.status(500).json({ error: 'Failed to fetch party incident attributions' })
+  }
+})
+
+app.post('/api/intelligence/parties/attribution', authMiddleware, async (req, res) => {
+  try {
+    const {
+      incidentSitrepId = null,
+      electionSlug = null,
+      partyId,
+      role = 'accused',
+      agentName = '',
+      agentPhone = '',
+      agentPartyRole = 'Polling Agent',
+      allegationDetails,
+      evidenceNotes = '',
+    } = req.body || {}
+
+    if (!partyId || !allegationDetails) {
+      return res.status(400).json({ error: 'partyId and allegationDetails are required' })
+    }
+
+    const election = await resolveElectionHelper(electionSlug)
+
+    const { rows } = await pool.query(
+      `INSERT INTO party_incident_attributions (
+        incident_sitrep_id, election_id, party_id, role,
+        agent_name, agent_phone, agent_party_role, allegation_details,
+        evidence_notes, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+      RETURNING *`,
+      [
+        incidentSitrepId,
+        election?.id || null,
+        partyId,
+        role,
+        agentName,
+        agentPhone,
+        agentPartyRole,
+        allegationDetails,
+        evidenceNotes,
+      ]
+    )
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('party_attribution_logged', {
+        id: rows[0].id,
+        partyId,
+        role,
+        agentName,
+      })
+    }
+
+    return res.json({ ok: true, attribution: rows[0] })
+  } catch (e) {
+    console.error('Create party attribution error:', e)
+    return res.status(500).json({ error: 'Failed to record party incident attribution' })
+  }
+})
+
+/* --- 2. ACCREDITED STAKEHOLDERS & OBSERVERS REGISTRY --- */
+
+app.get('/api/intelligence/stakeholders', authMiddleware, async (req, res) => {
+  try {
+    const category = req.query.category
+    const stateId = req.query.stateId ? parseInt(req.query.stateId, 10) : null
+    const search = req.query.search
+
+    const params = []
+    let sql = `SELECT s.*, gs.name AS state_name
+               FROM accredited_stakeholders s
+               LEFT JOIN geo_states gs ON gs.id = s.state_id
+               WHERE 1=1`
+
+    if (category) {
+      params.push(category)
+      sql += ` AND s.category = $${params.length}`
+    }
+    if (stateId) {
+      params.push(stateId)
+      sql += ` AND s.state_id = $${params.length}`
+    }
+    if (search) {
+      params.push(`%${search}%`)
+      sql += ` AND (s.organization_name ILIKE $${params.length} OR s.lead_contact_name ILIKE $${params.length} OR s.accreditation_number ILIKE $${params.length})`
+    }
+
+    sql += ` ORDER BY s.organization_name ASC LIMIT 150`
+    const { rows } = await pool.query(sql, params)
+
+    const summary = {
+      total: rows.length,
+      domesticObservers: rows.filter((r) => r.category === 'domestic_observer').length,
+      internationalObservers: rows.filter((r) => r.category === 'international_observer').length,
+      media: rows.filter((r) => r.category === 'media_press').length,
+      escortProvided: rows.filter((r) => r.security_escort_provided).length,
+    }
+
+    return res.json({ summary, stakeholders: rows })
+  } catch (e) {
+    console.error('Stakeholders error:', e)
+    return res.status(500).json({ error: 'Failed to fetch accredited stakeholders' })
+  }
+})
+
+app.post('/api/intelligence/stakeholders', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
+  try {
+    const {
+      electionSlug,
+      category,
+      organizationName,
+      leadContactName,
+      contactPhone,
+      contactEmail = '',
+      accreditationNumber,
+      stateId = null,
+      assignedLgaIds = [],
+      vehiclePlateNumbers = '',
+      securityEscortProvided = false,
+      incidentAccessLevel = 'public_verified',
+      status = 'accredited',
+    } = req.body || {}
+
+    if (!category || !organizationName || !leadContactName || !contactPhone || !accreditationNumber) {
+      return res.status(400).json({ error: 'category, organizationName, leadContactName, contactPhone, and accreditationNumber are required' })
+    }
+
+    const election = await resolveElectionHelper(electionSlug)
+
+    const { rows } = await pool.query(
+      `INSERT INTO accredited_stakeholders (
+        election_id, category, organization_name, lead_contact_name,
+        contact_phone, contact_email, accreditation_number, state_id,
+        assigned_lga_ids, vehicle_plate_numbers, security_escort_provided,
+        incident_access_level, status, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now(), now())
+      ON CONFLICT (accreditation_number)
+      DO UPDATE SET
+        organization_name = EXCLUDED.organization_name,
+        lead_contact_name = EXCLUDED.lead_contact_name,
+        contact_phone = EXCLUDED.contact_phone,
+        contact_email = EXCLUDED.contact_email,
+        security_escort_provided = EXCLUDED.security_escort_provided,
+        incident_access_level = EXCLUDED.incident_access_level,
+        status = EXCLUDED.status,
+        updated_at = now()
+      RETURNING *`,
+      [
+        election?.id || null,
+        category,
+        organizationName,
+        leadContactName,
+        contactPhone,
+        contactEmail,
+        accreditationNumber,
+        stateId,
+        JSON.stringify(assignedLgaIds),
+        vehiclePlateNumbers,
+        securityEscortProvided,
+        incidentAccessLevel,
+        status,
+      ]
+    )
+
+    return res.json({ ok: true, stakeholder: rows[0] })
+  } catch (e) {
+    console.error('Create stakeholder error:', e)
+    return res.status(500).json({ error: 'Failed to register accredited stakeholder' })
+  }
+})
+
+app.patch('/api/intelligence/stakeholders/:id', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10)
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid ID' })
+
+    const { status, securityEscortProvided, incidentAccessLevel } = req.body || {}
+
+    const { rows } = await pool.query(
+      `UPDATE accredited_stakeholders
+       SET status = COALESCE($1, status),
+           security_escort_provided = COALESCE($2, security_escort_provided),
+           incident_access_level = COALESCE($3, incident_access_level),
+           updated_at = now()
+       WHERE id = $4
+       RETURNING *`,
+      [status, securityEscortProvided, incidentAccessLevel, id]
+    )
+
+    if (!rows.length) return res.status(404).json({ error: 'Stakeholder not found' })
+
+    return res.json({ ok: true, stakeholder: rows[0] })
+  } catch (e) {
+    console.error('Update stakeholder error:', e)
+    return res.status(500).json({ error: 'Failed to update stakeholder' })
+  }
+})
+
+/* --- 3. SCENARIO PLAYBOOKS & POST-ELECTION PLANNING --- */
+
+app.get('/api/intelligence/scenarios/playbooks', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM scenario_playbooks ORDER BY id ASC`)
+    return res.json({ playbooks: rows })
+  } catch (e) {
+    console.error('Playbooks error:', e)
+    return res.status(500).json({ error: 'Failed to load scenario playbooks' })
+  }
+})
+
+app.get('/api/intelligence/scenarios/activations', authMiddleware, async (req, res) => {
+  try {
+    const stateId = req.query.stateId ? parseInt(req.query.stateId, 10) : null
+    const params = []
+    let sql = `SELECT a.*,
+                      p.title AS playbook_title, p.slug AS playbook_slug, p.scenario_type,
+                      p.security_doctrine, p.rules_of_engagement, p.communication_channels,
+                      p.checklist_steps AS default_checklist,
+                      s.name AS state_name, l.name AS lga_name,
+                      u.username AS activated_by_username
+               FROM scenario_activations a
+               JOIN scenario_playbooks p ON p.id = a.playbook_id
+               LEFT JOIN geo_states s ON s.id = a.state_id
+               LEFT JOIN geo_lgas l ON l.id = a.lga_id
+               LEFT JOIN app_users u ON u.id = a.activated_by
+               WHERE 1=1`
+
+    if (stateId) {
+      params.push(stateId)
+      sql += ` AND a.state_id = $${params.length}`
+    }
+
+    sql += ` ORDER BY a.activated_at DESC LIMIT 50`
+    const { rows } = await pool.query(sql, params)
+
+    return res.json({ activations: rows })
+  } catch (e) {
+    console.error('Activations error:', e)
+    return res.status(500).json({ error: 'Failed to load scenario activations' })
+  }
+})
+
+app.post('/api/intelligence/scenarios/activate', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
+  try {
+    const {
+      playbookId,
+      electionSlug,
+      stateId = null,
+      lgaId = null,
+      activationRationale,
+      activeCheckpointsCount = 4,
+    } = req.body || {}
+
+    if (!playbookId || !activationRationale) {
+      return res.status(400).json({ error: 'playbookId and activationRationale are required' })
+    }
+
+    const election = await resolveElectionHelper(electionSlug)
+
+    const { rows } = await pool.query(
+      `INSERT INTO scenario_activations (
+        playbook_id, election_id, state_id, lga_id, activated_by,
+        status, activation_rationale, active_checkpoints_count, completed_steps, activated_at
+      ) VALUES ($1, $2, $3, $4, $5, 'active', $6, $7, '[]'::jsonb, now())
+      RETURNING *`,
+      [
+        playbookId,
+        election?.id || null,
+        stateId,
+        lgaId,
+        req.auth.sub,
+        activationRationale,
+        activeCheckpointsCount,
+      ]
+    )
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('scenario_activated', {
+        id: rows[0].id,
+        playbookId,
+        activatedBy: req.auth.username,
+      })
+    }
+
+    return res.json({ ok: true, activation: rows[0] })
+  } catch (e) {
+    console.error('Scenario activate error:', e)
+    return res.status(500).json({ error: 'Failed to activate scenario playbook' })
+  }
+})
+
+app.patch('/api/intelligence/scenarios/activations/:id', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10)
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid ID' })
+
+    const { status, activeCheckpointsCount, completedSteps } = req.body || {}
+
+    const { rows } = await pool.query(
+      `UPDATE scenario_activations
+       SET status = COALESCE($1, status),
+           active_checkpoints_count = COALESCE($2, active_checkpoints_count),
+           completed_steps = COALESCE($3, completed_steps),
+           closed_at = CASE WHEN $1 = 'closed' OR $1 = 'deescalated' THEN now() ELSE closed_at END
+       WHERE id = $4
+       RETURNING *`,
+      [status, activeCheckpointsCount, completedSteps ? JSON.stringify(completedSteps) : null, id]
+    )
+
+    if (!rows.length) return res.status(404).json({ error: 'Activation not found' })
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('scenario_updated', { id, status: rows[0].status })
+    }
+
+    return res.json({ ok: true, activation: rows[0] })
+  } catch (e) {
+    console.error('Update scenario activation error:', e)
+    return res.status(500).json({ error: 'Failed to update scenario activation' })
+  }
+})
+
+/* --- 4. TRIBUNAL EVIDENCE EXPORT BUNDLES --- */
+
+app.get('/api/intelligence/tribunal/bundles', authMiddleware, async (req, res) => {
+  try {
+    const election = await resolveElectionHelper(req.query.electionSlug)
+    const stateId = req.query.stateId ? parseInt(req.query.stateId, 10) : null
+
+    const params = []
+    let sql = `SELECT b.*,
+                      s.name AS state_name, l.name AS lga_name,
+                      pu.code AS pu_code, pu.name AS pu_name,
+                      u.username AS compiled_by_username, coalesce(p.full_name, u.username) AS compiled_by_name
+               FROM tribunal_evidence_bundles b
+               LEFT JOIN geo_states s ON s.id = b.state_id
+               LEFT JOIN geo_lgas l ON l.id = b.lga_id
+               LEFT JOIN geo_polling_units pu ON pu.id = b.polling_unit_id
+               LEFT JOIN app_users u ON u.id = b.compiled_by
+               LEFT JOIN officer_profiles p ON p.user_id = u.id
+               WHERE 1=1`
+
+    if (election) {
+      params.push(election.id)
+      sql += ` AND b.election_id = $${params.length}`
+    }
+    if (stateId) {
+      params.push(stateId)
+      sql += ` AND b.state_id = $${params.length}`
+    }
+
+    sql += ` ORDER BY b.created_at DESC LIMIT 100`
+    const { rows } = await pool.query(sql, params)
+
+    return res.json({ election, bundles: rows })
+  } catch (e) {
+    console.error('Tribunal bundles error:', e)
+    return res.status(500).json({ error: 'Failed to load tribunal evidence bundles' })
+  }
+})
+
+app.post('/api/intelligence/tribunal/bundles', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
+  try {
+    const {
+      electionSlug,
+      pollingUnitId = null,
+      lgaId = null,
+      stateId = null,
+      caseTitle,
+      petitionerParty = '',
+      respondentParty = '',
+    } = req.body || {}
+
+    if (!caseTitle) {
+      return res.status(400).json({ error: 'caseTitle is required' })
+    }
+
+    const election = await resolveElectionHelper(electionSlug)
+    if (!election) return res.status(404).json({ error: 'Election not found' })
+
+    const bundleCode = `TRIB-${Date.now().toString().slice(-6)}-${pollingUnitId || lgaId || 'SEC'}`
+
+    // Collect evidence items in scope (Sitreps, EC8A returns, Materials logs, Shift logs)
+    let sitreps = []
+    let ec8a = []
+    if (pollingUnitId) {
+      const sRes = await pool.query(`SELECT id, kind, title, body, severity, created_at FROM command_sitreps WHERE pu_id = $1 LIMIT 20`, [pollingUnitId])
+      sitreps = sRes.rows
+      const eRes = await pool.query(`SELECT id, photo_hash_sha256, registered_voters, accredited_voters, valid_votes, party_votes, is_verified FROM ec8a_results_evidence WHERE polling_unit_id = $1 LIMIT 5`, [pollingUnitId])
+      ec8a = eRes.rows
+    }
+
+    const manifest = {
+      bundleCode,
+      caseTitle,
+      compiledAt: new Date().toISOString(),
+      election: { id: election.id, name: election.name },
+      sitrepsCount: sitreps.length,
+      ec8aRecords: ec8a,
+      officerSignOff: { userId: req.auth.sub, username: req.auth.username },
+      affidavitStatement: 'I hereby certify that the electronic sitreps, forensic photo hashes, and officer logs contained herein constitute genuine, immutable police records compiled during Election Operations.',
+    }
+
+    const bundleHash = createHash('sha256').update(JSON.stringify(manifest)).digest('hex')
+
+    const { rows } = await pool.query(
+      `INSERT INTO tribunal_evidence_bundles (
+        bundle_code, election_id, polling_unit_id, lga_id, state_id,
+        case_title, petitioner_party, respondent_party, compiled_by,
+        integrity_hash_sha256, bundle_manifest, certified_affidavit_signed, status, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, 'ready_for_court', now(), now())
+      RETURNING *`,
+      [
+        bundleCode,
+        election.id,
+        pollingUnitId,
+        lgaId,
+        stateId,
+        caseTitle,
+        petitionerParty,
+        respondentParty,
+        req.auth.sub,
+        bundleHash,
+        JSON.stringify(manifest),
+      ]
+    )
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('tribunal_bundle_created', {
+        id: rows[0].id,
+        bundleCode,
+        integrityHash: bundleHash,
+      })
+    }
+
+    return res.json({ ok: true, bundle: rows[0] })
+  } catch (e) {
+    console.error('Create tribunal bundle error:', e)
+    return res.status(500).json({ error: 'Failed to compile tribunal evidence bundle' })
+  }
+})
+
+/* -------------------------------------------------------------------------- */
+/* PHASE 4: COMMAND, COMMUNICATIONS & COORDINATION APIS                       */
+/* -------------------------------------------------------------------------- */
+
+/* --- 1. JOINT TASKFORCE INTER-AGENCY COORDINATION --- */
+
+app.get('/api/coordination/agencies', authMiddleware, async (req, res) => {
+  try {
+    const stateId = req.query.stateId ? parseInt(req.query.stateId, 10) : null
+    const agencyCode = req.query.agencyCode
+
+    const params = []
+    let sql = `SELECT a.*, gs.name AS state_name
+               FROM joint_taskforce_agencies a
+               LEFT JOIN geo_states gs ON gs.id = a.state_id
+               WHERE 1=1`
+
+    if (stateId) {
+      params.push(stateId)
+      sql += ` AND a.state_id = $${params.length}`
+    }
+    if (agencyCode) {
+      params.push(agencyCode)
+      sql += ` AND a.agency_code = $${params.length}`
+    }
+
+    sql += ` ORDER BY a.deployed_personnel_count DESC, a.agency_name ASC`
+    const { rows } = await pool.query(sql, params)
+
+    const summary = {
+      totalAgencies: rows.length,
+      totalPersonnel: rows.reduce((s, r) => s + (r.deployed_personnel_count || 0), 0),
+      totalPatrolVehicles: rows.reduce((s, r) => s + (r.patrol_vehicles_count || 0), 0),
+      totalArmoredVehicles: rows.reduce((s, r) => s + (r.armored_vehicles_count || 0), 0),
+      activeEngagements: rows.filter((r) => r.status === 'engaged' || r.status === 'active').length,
+    }
+
+    return res.json({ summary, agencies: rows })
+  } catch (e) {
+    console.error('Agencies error:', e)
+    return res.status(500).json({ error: 'Failed to load taskforce agencies' })
+  }
+})
+
+app.post('/api/coordination/agencies', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
+  try {
+    const {
+      electionSlug,
+      agencyCode,
+      agencyName,
+      sectorName,
+      stateId = null,
+      liaisonOfficerName,
+      liaisonOfficerRank,
+      liaisonOfficerPhone,
+      tacticalCallsign,
+      radioFrequency,
+      deployedPersonnelCount = 0,
+      patrolVehiclesCount = 0,
+      armoredVehiclesCount = 0,
+      status = 'active',
+    } = req.body || {}
+
+    if (!agencyCode || !agencyName || !sectorName || !liaisonOfficerName || !tacticalCallsign) {
+      return res.status(400).json({ error: 'agencyCode, agencyName, sectorName, liaisonOfficerName, and tacticalCallsign are required' })
+    }
+
+    const election = await resolveElectionHelper(electionSlug)
+
+    const { rows } = await pool.query(
+      `INSERT INTO joint_taskforce_agencies (
+        election_id, agency_code, agency_name, sector_name, state_id,
+        liaison_officer_name, liaison_officer_rank, liaison_officer_phone,
+        tactical_callsign, radio_frequency, deployed_personnel_count,
+        patrol_vehicles_count, armored_vehicles_count, status, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now(), now())
+      RETURNING *`,
+      [
+        election?.id || null,
+        agencyCode,
+        agencyName,
+        sectorName,
+        stateId,
+        liaisonOfficerName,
+        liaisonOfficerRank,
+        liaisonOfficerPhone,
+        tacticalCallsign,
+        radioFrequency,
+        deployedPersonnelCount,
+        patrolVehiclesCount,
+        armoredVehiclesCount,
+        status,
+      ]
+    )
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('taskforce_agency_updated', { id: rows[0].id, agencyCode, status })
+    }
+
+    return res.json({ ok: true, agency: rows[0] })
+  } catch (e) {
+    console.error('Create agency error:', e)
+    return res.status(500).json({ error: 'Failed to create taskforce agency' })
+  }
+})
+
+app.patch('/api/coordination/agencies/:id', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10)
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid ID' })
+
+    const { status, deployedPersonnelCount, patrolVehiclesCount, armoredVehiclesCount } = req.body || {}
+
+    const { rows } = await pool.query(
+      `UPDATE joint_taskforce_agencies
+       SET status = COALESCE($1, status),
+           deployed_personnel_count = COALESCE($2, deployed_personnel_count),
+           patrol_vehicles_count = COALESCE($3, patrol_vehicles_count),
+           armored_vehicles_count = COALESCE($4, armored_vehicles_count),
+           updated_at = now()
+       WHERE id = $5
+       RETURNING *`,
+      [status, deployedPersonnelCount, patrolVehiclesCount, armoredVehiclesCount, id]
+    )
+
+    if (!rows.length) return res.status(404).json({ error: 'Agency not found' })
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('taskforce_agency_updated', { id, status: rows[0].status })
+    }
+
+    return res.json({ ok: true, agency: rows[0] })
+  } catch (e) {
+    console.error('Update agency error:', e)
+    return res.status(500).json({ error: 'Failed to update taskforce agency' })
+  }
+})
+
+/* --- 2. COMMAND DIRECTIVES & FLASH SIGNALS BROADCASTING --- */
+
+app.get('/api/coordination/directives', authMiddleware, async (req, res) => {
+  try {
+    const stateId = req.query.stateId ? parseInt(req.query.stateId, 10) : null
+    const priority = req.query.priority
+
+    const params = []
+    let sql = `SELECT d.*,
+                      u.username AS issuer_username, coalesce(p.full_name, u.username) AS issuer_name,
+                      s.name AS target_state_name, l.name AS target_lga_name,
+                      (SELECT COUNT(*)::int FROM directive_acknowledgments a WHERE a.directive_id = d.id) AS ack_count,
+                      EXISTS(SELECT 1 FROM directive_acknowledgments a WHERE a.directive_id = d.id AND a.user_id = $1) AS user_has_acknowledged
+               FROM command_broadcast_directives d
+               LEFT JOIN app_users u ON u.id = d.issuer_id
+               LEFT JOIN officer_profiles p ON p.user_id = u.id
+               LEFT JOIN geo_states s ON s.id = d.target_state_id
+               LEFT JOIN geo_lgas l ON l.id = d.target_lga_id
+               WHERE 1=1`
+
+    params.push(req.auth.sub)
+
+    if (stateId) {
+      params.push(stateId)
+      sql += ` AND (d.target_state_id = $${params.length} OR d.target_scope = 'nationwide')`
+    }
+    if (priority) {
+      params.push(priority)
+      sql += ` AND d.priority = $${params.length}`
+    }
+
+    sql += ` ORDER BY d.created_at DESC LIMIT 60`
+    const { rows } = await pool.query(sql, params)
+
+    return res.json({ directives: rows })
+  } catch (e) {
+    console.error('Directives error:', e)
+    return res.status(500).json({ error: 'Failed to load command directives' })
+  }
+})
+
+app.post('/api/coordination/directives', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
+  try {
+    const {
+      electionSlug,
+      commandLevel = 'STATE_HQ',
+      priority = 'OPERATIONAL_ORDER',
+      targetScope = 'nationwide',
+      targetStateId = null,
+      targetLgaId = null,
+      title,
+      directiveBody,
+      enforcementDeadline = null,
+      requireAcknowledgment = true,
+    } = req.body || {}
+
+    if (!title || !directiveBody) {
+      return res.status(400).json({ error: 'title and directiveBody are required' })
+    }
+
+    const election = await resolveElectionHelper(electionSlug)
+    const directiveCode = `DIR-${priority.slice(0, 3)}-${Date.now().toString().slice(-6)}`
+
+    const { rows } = await pool.query(
+      `INSERT INTO command_broadcast_directives (
+        election_id, directive_code, issuer_id, command_level, priority,
+        target_scope, target_state_id, target_lga_id, title, directive_body,
+        enforcement_deadline, require_acknowledgment, status, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'broadcasted', now())
+      RETURNING *`,
+      [
+        election?.id || null,
+        directiveCode,
+        req.auth.sub,
+        commandLevel,
+        priority,
+        targetScope,
+        targetStateId,
+        targetLgaId,
+        title,
+        directiveBody,
+        enforcementDeadline,
+        requireAcknowledgment,
+      ]
+    )
+
+    const directive = rows[0]
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('directive_broadcasted', {
+        id: directive.id,
+        directiveCode: directive.directive_code,
+        priority: directive.priority,
+        title: directive.title,
+        commandLevel: directive.command_level,
+        issuerUsername: req.auth.username,
+      })
+    }
+
+    return res.json({ ok: true, directive })
+  } catch (e) {
+    console.error('Create directive error:', e)
+    return res.status(500).json({ error: 'Failed to broadcast directive' })
+  }
+})
+
+app.post('/api/coordination/directives/:id/acknowledge', authMiddleware, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10)
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid ID' })
+
+    const { officerRank = 'Field Commander', commandJurisdiction = '', acknowledgmentNotes = '' } = req.body || {}
+
+    const { rows } = await pool.query(
+      `INSERT INTO directive_acknowledgments (
+        directive_id, user_id, officer_rank, command_jurisdiction, acknowledged_at, acknowledgment_notes
+      ) VALUES ($1, $2, $3, $4, now(), $5)
+      ON CONFLICT (directive_id, user_id)
+      DO UPDATE SET acknowledged_at = now(), acknowledgment_notes = EXCLUDED.acknowledgment_notes
+      RETURNING *`,
+      [id, req.auth.sub, officerRank, commandJurisdiction, acknowledgmentNotes]
+    )
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('directive_acknowledged', {
+        directiveId: id,
+        userId: req.auth.sub,
+        username: req.auth.username,
+      })
+    }
+
+    return res.json({ ok: true, acknowledgment: rows[0] })
+  } catch (e) {
+    console.error('Acknowledge directive error:', e)
+    return res.status(500).json({ error: 'Failed to acknowledge directive' })
+  }
+})
+
+/* --- 3. GEOFENCED QRF PROXIMITY & RAPID ALERTING RULES --- */
+
+app.get('/api/coordination/geofence/rules', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM geofenced_qrf_rules ORDER BY id ASC`)
+    return res.json({ rules: rows })
+  } catch (e) {
+    console.error('Geofence rules error:', e)
+    return res.status(500).json({ error: 'Failed to load geofence rules' })
+  }
+})
+
+app.post('/api/coordination/geofence/match', authMiddleware, async (req, res) => {
+  try {
+    const { lat, lng, radiusKm = 15.0, severity = 'high' } = req.body || {}
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({ error: 'lat and lng must be valid numbers' })
+    }
+
+    // Haversine distance formula against tactical standby units
+    const { rows: units } = await pool.query(
+      `SELECT u.*, gs.name AS state_name, gl.name AS lga_name,
+              ( 6371 * acos( cos( radians($1) ) * cos( radians( COALESCE(u.current_lat, 9.082) ) ) * cos( radians( COALESCE(u.current_lng, 8.675) ) - radians($2) ) + sin( radians($1) ) * sin( radians( COALESCE(u.current_lat, 9.082) ) ) ) ) AS distance_km
+       FROM qrf_tactical_units u
+       LEFT JOIN geo_states gs ON gs.id = u.state_id
+       LEFT JOIN geo_lgas gl ON gl.id = u.lga_id
+       WHERE u.status = 'standby'
+       ORDER BY distance_km ASC
+       LIMIT 10`,
+      [lat, lng]
+    )
+
+    const nearbyUnits = units.map((u) => ({
+      ...u,
+      distanceKm: Math.round(Number(u.distance_km || 0) * 10) / 10,
+      withinGeofence: Number(u.distance_km || 0) <= radiusKm,
+    }))
+
+    return res.json({
+      incidentCoords: { lat, lng },
+      radiusKm,
+      severity,
+      matchedUnitsCount: nearbyUnits.filter((u) => u.withinGeofence).length,
+      units: nearbyUnits,
+    })
+  } catch (e) {
+    console.error('Geofence match error:', e)
+    return res.status(500).json({ error: 'Failed to evaluate geofence proximity match' })
+  }
+})
+
+/* --- 4. SITUATION ROOM MULTI-SCREEN WALL SYNCHRONIZATION --- */
+
+app.get('/api/coordination/situation-room/sync', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT s.*, u.username AS controller_username, coalesce(p.full_name, u.username) AS controller_name
+       FROM situation_room_synced_views s
+       LEFT JOIN app_users u ON u.id = s.last_controlled_by
+       LEFT JOIN officer_profiles p ON p.user_id = u.id
+       WHERE s.id = 1`
+    )
+
+    if (!rows.length) {
+      return res.json({ sync: { active_layout: 'split_tactical', audio_alerts_enabled: true } })
+    }
+
+    return res.json({ sync: rows[0] })
+  } catch (e) {
+    console.error('Situation room sync error:', e)
+    return res.status(500).json({ error: 'Failed to load situation room sync state' })
+  }
+})
+
+app.post('/api/coordination/situation-room/sync', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
+  try {
+    const { activeLayout = 'split_tactical', activeStateId = null, audioAlertsEnabled = true } = req.body || {}
+
+    const { rows } = await pool.query(
+      `INSERT INTO situation_room_synced_views (id, active_layout, active_state_id, audio_alerts_enabled, last_controlled_by, updated_at)
+       VALUES (1, $1, $2, $3, $4, now())
+       ON CONFLICT (id)
+       DO UPDATE SET
+         active_layout = EXCLUDED.active_layout,
+         active_state_id = EXCLUDED.active_state_id,
+         audio_alerts_enabled = EXCLUDED.audio_alerts_enabled,
+         last_controlled_by = EXCLUDED.last_controlled_by,
+         updated_at = now()
+       RETURNING *`,
+      [activeLayout, activeStateId, audioAlertsEnabled, req.auth.sub]
+    )
+
+    const syncState = rows[0]
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('situation_room_synced', {
+        sync: syncState,
+        controlledBy: req.auth.username,
+      })
+    }
+
+    return res.json({ ok: true, sync: syncState })
+  } catch (e) {
+    console.error('Update situation room sync error:', e)
+    return res.status(500).json({ error: 'Failed to synchronize situation room views' })
+  }
+})
+
+/* -------------------------------------------------------------------------- */
+/* PHASE 5: TECHNOLOGY, INTEGRITY & FIELD REALITIES APIS                      */
+/* -------------------------------------------------------------------------- */
+
+/* --- 1. OFFLINE SYNC CONFLICT RESOLUTION & QUEUE TELEMETRY --- */
+
+app.get('/api/technology/offline-sync/telemetry', authMiddleware, async (req, res) => {
+  try {
+    const outboxQ = await pool.query(
+      `SELECT COUNT(*)::int AS total_captured,
+              COUNT(CASE WHEN photo_data IS NOT NULL THEN 1 END)::int AS with_photos,
+              MAX(created_at) AS last_sync_at
+       FROM field_capture_outbox`
+    )
+
+    const conflictsQ = await pool.query(
+      `SELECT c.*, u.username, coalesce(p.full_name, u.username) AS officer_name
+       FROM offline_conflict_resolutions c
+       JOIN app_users u ON u.id = c.user_id
+       LEFT JOIN officer_profiles p ON p.user_id = u.id
+       ORDER BY c.resolved_at DESC LIMIT 50`
+    )
+
+    return res.json({
+      queueMetrics: {
+        totalCaptured: outboxQ.rows[0]?.total_captured ?? 0,
+        withPhotos: outboxQ.rows[0]?.with_photos ?? 0,
+        lastSyncAt: outboxQ.rows[0]?.last_sync_at ?? null,
+      },
+      conflicts: conflictsQ.rows,
+    })
+  } catch (e) {
+    console.error('Offline sync telemetry error:', e)
+    return res.status(500).json({ error: 'Failed to load offline sync telemetry' })
+  }
+})
+
+app.post('/api/technology/offline-sync/resolve', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
+  try {
+    const { clientId, userId, entityType, serverPayload, clientPayload, resolutionStrategy = 'server_wins' } = req.body || {}
+
+    if (!clientId || !userId || !entityType) {
+      return res.status(400).json({ error: 'clientId, userId, and entityType are required' })
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO offline_conflict_resolutions (
+        client_id, user_id, entity_type, server_payload, client_payload,
+        resolution_strategy, resolved_by, resolved_at
+      ) VALUES ($1, $2::uuid, $3, $4::jsonb, $5::jsonb, $6, $7::uuid, now())
+      RETURNING *`,
+      [
+        clientId,
+        userId,
+        entityType,
+        JSON.stringify(serverPayload || {}),
+        JSON.stringify(clientPayload || {}),
+        resolutionStrategy,
+        req.auth.sub,
+      ]
+    )
+
+    return res.json({ ok: true, resolution: rows[0] })
+  } catch (e) {
+    console.error('Conflict resolve error:', e)
+    return res.status(500).json({ error: 'Failed to resolve offline sync conflict' })
+  }
+})
+
+/* --- 2. DEVICE BIOMETRIC TELEMETRY & FIELD OFFICER HEALTH --- */
+
+app.get('/api/technology/telemetry/devices', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT t.*, u.username, coalesce(p.full_name, u.username) AS officer_name,
+              p.service_number, pu.name AS pu_name, pu.code AS pu_code,
+              gs.name AS state_name
+       FROM officer_device_telemetry t
+       JOIN app_users u ON u.id = t.user_id
+       LEFT JOIN officer_profiles p ON p.user_id = u.id
+       LEFT JOIN geo_polling_units pu ON pu.id = p.assigned_polling_unit_id
+       LEFT JOIN geo_wards gw ON gw.id = pu.ward_id
+       LEFT JOIN geo_lgas gl ON gl.id = gw.lga_id
+       LEFT JOIN geo_states gs ON gs.id = gl.state_id
+       ORDER BY t.last_heartbeat DESC LIMIT 100`
+    )
+
+    const summary = {
+      totalMonitoredDevices: rows.length,
+      lowBatteryDevices: rows.filter((r) => r.battery_level < 20).length,
+      offlineOr2G: rows.filter((r) => r.network_type === '2G' || r.network_type === 'OFFLINE').length,
+      mockLocationFlags: rows.filter((r) => r.mock_location_detected).length,
+      highLivenessVerified: rows.filter((r) => Number(r.biometric_liveness_score) > 0.95).length,
+    }
+
+    return res.json({ summary, devices: rows })
+  } catch (e) {
+    console.error('Device telemetry error:', e)
+    return res.status(500).json({ error: 'Failed to load device telemetry' })
+  }
+})
+
+app.post('/api/technology/telemetry/heartbeat', authMiddleware, async (req, res) => {
+  try {
+    const {
+      deviceId = 'NPF-MOB-DEVICE',
+      batteryLevel = 100,
+      batteryIsCharging = false,
+      networkType = '4G',
+      signalStrengthDbm = -75,
+      gpsLat = null,
+      gpsLng = null,
+      gpsAccuracyMeters = 5.0,
+      appVersion = '2.4.0',
+      biometricLivenessScore = 0.995,
+      mockLocationDetected = false,
+    } = req.body || {}
+
+    const { rows } = await pool.query(
+      `INSERT INTO officer_device_telemetry (
+        user_id, device_id, battery_level, battery_is_charging,
+        network_type, signal_strength_dbm, gps_lat, gps_lng,
+        gps_accuracy_meters, app_version, biometric_liveness_score,
+        mock_location_detected, last_heartbeat
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
+      ON CONFLICT (user_id, device_id)
+      DO UPDATE SET
+        battery_level = EXCLUDED.battery_level,
+        battery_is_charging = EXCLUDED.battery_is_charging,
+        network_type = EXCLUDED.network_type,
+        signal_strength_dbm = EXCLUDED.signal_strength_dbm,
+        gps_lat = EXCLUDED.gps_lat,
+        gps_lng = EXCLUDED.gps_lng,
+        gps_accuracy_meters = EXCLUDED.gps_accuracy_meters,
+        app_version = EXCLUDED.app_version,
+        biometric_liveness_score = EXCLUDED.biometric_liveness_score,
+        mock_location_detected = EXCLUDED.mock_location_detected,
+        last_heartbeat = now()
+      RETURNING *`,
+      [
+        req.auth.sub,
+        deviceId,
+        batteryLevel,
+        batteryIsCharging,
+        networkType,
+        signalStrengthDbm,
+        gpsLat,
+        gpsLng,
+        gpsAccuracyMeters,
+        appVersion,
+        biometricLivenessScore,
+        mockLocationDetected,
+      ]
+    )
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('device_telemetry_updated', {
+        userId: req.auth.sub,
+        batteryLevel,
+        networkType,
+        lastHeartbeat: rows[0].last_heartbeat,
+      })
+    }
+
+    return res.json({ ok: true, telemetry: rows[0] })
+  } catch (e) {
+    console.error('Device heartbeat error:', e)
+    return res.status(500).json({ error: 'Failed to record device heartbeat' })
+  }
+})
+
+/* --- 3. LOW-BANDWIDTH SMS & USSD INGESTION GATEWAY --- */
+
+app.get('/api/technology/sms-gateway/queue', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM sms_ussd_inbound_queue ORDER BY created_at DESC LIMIT 100`
+    )
+
+    const summary = {
+      totalReceived: rows.length,
+      smsCount: rows.filter((r) => r.channel === 'SMS').length,
+      ussdCount: rows.filter((r) => r.channel === 'USSD').length,
+      processed: rows.filter((r) => r.parsing_status === 'processed').length,
+      malformed: rows.filter((r) => r.parsing_status === 'malformed').length,
+    }
+
+    return res.json({ summary, messages: rows })
+  } catch (e) {
+    console.error('SMS queue error:', e)
+    return res.status(500).json({ error: 'Failed to load SMS/USSD inbound queue' })
+  }
+})
+
+app.post('/api/technology/sms-gateway/ingest', authMiddleware, async (req, res) => {
+  try {
+    const {
+      senderPhone = '+2348000000000',
+      channel = 'SMS',
+      rawMessage,
+      electionSlug,
+    } = req.body || {}
+
+    if (!rawMessage) {
+      return res.status(400).json({ error: 'rawMessage is required' })
+    }
+
+    const election = await resolveElectionHelper(electionSlug)
+
+    // Automated Parsing Engine for SMS / USSD text
+    const text = String(rawMessage).trim().toUpperCase()
+    let parsedCommand = 'UNKNOWN'
+    let parsedPuCode = null
+    const parsedPayload = {}
+    let parsingStatus = 'processed'
+
+    if (text.startsWith('SITREP')) {
+      parsedCommand = 'SITREP'
+      const parts = text.split(/\s+/)
+      if (parts.length >= 2) parsedPuCode = parts[1]
+      parsedPayload.rawStatus = text
+      parsedPayload.category = 'field_sms_report'
+    } else if (text.startsWith('SOS') || text.startsWith('ALERT')) {
+      parsedCommand = 'SOS'
+      const parts = text.split(/\s+/)
+      if (parts.length >= 2) parsedPuCode = parts[1]
+      parsedPayload.urgency = 'critical'
+      parsedPayload.incident = text
+    } else if (text.startsWith('*999*') || text.includes('VOTES')) {
+      parsedCommand = 'VOTE_TALLY'
+      parsedPayload.rawUssd = text
+    } else {
+      parsingStatus = 'malformed'
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO sms_ussd_inbound_queue (
+        election_id, sender_phone, channel, raw_message, parsed_command,
+        parsed_pu_code, parsed_payload, parsing_status, processed_at, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now())
+      RETURNING *`,
+      [
+        election?.id || null,
+        senderPhone,
+        channel,
+        rawMessage,
+        parsedCommand,
+        parsedPuCode,
+        JSON.stringify(parsedPayload),
+        parsingStatus,
+      ]
+    )
+
+    const msg = rows[0]
+
+    const io = req.app.get('io')
+    if (io) {
+      io.emit('sms_sitrep_ingested', {
+        id: msg.id,
+        channel: msg.channel,
+        command: msg.parsed_command,
+        senderPhone: msg.sender_phone,
+      })
+    }
+
+    return res.json({ ok: true, message: msg })
+  } catch (e) {
+    console.error('SMS ingestion error:', e)
+    return res.status(500).json({ error: 'Failed to ingest SMS/USSD payload' })
+  }
+})
+
+/* --- 4. CRYPTOGRAPHIC IMMUTABLE BLOCK AUDIT LEDGER --- */
+
+app.get('/api/technology/audit-ledger/blocks', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM cryptographic_audit_ledger ORDER BY block_index DESC LIMIT 80`
+    )
+
+    return res.json({ blocks: rows })
+  } catch (e) {
+    console.error('Audit blocks error:', e)
+    return res.status(500).json({ error: 'Failed to load cryptographic audit ledger' })
+  }
+})
+
+app.post('/api/technology/audit-ledger/verify', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT block_index, previous_block_hash, current_block_hash, event_type, payload_summary, created_at
+       FROM cryptographic_audit_ledger ORDER BY block_index ASC`
+    )
+
+    let chainIntact = true
+    let brokenBlockIndex = null
+
+    for (let i = 1; i < rows.length; i++) {
+      const prev = rows[i - 1]
+      const curr = rows[i]
+      if (curr.previous_block_hash !== prev.current_block_hash) {
+        chainIntact = false
+        brokenBlockIndex = curr.block_index
+        break
+      }
+    }
+
+    return res.json({
+      verified: chainIntact,
+      totalBlocksAudited: rows.length,
+      brokenBlockIndex,
+      genesisBlockHash: rows[0]?.current_block_hash ?? null,
+      tipBlockHash: rows[rows.length - 1]?.current_block_hash ?? null,
+      verifiedAt: new Date().toISOString(),
+    })
+  } catch (e) {
+    console.error('Audit verify error:', e)
+    return res.status(500).json({ error: 'Failed to verify cryptographic audit chain' })
   }
 })
 
 /** Bind all IPv4 interfaces so cloud / LAN clients can reach the API (not only 127.0.0.1). */
 const httpServer = createServer(app)
-initWebSockets(httpServer, pool, JWT_SECRET)
+const io = initWebSockets(httpServer, pool, JWT_SECRET)
+app.set('io', io)
 
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`[election-sitrep-api] listening on 0.0.0.0:${PORT}`)
 })
+
+

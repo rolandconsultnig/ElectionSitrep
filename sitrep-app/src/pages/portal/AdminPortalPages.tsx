@@ -161,7 +161,7 @@ export function AdminDashboard() {
         </div>
         <button
           type="button"
-          className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[color:var(--portal-border)] bg-[color:var(--theme-toggle-bg)] px-4 py-2.5 font-(--font-mono) text-xs font-semibold uppercase tracking-wider text-[#0dccb0] transition hover:border-[#0dccb0]/40"
+          className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[color:var(--portal-border)] bg-[color:var(--theme-toggle-bg)] px-4 py-2.5 font-(--font-mono) text-xs font-semibold uppercase tracking-wider text-[#00c46a] transition hover:border-[#00c46a]/40"
           onClick={() => setCalOpen(true)}
         >
           <span aria-hidden>📅</span>
@@ -204,7 +204,7 @@ export function AdminDashboard() {
           ))}
           <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[var(--portal-input-bg)]">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-[#00C896] to-[#00A87C]"
+              className="h-full rounded-full bg-gradient-to-r from-[#d9b64a] to-[#00A87C]"
               style={{ width: `${pct}%` }}
             />
           </div>
@@ -241,7 +241,7 @@ export function AdminDashboard() {
                       <span
                         className={
                           row.status === 'Active'
-                            ? 'rounded bg-[#00C896]/15 px-2 py-0.5 text-[11px] text-[#00C896]'
+                            ? 'rounded bg-[#d9b64a]/15 px-2 py-0.5 text-[11px] text-[#d9b64a]'
                             : 'rounded bg-[#F59E0B]/15 px-2 py-0.5 text-[11px] text-[#F59E0B]'
                         }
                       >
@@ -259,7 +259,7 @@ export function AdminDashboard() {
           <div className="flex flex-col gap-2">
             <button
               type="button"
-              className="rounded-lg bg-[#00C896] px-4 py-2 text-sm font-semibold text-[#0A1628]"
+              className="rounded-lg bg-[#d9b64a] px-4 py-2 text-sm font-semibold text-[#0a1510]"
               onClick={() => navigate('/admin/elections')}
             >
               Configure active election
@@ -298,7 +298,7 @@ function Stat({
 }) {
   const c =
     tone === 'green'
-      ? 'text-[#00C896]'
+      ? 'text-[#d9b64a]'
       : tone === 'blue'
         ? 'text-[#3B82F6]'
         : tone === 'amber'
@@ -316,7 +316,7 @@ function Stat({
 function ReadinessRow({ label, status }: { label: string; status: 'done' | 'progress' | 'pending' }) {
   const badge =
     status === 'done'
-      ? 'bg-[#00C896]/15 text-[#00C896]'
+      ? 'bg-[#d9b64a]/15 text-[#d9b64a]'
       : status === 'progress'
         ? 'bg-[#F59E0B]/15 text-[#F59E0B]'
         : 'bg-[#EF4444]/15 text-[#EF4444]'
@@ -365,7 +365,7 @@ export function AdminElections() {
         </div>
         <button
           type="button"
-          className="rounded-lg bg-[#00C896] px-4 py-2 text-sm font-semibold text-[#0A1628]"
+          className="rounded-lg bg-[#d9b64a] px-4 py-2 text-sm font-semibold text-[#0a1510]"
           onClick={() => {
             setWizardMode('create')
             setWizardEditSlug(null)
@@ -405,12 +405,12 @@ export function AdminElections() {
                   <td className={td}>{e.jurisdictionsCount}</td>
                   <td className={td}>{e.puCount.toLocaleString('en-NG')}</td>
                   <td className={td}>
-                    <span className="rounded bg-[#00C896]/15 px-2 py-0.5 text-[11px] capitalize text-[#00C896]">{e.status}</span>
+                    <span className="rounded bg-[#d9b64a]/15 px-2 py-0.5 text-[11px] capitalize text-[#d9b64a]">{e.status}</span>
                   </td>
                   <td className={td}>
                     <button
                       type="button"
-                      className="rounded-lg border border-[color:var(--portal-border)] px-3 py-1 text-[12px] font-medium text-[#0dccb0] hover:bg-[var(--portal-table-row-hover)]"
+                      className="rounded-lg border border-[color:var(--portal-border)] px-3 py-1 text-[12px] font-medium text-[#00c46a] hover:bg-[var(--portal-table-row-hover)]"
                       onClick={() => {
                         setWizardMode('edit')
                         setWizardEditSlug(e.slug)
@@ -500,7 +500,7 @@ export function AdminParties() {
             href="https://www.inecnigeria.org/list-of-political-parties"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[#0dccb0] underline-offset-2 hover:underline"
+            className="text-[#00c46a] underline-offset-2 hover:underline"
           >
             INEC register
           </a>
@@ -558,7 +558,7 @@ export function AdminParties() {
                             />
                             <label
                               htmlFor={inputId}
-                              className={`cursor-pointer rounded-lg border border-[color:var(--portal-border)] bg-[color:var(--portal-table-row-hover)] px-2 py-1 font-(--font-mono) text-[10px] font-semibold uppercase tracking-wider text-[#0dccb0] transition hover:border-[#0dccb0]/50 ${busy ? 'pointer-events-none opacity-50' : ''}`}
+                              className={`cursor-pointer rounded-lg border border-[color:var(--portal-border)] bg-[color:var(--portal-table-row-hover)] px-2 py-1 font-(--font-mono) text-[10px] font-semibold uppercase tracking-wider text-[#00c46a] transition hover:border-[#00c46a]/50 ${busy ? 'pointer-events-none opacity-50' : ''}`}
                             >
                               Upload
                             </label>
@@ -579,7 +579,7 @@ export function AdminParties() {
                       <td className={td}>{p.abbreviation}</td>
                       <td className={`${td} font-(--font-mono) text-[12px]`}>{p.inecRegisterCode}</td>
                       <td className={td}>
-                        <span className="rounded bg-[#00C896]/15 px-2 py-0.5 text-[11px] text-[#00C896]">{p.status}</span>
+                        <span className="rounded bg-[#d9b64a]/15 px-2 py-0.5 text-[11px] text-[#d9b64a]">{p.status}</span>
                       </td>
                     </tr>
                   )
@@ -662,7 +662,7 @@ export function AdminCandidates() {
                   <td className={td}>{candQuery.data?.electionName ?? '—'}</td>
                   <td className={td}>{c.runningMateName ?? '—'}</td>
                   <td className={td}>
-                    <span className="rounded bg-[#00C896]/15 px-2 py-0.5 text-[11px] capitalize text-[#00C896]">{c.status}</span>
+                    <span className="rounded bg-[#d9b64a]/15 px-2 py-0.5 text-[11px] capitalize text-[#d9b64a]">{c.status}</span>
                   </td>
                 </tr>
               ))}
@@ -848,7 +848,7 @@ export function AdminGeography() {
           </label>
         </div>
         {selectedPu ? (
-          <div className="rounded-lg border border-[#0dccb0]/25 bg-[#0dccb0]/10 px-3 py-2 font-(--font-mono) text-[11px] text-[var(--portal-muted)]">
+          <div className="rounded-lg border border-[#00c46a]/25 bg-[#00c46a]/10 px-3 py-2 font-(--font-mono) text-[11px] text-[var(--portal-muted)]">
             GPS · lat {selectedPu.lat.toFixed(5)}, lng {selectedPu.lng.toFixed(5)}
           </div>
         ) : null}
@@ -1034,8 +1034,17 @@ export function AdminRoles() {
               <td className={td}>Read only</td>
               <td className={td}>State</td>
             </tr>
-            <tr>
-              <td className={`${td} text-[var(--portal-fg)]`}>IGP</td>
+              <tr>
+                <td className={`${td} text-[var(--portal-fg)]`}>Situation room Command</td>
+                <td className={td}>✗</td>
+                <td className={td}>National</td>
+                <td className={td}>National</td>
+                <td className={td}>✗</td>
+                <td className={td}>Read only</td>
+                <td className={td}>National</td>
+              </tr>
+              <tr>
+                <td className={`${td} text-[var(--portal-fg)]`}>IGP</td>
               <td className={td}>✗</td>
               <td className={td}>Declared</td>
               <td className={td}>✗</td>
@@ -1199,7 +1208,7 @@ export function AdminSettings() {
         </p>
       ) : null}
       {saveOk ? (
-        <p className="rounded-lg border border-[#0dccb0]/30 bg-[#0dccb0]/10 px-3 py-2 text-sm text-[#0dccb0]" role="status">
+        <p className="rounded-lg border border-[#00c46a]/30 bg-[#00c46a]/10 px-3 py-2 text-sm text-[#00c46a]" role="status">
           Settings saved.
         </p>
       ) : null}
@@ -1258,7 +1267,7 @@ export function AdminSettings() {
         <button
           type="button"
           disabled={settingsQuery.isLoading || saveSettings.isPending}
-          className="rounded-lg bg-[#00C896] px-5 py-2 text-sm font-semibold text-[#0A1628] disabled:opacity-50"
+          className="rounded-lg bg-[#d9b64a] px-5 py-2 text-sm font-semibold text-[#0a1510] disabled:opacity-50"
           onClick={() => {
             setSaveErr(null)
             saveSettings.mutate()

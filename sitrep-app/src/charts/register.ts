@@ -13,7 +13,7 @@ import {
   Tooltip,
 } from 'chart.js'
 
-const NAVY = '#0A1628'
+const NAVY = '#0a1510'
 
 ChartJS.defaults.font.family = "'DM Sans', system-ui, sans-serif"
 ChartJS.defaults.color = '#8A9AB8'
@@ -35,7 +35,7 @@ ChartJS.register(
 
 export const chartColors = {
   nav: NAVY,
-  green: '#00C896',
+  green: '#d9b64a',
   amber: '#F59E0B',
   red: '#EF4444',
   blue: '#3B82F6',

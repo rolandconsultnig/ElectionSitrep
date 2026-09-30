@@ -159,19 +159,11 @@ function analyzeTexture(frames: ImageData[]): { isLive: boolean; confidence: num
   return { isLive: avgVariance > 5, confidence: 0.4, reason: 'Keep face steady and well-lit' }
 }
 
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () => resolve(String(r.result || ''))
-    r.onerror = () => reject(new Error('Could not read file'))
-    r.readAsDataURL(file)
-  })
-}
+
 
 export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const prevFrameRef = useRef<ImageData | null>(null)
   const lastSpikeRef = useRef(0)
@@ -398,7 +390,7 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
 
   const getStatusColor = () => {
     if (livenessStatus === 'spoof') return 'text-[#f05b4d]'
-    if (livenessStatus === 'live') return 'text-[#00C896]'
+    if (livenessStatus === 'live') return 'text-[#d9b64a]'
     return 'text-white'
   }
 
@@ -416,8 +408,7 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
           <p className="mt-1 text-amber-100/90">
             Pages opened as <code className="rounded bg-black/30 px-1">http://your-ip:port</code> are not a secure
             context. Use <strong>HTTPS</strong> (nginx + Let&apos;s Encrypt on a domain), or{' '}
-            <code className="rounded bg-black/30 px-1">http://localhost</code> for testing. Otherwise use{' '}
-            <strong>Upload photo</strong> below (blink checks are skipped).
+            <code className="rounded bg-black/30 px-1">http://localhost</code> for testing. Live face verification is strictly required.
           </p>
         </div>
       ) : null}
@@ -427,8 +418,7 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
           <div className="flex h-full min-h-full w-full flex-col items-center justify-center gap-2 bg-black/80 px-6 text-center">
             <p className="text-sm font-semibold text-white/95">Live camera unavailable on plain HTTP</p>
             <p className="max-w-sm text-xs leading-relaxed text-white/70">
-              Use HTTPS (or <code className="rounded bg-black/40 px-1">http://localhost</code> for testing), or upload a
-              JPEG/PNG below — onboarding works either way.
+              Use HTTPS (or <code className="rounded bg-black/40 px-1">http://localhost</code> for testing). Live face verification is required to proceed.
             </p>
           </div>
         ) : (
@@ -455,7 +445,7 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
               </div>
             ) : (
               <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                <span className="rounded-full border border-[#0dccb0]/50 bg-[#0dccb0]/20 px-4 py-2 font-(--font-mono) text-xs font-semibold text-[#0dccb0]">
+                <span className="rounded-full border border-[#00c46a]/50 bg-[#00c46a]/20 px-4 py-2 font-(--font-mono) text-xs font-semibold text-[#00c46a]">
                   Photo captured
                 </span>
               </div>
@@ -481,68 +471,13 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
         </p>
       ) : null}
 
-      <div className="rounded-xl border border-[color:var(--portal-border)] bg-[color:var(--sr-panel)]/40 p-4">
-        <p className="sr-label mb-2">Upload photo (fallback)</p>
-        <p className="mb-3 text-xs text-[var(--portal-muted)]">
-          Use when the camera preview stays blank or the browser blocks camera over HTTP. JPEG or PNG only (not WEBP).
-        </p>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/jpeg,image/png"
-          className="hidden"
-          onChange={async (ev) => {
-            const file = ev.target.files?.[0]
-            ev.target.value = ''
-            if (!file) return
-            const t = file.type.toLowerCase()
-            if (t !== 'image/jpeg' && t !== 'image/png') {
-              setError('Choose a JPEG or PNG image.')
-              return
-            }
-            try {
-              let dataUrl = await readFileAsDataUrl(file)
-              if (dataUrl.startsWith('data:image/png')) {
-                const img = new Image()
-                await new Promise<void>((resolve, reject) => {
-                  img.onload = () => resolve()
-                  img.onerror = () => reject(new Error('Invalid image'))
-                  img.src = dataUrl
-                })
-                const c = document.createElement('canvas')
-                c.width = img.naturalWidth
-                c.height = img.naturalHeight
-                const cx = c.getContext('2d')
-                if (!cx) throw new Error('Canvas error')
-                cx.drawImage(img, 0, 0)
-                dataUrl = c.toDataURL('image/jpeg', 0.92)
-              }
-              stopStream()
-              if (videoRef.current?.srcObject) videoRef.current.srcObject = null
-              setCaptured(true)
-              setPermission('granted')
-              setError(null)
-              onVerified(dataUrl)
-            } catch {
-              setError('Could not use that image. Try another JPEG or PNG.')
-            }
-          }}
-        />
-        <button
-          type="button"
-          className="sr-btn-ghost w-full justify-center border border-[color:var(--portal-border)] py-2.5 text-sm"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          Upload photo (JPEG / PNG)
-        </button>
-      </div>
 
       <div className="space-y-1 text-xs leading-relaxed text-[var(--portal-muted)]">
         <p className="flex items-center gap-2">
-          <span className={faceDetected ? 'text-[#00C896]' : 'text-[#f05b4d]'}>
+          <span className={faceDetected ? 'text-[#d9b64a]' : 'text-[#f05b4d]'}>
             {faceDetected ? '✓' : '○'} Face detected
           </span>
-          <span className={livenessStatus === 'live' ? 'text-[#00C896]' : livenessStatus === 'spoof' ? 'text-[#f05b4d]' : 'text-[#F59E0B]'}>
+          <span className={livenessStatus === 'live' ? 'text-[#d9b64a]' : livenessStatus === 'spoof' ? 'text-[#f05b4d]' : 'text-[#F59E0B]'}>
             {livenessStatus === 'live' ? '✓' : livenessStatus === 'spoof' ? '✗' : '○'} Liveness check
           </span>
         </p>

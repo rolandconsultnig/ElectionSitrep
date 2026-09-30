@@ -534,7 +534,7 @@ export function ElectionSetupWizard({ open, mode, editSlug, onClose, onSaved }: 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
       <div
-        className="sr-card relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden border-[#0dccb0]/25 shadow-2xl"
+        className="sr-card relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden border-[#00c46a]/25 shadow-2xl"
         role="dialog"
         aria-modal
       >
@@ -629,7 +629,7 @@ export function ElectionSetupWizard({ open, mode, editSlug, onClose, onSaved }: 
                     <button
                       type="button"
                       disabled={contestTypes.length >= ALL_CONTEST_CODES.length}
-                      className="inline-flex items-center gap-1 rounded-lg border border-[#0dccb0]/40 bg-[#0dccb0]/10 px-3 py-2 text-[12px] font-semibold text-[#0dccb0] disabled:opacity-40"
+                      className="inline-flex items-center gap-1 rounded-lg border border-[#00c46a]/40 bg-[#00c46a]/10 px-3 py-2 text-[12px] font-semibold text-[#00c46a] disabled:opacity-40"
                       onClick={() => setContestTypes((prev) => [...prev, nextDefaultContest(prev)])}
                     >
                       + Add election type
@@ -695,7 +695,7 @@ export function ElectionSetupWizard({ open, mode, editSlug, onClose, onSaved }: 
                         <tr key={p.id} className="border-t border-[color:var(--portal-border)]">
                           <td className="px-3 py-2 font-medium text-[var(--portal-fg)]">
                             {p.name}{' '}
-                            <span className="font-(--font-mono) text-[11px] text-[#0dccb0]">({p.abbreviation})</span>
+                            <span className="font-(--font-mono) text-[11px] text-[#00c46a]">({p.abbreviation})</span>
                           </td>
                           <td className="px-3 py-2">
                             <input
@@ -721,7 +721,7 @@ export function ElectionSetupWizard({ open, mode, editSlug, onClose, onSaved }: 
                 <h3 className="font-(--font-syne) text-sm font-semibold text-[var(--portal-fg)]">Geographic scope</h3>
 
                 {presetScope ? (
-                  <div className="rounded-xl border border-[#0dccb0]/35 bg-[#0dccb0]/10 px-4 py-3 text-sm text-[var(--portal-fg)]">
+                  <div className="rounded-xl border border-[#00c46a]/35 bg-[#00c46a]/10 px-4 py-3 text-sm text-[var(--portal-fg)]">
                     <p className="font-semibold">
                       {contestTypes.includes('presidential')
                         ? 'Nationwide (Presidential)'
@@ -804,7 +804,7 @@ export function ElectionSetupWizard({ open, mode, editSlug, onClose, onSaved }: 
                                   <div className="flex flex-wrap items-end gap-2">
                                     <button
                                       type="button"
-                                      className="mb-1 shrink-0 rounded-md border border-[#0dccb0]/40 px-2 py-1 font-(--font-mono) text-[11px] font-bold text-[#0dccb0] hover:bg-[#0dccb0]/10"
+                                      className="mb-1 shrink-0 rounded-md border border-[#00c46a]/40 px-2 py-1 font-(--font-mono) text-[11px] font-bold text-[#00c46a] hover:bg-[#00c46a]/10"
                                       onClick={() => addLgaRow(bi)}
                                       title="Add another LGA under this state"
                                     >
@@ -874,7 +874,7 @@ export function ElectionSetupWizard({ open, mode, editSlug, onClose, onSaved }: 
                                                       onChange={(e) => toggleWard(bi, li, w.id, e.target.checked)}
                                                     />
                                                   <span className="text-[13px] leading-snug text-[var(--portal-fg)]">
-                                                    <span className="font-(--font-mono) text-[11px] text-[#0dccb0]">{w.code}</span> — {w.name}
+                                                    <span className="font-(--font-mono) text-[11px] text-[#00c46a]">{w.code}</span> — {w.name}
                                                   </span>
                                                 </label>
                                                 {open ? (
@@ -924,7 +924,7 @@ export function ElectionSetupWizard({ open, mode, editSlug, onClose, onSaved }: 
                     })}
                     <button
                       type="button"
-                      className="rounded-lg border border-[#0dccb0]/50 px-4 py-2.5 text-[13px] font-semibold text-[#0dccb0] hover:bg-[#0dccb0]/10"
+                      className="rounded-lg border border-[#00c46a]/50 px-4 py-2.5 text-[13px] font-semibold text-[#00c46a] hover:bg-[#00c46a]/10"
                       onClick={addStateBlock}
                     >
                       + Add state
@@ -950,7 +950,7 @@ export function ElectionSetupWizard({ open, mode, editSlug, onClose, onSaved }: 
           <button
             type="button"
             disabled={submitting || loading}
-            className="rounded-lg bg-[#00C896] px-5 py-2 text-sm font-semibold text-[#0A1628] disabled:opacity-50"
+            className="rounded-lg bg-[#d9b64a] px-5 py-2 text-sm font-semibold text-[#0a1510] disabled:opacity-50"
             onClick={() => void handleSubmit()}
           >
             {submitting ? 'Saving…' : mode === 'create' ? 'Create election' : 'Save configuration'}

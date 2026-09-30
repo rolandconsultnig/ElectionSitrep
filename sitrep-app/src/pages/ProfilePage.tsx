@@ -23,7 +23,7 @@ export function ProfilePage() {
         <dl className="grid gap-3 text-sm sm:grid-cols-2">
           <div>
             <dt className="font-(--font-mono) text-[10px] uppercase tracking-wider text-[var(--portal-dim)]">Username</dt>
-            <dd className="mt-1 font-(--font-mono) text-[#0dccb0]">{user?.username ?? '—'}</dd>
+            <dd className="mt-1 font-(--font-mono) text-[#00c46a]">{user?.username ?? '—'}</dd>
           </div>
           <div>
             <dt className="font-(--font-mono) text-[10px] uppercase tracking-wider text-[var(--portal-dim)]">Portal</dt>
@@ -90,7 +90,7 @@ export function ProfilePage() {
             },
           ].map((step) => (
             <li key={step.n} className="flex gap-4 rounded-xl border border-[color:var(--portal-border)] bg-[color:var(--portal-table-row-hover)] px-4 py-3">
-              <span className="font-(--font-mono) text-xl font-bold text-[#0dccb0]/80">{step.n}</span>
+              <span className="font-(--font-mono) text-xl font-bold text-[#00c46a]/80">{step.n}</span>
               <div>
                 <h3 className="font-(--font-display) font-bold text-[var(--portal-fg)]">{step.t}</h3>
                 <p className="mt-1 text-sm text-[var(--portal-muted)]">{step.d}</p>
@@ -115,7 +115,7 @@ export function ProfilePage() {
                     <td className="px-4 py-3 font-medium text-[var(--sr-heading)]">
                       {p.shortLabel} — {p.label}
                     </td>
-                    <td className="px-4 py-3 font-(--font-mono) text-[12px] text-[#0dccb0]">{portalMatchHint(id)}</td>
+                    <td className="px-4 py-3 font-(--font-mono) text-[12px] text-[#00c46a]">{portalMatchHint(id)}</td>
                   </tr>
                 )
               })}

@@ -21,6 +21,21 @@ function fmt(n: number) {
   return new Intl.NumberFormat('en-NG').format(n)
 }
 
+function deg2rad(deg: number) {
+  return deg * (Math.PI / 180)
+}
+
+function getDistanceFromLatLonInM(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371e3 // Radius of the earth in m
+  const dLat = deg2rad(lat2 - lat1)
+  const dLon = deg2rad(lon2 - lon1)
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
 function useOfflineQueueDepth(): number {
   const [depth, setDepth] = useState(() => getQueueDepth())
   useEffect(() => {
@@ -70,13 +85,17 @@ function countQueuedToday(): number {
 }
 
 const FIELD_QUICK_ACTIONS = [
+  { to: '/field/timeline', label: 'Timeline', icon: '⏱', hint: 'Milestone checklist' },
+  { to: '/field/ec8a', label: 'EC8A Return', icon: '📜', hint: 'SHA-256 evidence tally' },
+  { to: '/field/materials', label: 'Materials', icon: '📦', hint: 'Chain of custody' },
+  { to: '/field/shifts', label: 'Shift Relief', icon: '🔄', hint: 'Handover & post log' },
+  { to: '/field/logistics', label: 'Logistics', icon: '⛽', hint: 'Fuel & escort request' },
   { to: '/field/sitrep', label: 'SitRep', icon: '📝', hint: 'Structured PU report' },
   { to: '/field/voting', label: 'Vote tally', icon: '✓', hint: 'Upload party totals' },
-  { to: '/field/turnout', label: 'Turnout', icon: '📊', hint: 'National pulse' },
   { to: '/field/incidents', label: 'Incident', icon: '⚠', hint: 'Escalate to chain' },
   { to: '/field/violence', label: 'Violence', icon: '🚨', hint: 'Urgent — CP / HQ' },
+  { to: '/field/turnout', label: 'Turnout', icon: '📊', hint: 'National pulse' },
   { to: '/field/reference', label: 'Parties', icon: '⚑', hint: 'Candidates ref.' },
-  { to: '/field/history', label: 'History', icon: '🕐', hint: 'Queue on device' },
   { to: '/field/communications', label: 'Comms', icon: '💬', hint: 'HQ Chat & Video' },
 ] as const
 
@@ -85,9 +104,56 @@ export function FieldOfflineBanner() {
   const [online, setOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
   const [syncStatus, setSyncStatus] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
+  const [showReminder, setShowReminder] = useState(false)
+
+  // 30-minute reminder check
+  useEffect(() => {
+    const checkReminder = () => {
+      const queue = listQueue()
+      const sitreps = queue.filter((q) => q.type === 'sitrep')
+      let lastSitRepTime = 0
+      if (sitreps.length > 0) {
+        lastSitRepTime = Math.max(...sitreps.map((s) => new Date(s.createdAt).getTime()))
+      }
+      const dismissed = parseInt(localStorage.getItem('lastSitRepReminderDismissed') || '0', 10)
+      const lastSitRepTimeEffective = Math.max(lastSitRepTime, dismissed)
+      // If last sitrep (or dismissal) was more than 30 mins ago
+      if (Date.now() - lastSitRepTimeEffective > 30 * 60 * 1000) {
+        setShowReminder(true)
+      } else {
+        setShowReminder(false)
+      }
+    }
+    checkReminder()
+    const id = setInterval(checkReminder, 60000) // check every minute
+    return () => clearInterval(id)
+  }, [])
+
+  function dismissReminder() {
+    localStorage.setItem('lastSitRepReminderDismissed', Date.now().toString())
+    setShowReminder(false)
+  }
 
   useEffect(() => {
-    const handleOnline = () => setOnline(true)
+    const handleOnline = () => {
+      setOnline(true)
+      // Automatically attempt to flush the queue when network is restored
+      void (async () => {
+        if (getQueueDepth() === 0) return
+        setSyncing(true)
+        setSyncStatus(null)
+        try {
+          const syncedCount = await flushQueueIfOnline()
+          if (syncedCount > 0) {
+            setSyncStatus(`Auto-synced ${syncedCount} pending item${syncedCount === 1 ? '' : 's'}.`)
+          }
+        } catch (error) {
+          setSyncStatus(error instanceof Error ? error.message : 'Auto-sync failed')
+        } finally {
+          setSyncing(false)
+        }
+      })()
+    }
     const handleOffline = () => setOnline(false)
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
@@ -121,30 +187,48 @@ export function FieldOfflineBanner() {
   }
 
   return (
-    <div className="sr-card mb-6 flex flex-col gap-3 border-[#0dccb0]/20 bg-[var(--portal-input-bg)]/80 py-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="text-[13px] text-[var(--portal-muted)]">
-        <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-dim)]">Offline queue · Field PWA</span>
-        <span className="ml-3">
-          {online ? (
-            <span className="text-[#00C896]">Online — sync enabled</span>
-          ) : (
-            <span className="text-[#F59E0B]">Offline — submissions queued locally</span>
-          )}
-        </span>
+    <>
+      {showReminder && (
+        <div className="fixed bottom-6 right-6 z-50 flex w-80 flex-col gap-3 rounded-lg border border-[#F59E0B]/50 bg-[#1e1e1e] p-4 shadow-2xl shadow-black">
+          <div className="flex items-start justify-between text-[#F59E0B]">
+            <strong className="text-sm font-bold tracking-wide">SitRep Reminder</strong>
+            <button type="button" onClick={dismissReminder} className="text-xl leading-none text-[var(--portal-muted)] hover:text-white transition-colors">&times;</button>
+          </div>
+          <p className="text-xs leading-relaxed text-[var(--portal-muted)]">
+            It has been over 30 minutes since your last Flash SitRep. Regular updates are critical for command visibility.
+          </p>
+          <div className="flex justify-end">
+            <Link to="/field/sitrep" className="sr-btn-primary px-4 py-1.5 text-xs text-white" onClick={() => setShowReminder(false)}>
+              Submit Update
+            </Link>
+          </div>
+        </div>
+      )}
+      <div className="sr-card mb-6 flex flex-col gap-3 border-[#00c46a]/20 bg-[var(--portal-input-bg)]/80 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-[13px] text-[var(--portal-muted)]">
+          <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-dim)]">Offline queue · Field PWA</span>
+          <span className="ml-3">
+            {online ? (
+              <span className="text-[#d9b64a]">Online — sync enabled</span>
+            ) : (
+              <span className="text-[#F59E0B]">Offline — submissions queued locally</span>
+            )}
+          </span>
+        </div>
+        <div className="flex items-center gap-3 font-(--font-mono) text-[11px] text-[var(--portal-muted)]">
+          Pending items: <strong className="text-[var(--portal-fg)]">{depth}</strong>
+          <button
+            type="button"
+            disabled={syncing}
+            onClick={handleRetry}
+            className="sr-btn-ghost px-3 py-1.5 text-[11px] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {syncing ? 'Syncing…' : 'Retry sync'}
+          </button>
+        </div>
+        {syncStatus && <div className="text-[11px] text-[var(--portal-muted)]">{syncStatus}</div>}
       </div>
-      <div className="flex items-center gap-3 font-(--font-mono) text-[11px] text-[var(--portal-muted)]">
-        Pending items: <strong className="text-[var(--portal-fg)]">{depth}</strong>
-        <button
-          type="button"
-          disabled={syncing}
-          onClick={handleRetry}
-          className="sr-btn-ghost px-3 py-1.5 text-[11px] disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {syncing ? 'Syncing…' : 'Retry sync'}
-        </button>
-      </div>
-      {syncStatus && <div className="text-[11px] text-[var(--portal-muted)]">{syncStatus}</div>}
-    </div>
+    </>
   )
 }
 
@@ -152,7 +236,8 @@ export function FieldDashboard() {
   const q = useFieldContext()
   const depth = useOfflineQueueDepth()
   const ctx = q.data
-  const todayQueued = useMemo(() => countQueuedToday(), [depth])
+  // depth is a recompute signal: when the offline queue depth changes, re-read the localStorage-backed queue
+  const todayQueued = useMemo(() => { void depth; return countQueuedToday() }, [depth])
 
   return (
     <div className="space-y-6 pb-8">
@@ -193,11 +278,11 @@ export function FieldDashboard() {
             <Link
               key={a.to}
               to={a.to}
-              className="sr-card group flex gap-3 border-[color:var(--portal-border)] py-3 transition hover:border-[#0dccb0]/45 hover:bg-[#0dccb0]/[0.06]"
+              className="sr-card group flex gap-3 border-[color:var(--portal-border)] py-3 transition hover:border-[#00c46a]/45 hover:bg-[#00c46a]/[0.06]"
             >
               <span className="text-2xl leading-none opacity-90">{a.icon}</span>
               <span className="min-w-0">
-                <span className="block font-(--font-syne) text-sm font-semibold text-[var(--portal-fg)] group-hover:text-[#0dccb0]">
+                <span className="block font-(--font-syne) text-sm font-semibold text-[var(--portal-fg)] group-hover:text-[#00c46a]">
                   {a.label}
                 </span>
                 <span className="mt-0.5 block text-[11px] leading-snug text-[var(--portal-muted)]">{a.hint}</span>
@@ -251,7 +336,7 @@ export function FieldDashboard() {
 function Stat({ label, value, sub, tone }: { label: string; value: string; sub: string; tone: string }) {
   const col =
     tone === 'green'
-      ? 'text-[#00C896]'
+      ? 'text-[#d9b64a]'
       : tone === 'blue'
         ? 'text-[#3B82F6]'
         : tone === 'amber'
@@ -269,24 +354,69 @@ function Stat({ label, value, sub, tone }: { label: string; value: string; sub: 
 export function FieldSitRep() {
   const [busy, setBusy] = useState(false)
   const [severity, setSeverity] = useState('GREEN')
+  const [securityStatus, setSecurityStatus] = useState('Peaceful')
   const [accredited, setAccredited] = useState('')
+  const [observedIncident, setObservedIncident] = useState('None')
   const [narrative, setNarrative] = useState('')
+  const [photoDataUrl, setPhotoDataUrl] = useState('')
+  
   const ctxQ = useFieldContext()
   const pu = puPayloadFromContext(ctxQ.data)
 
+  const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      if (ev.target?.result) setPhotoDataUrl(ev.target.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
   async function onSubmit() {
     setBusy(true)
+
+    // GPS Verification
+    let gpsVerified = false
+    let distanceMeters = null
+
+    try {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        })
+      })
+
+      const puLat = ctxQ.data?.assignment?.pollingUnit?.lat
+      const puLng = ctxQ.data?.assignment?.pollingUnit?.lng
+
+      if (puLat && puLng) {
+        distanceMeters = getDistanceFromLatLonInM(pos.coords.latitude, pos.coords.longitude, puLat, puLng)
+        gpsVerified = distanceMeters <= 100 // within 100 meters
+      }
+    } catch (e) {
+      console.warn('Could not get GPS location', e)
+    }
+
     await enqueueOffline({
       type: 'sitrep',
       createdAt: new Date().toISOString(),
       payload: {
         severity,
+        securityStatus,
+        observedIncident,
         accredited: accredited === '' ? null : Number(accredited),
         narrative: narrative.trim() || undefined,
+        photoDataUrl: photoDataUrl || undefined,
+        gpsVerified,
+        distanceMeters,
         ...pu,
       },
     })
     setBusy(false)
+    setPhotoDataUrl('')
     alert('SitRep queued locally. Retry sync when online to deliver it to the backend.')
   }
 
@@ -317,7 +447,22 @@ export function FieldSitRep() {
             </select>
           </label>
           <label className="block text-[13px]">
-            <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">Accredited count</span>
+            <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">Security Status</span>
+            <select
+              value={securityStatus}
+              onChange={(e) => setSecurityStatus(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)] px-3 py-2 text-[var(--portal-fg)]"
+            >
+              <option value="Peaceful">Peaceful</option>
+              <option value="Tense">Tense</option>
+              <option value="Hostile">Hostile</option>
+            </select>
+          </label>
+        </div>
+        
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <label className="block text-[13px]">
+            <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">Voter Turnout / Accredited Count</span>
             <input
               type="number"
               value={accredited}
@@ -326,11 +471,26 @@ export function FieldSitRep() {
               className="mt-1 w-full rounded-lg border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)] px-3 py-2 text-[var(--portal-fg)]"
             />
           </label>
+          <label className="block text-[13px]">
+            <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">Observed Incident</span>
+            <select
+              value={observedIncident}
+              onChange={(e) => setObservedIncident(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)] px-3 py-2 text-[var(--portal-fg)]"
+            >
+              <option value="None">None</option>
+              <option value="Vote Buying">Vote Buying</option>
+              <option value="Thuggery">Thuggery</option>
+              <option value="Intimidation">Intimidation</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
         </div>
+        
         <label className="mt-4 block text-[13px]">
-          <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">Narrative</span>
+          <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">Narrative / Extra Details</span>
           <textarea
-            rows={4}
+            rows={3}
             value={narrative}
             onChange={(e) => setNarrative(e.target.value)}
             placeholder="Voting concluded peacefully. Party agents present."
@@ -338,9 +498,14 @@ export function FieldSitRep() {
           />
         </label>
         <label className="mt-4 block text-[13px]">
-          <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">EC8A image</span>
-          <input type="file" accept="image/*" className="mt-2 block w-full text-sm text-[var(--portal-muted)]" />
+          <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">Photo Evidence (Optional, high-speed network)</span>
+          <input type="file" accept="image/*" onChange={handlePhotoCapture} className="mt-2 block w-full text-sm text-[var(--portal-muted)]" />
         </label>
+        {photoDataUrl && (
+          <div className="mt-2">
+            <img src={photoDataUrl} alt="SitRep Evidence" className="h-32 w-auto rounded-md object-cover" />
+          </div>
+        )}
         <button type="button" disabled={busy} onClick={onSubmit} className="sr-btn-primary mt-6 disabled:opacity-50">
           Submit SitRep
         </button>
@@ -362,6 +527,7 @@ function useFieldElections() {
 export function FieldVoting() {
   const electionsQ = useFieldElections()
   const ctxQ = useFieldContext()
+  const pu = puPayloadFromContext(ctxQ.data)
   const [electionSlug, setElectionSlug] = useState('')
   const [votes, setVotes] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
@@ -743,7 +909,8 @@ export function FieldReference() {
 
 export function FieldHistory() {
   const depth = useOfflineQueueDepth()
-  const items = useMemo(() => [...listQueue()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [depth])
+  // depth is a recompute signal: when the offline queue depth changes, re-read the localStorage-backed queue
+  const items = useMemo(() => { void depth; return [...listQueue()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)) }, [depth])
 
   return (
     <div className="space-y-6">
@@ -770,7 +937,7 @@ export function FieldHistory() {
                 <tr key={row.id} className="border-t border-[color:var(--portal-border)]">
                   <td className="py-2 font-(--font-mono) text-[12px]">{row.createdAt.slice(11, 19)}</td>
                   <td className="py-2 text-[var(--portal-fg)]">{row.type}</td>
-                  <td className="py-2">{row.synced ? <span className="text-[#00C896]">Synced</span> : <span className="text-[#F59E0B]">Pending</span>}</td>
+                  <td className="py-2">{row.synced ? <span className="text-[#d9b64a]">Delivered to Server</span> : <span className="text-[#F59E0B]">Pending</span>}</td>
                 </tr>
               ))}
             </tbody>

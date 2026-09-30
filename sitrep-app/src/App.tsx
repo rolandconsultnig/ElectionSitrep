@@ -49,6 +49,41 @@ import {
   IGPTimeline,
 } from './pages/portal/IGPPortalPages'
 import { AdminCredentialBatches } from './pages/portal/AdminCredentialBatches'
+import { SituationRoomDashboard } from './pages/portal/SituationRoomDashboard'
+import { SvgMonitorDashboard } from './pages/portal/SvgMonitorDashboard'
+import {
+  FieldTimelinePage,
+  FieldEc8aPage,
+  FieldMaterialsPage,
+  FieldShiftsPage,
+  FieldLogisticsPage,
+} from './pages/portal/FieldOperationsPages'
+import {
+  ManagementTimelinePage,
+  ManagementEc8aMirrorPage,
+  ManagementMaterialsChainPage,
+  ManagementRosterPage,
+  ManagementLogisticsBoardPage,
+  ManagementQrfBoardPage,
+} from './pages/portal/ManagementOperationsPages'
+import {
+  PartyAttributionPage,
+  StakeholderRegistryPage,
+  ScenarioPlanningPage,
+  TribunalEvidencePage,
+} from './pages/portal/IntelligencePortalPages'
+import {
+  InterAgencyTaskforcePage,
+  CommandDirectivesPage,
+  GeofencedQrfPage,
+  SituationRoomSyncPage,
+} from './pages/portal/CoordinationPortalPages'
+import {
+  OfflineSyncManagerPage,
+  DeviceTelemetryPage,
+  SmsGatewayParserPage,
+  CryptographicAuditLedgerPage,
+} from './pages/portal/TechnologyPortalPages'
 
 function OnboardingGate() {
   const { user, bootstrapping } = useAuth()
@@ -70,6 +105,8 @@ export default function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/onboarding" element={<OnboardingGate />} />
+      <Route path="/situation-room" element={<SituationRoomDashboard />} />
+      <Route path="/svg-monitor" element={<SvgMonitorDashboard />} />
 
       <Route path="/admin" element={<PortalGate portalId="admin" />}>
         <Route index element={<Navigate to="dashboard" replace />} />
@@ -81,6 +118,10 @@ export default function App() {
         <Route path="operations-map" element={<AdminOperationsMap />} />
         <Route path="users" element={<AdminUsers />} />
         <Route path="roles" element={<AdminRoles />} />
+        <Route path="offline-sync" element={<OfflineSyncManagerPage />} />
+        <Route path="device-telemetry" element={<DeviceTelemetryPage />} />
+        <Route path="sms-gateway" element={<SmsGatewayParserPage />} />
+        <Route path="crypto-ledger" element={<CryptographicAuditLedgerPage />} />
         <Route path="audit" element={<AdminAudit />} />
         <Route path="settings" element={<AdminSettings />} />
         <Route path="credential-batches" element={<AdminCredentialBatches />} />
@@ -90,6 +131,11 @@ export default function App() {
       <Route path="/field" element={<PortalGate portalId="field" />}>
         <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<FieldDashboard />} />
+        <Route path="timeline" element={<FieldTimelinePage />} />
+        <Route path="ec8a" element={<FieldEc8aPage />} />
+        <Route path="materials" element={<FieldMaterialsPage />} />
+        <Route path="shifts" element={<FieldShiftsPage />} />
+        <Route path="logistics" element={<FieldLogisticsPage />} />
         <Route path="sitrep" element={<FieldSitRep />} />
         <Route path="voting" element={<FieldVoting />} />
         <Route path="turnout" element={<FieldTurnout />} />
@@ -104,6 +150,24 @@ export default function App() {
       <Route path="/management" element={<PortalGate portalId="management" />}>
         <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<MgmtDashboard />} />
+        <Route path="timeline" element={<ManagementTimelinePage />} />
+        <Route path="ec8a-mirror" element={<ManagementEc8aMirrorPage />} />
+        <Route path="materials-chain" element={<ManagementMaterialsChainPage />} />
+        <Route path="roster" element={<ManagementRosterPage />} />
+        <Route path="logistics-board" element={<ManagementLogisticsBoardPage />} />
+        <Route path="qrf-board" element={<ManagementQrfBoardPage />} />
+        <Route path="party-attribution" element={<PartyAttributionPage />} />
+        <Route path="stakeholders" element={<StakeholderRegistryPage />} />
+        <Route path="scenarios" element={<ScenarioPlanningPage />} />
+        <Route path="tribunal-evidence" element={<TribunalEvidencePage />} />
+        <Route path="taskforce" element={<InterAgencyTaskforcePage />} />
+        <Route path="directives" element={<CommandDirectivesPage />} />
+        <Route path="geofence-qrf" element={<GeofencedQrfPage />} />
+        <Route path="wall-sync" element={<SituationRoomSyncPage />} />
+        <Route path="offline-sync" element={<OfflineSyncManagerPage />} />
+        <Route path="device-telemetry" element={<DeviceTelemetryPage />} />
+        <Route path="sms-gateway" element={<SmsGatewayParserPage />} />
+        <Route path="crypto-ledger" element={<CryptographicAuditLedgerPage />} />
         <Route path="map" element={<MgmtMap />} />
         <Route path="sitrep" element={<MgmtSitRepFeed />} />
         <Route path="results" element={<MgmtResults />} />
@@ -119,6 +183,18 @@ export default function App() {
         <Route index element={<Navigate to="overview" replace />} />
         <Route path="overview" element={<IGPOverview />} />
         <Route path="security" element={<IGPSecurity />} />
+        <Route path="taskforce" element={<InterAgencyTaskforcePage />} />
+        <Route path="directives" element={<CommandDirectivesPage />} />
+        <Route path="geofence-qrf" element={<GeofencedQrfPage />} />
+        <Route path="wall-sync" element={<SituationRoomSyncPage />} />
+        <Route path="party-attribution" element={<PartyAttributionPage />} />
+        <Route path="stakeholders" element={<StakeholderRegistryPage />} />
+        <Route path="scenarios" element={<ScenarioPlanningPage />} />
+        <Route path="tribunal-evidence" element={<TribunalEvidencePage />} />
+        <Route path="offline-sync" element={<OfflineSyncManagerPage />} />
+        <Route path="device-telemetry" element={<DeviceTelemetryPage />} />
+        <Route path="sms-gateway" element={<SmsGatewayParserPage />} />
+        <Route path="crypto-ledger" element={<CryptographicAuditLedgerPage />} />
         <Route path="results" element={<IGPResults />} />
         <Route path="hotspots" element={<IGPHotspots />} />
         <Route path="timeline" element={<IGPTimeline />} />
