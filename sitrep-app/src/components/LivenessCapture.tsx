@@ -129,9 +129,19 @@ function analyzeTexture(frames: ImageData[]): { isLive: boolean; confidence: num
 
 
 
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(String(r.result || ''))
+    r.onerror = () => reject(new Error('Failed to read file'))
+    r.readAsDataURL(file)
+  })
+}
+
 export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const prevFrameRef = useRef<ImageData | null>(null)
   const lastSpikeRef = useRef(0)
