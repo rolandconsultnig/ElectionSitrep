@@ -193,6 +193,7 @@ export const PORTALS: Record<PortalId, PortalMeta> = {
           { id: 'overview', moduleCode: 'M26', label: 'National Overview', icon: '◈', path: 'overview' },
           { id: 'security', moduleCode: 'M27', label: 'Security Status', icon: '🛡', path: 'security' },
           { id: 'incident-command', moduleCode: 'M27a', label: 'Incident command', icon: '🚨', path: 'incident-command' },
+          { id: 'wall', moduleCode: 'M27b', label: 'Situation room TV wall', icon: '📺', path: 'wall' },
           { id: 'results', moduleCode: 'M28', label: 'Election Results', icon: '📊', path: 'results' },
         ],
       },

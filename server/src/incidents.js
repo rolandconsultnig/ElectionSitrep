@@ -68,7 +68,7 @@ async function officerGeo(db, userId) {
   return r.rows[0] ?? null
 }
 
-async function commandScope(db, userId) {
+export async function commandScope(db, userId) {
   const r = await db.query(
     `SELECT jurisdiction_level, jurisdiction_state_id, jurisdiction_lga_id FROM app_users WHERE id = $1`,
     [userId],
@@ -82,7 +82,7 @@ async function commandScope(db, userId) {
 }
 
 /** Appends `AND …` scoping clause on alias `a` (must have state_id / lga_id). */
-function scopeSql(scope, alias, params) {
+export function scopeSql(scope, alias, params) {
   if (scope.level === 'area') {
     params.push(scope.lgaId)
     return ` AND ${alias}.lga_id = $${params.length}`

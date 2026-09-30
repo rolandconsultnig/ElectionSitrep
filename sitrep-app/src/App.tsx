@@ -1,13 +1,14 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { PortalGate } from './components/PortalGate'
 import { useAuth } from './contexts/AuthContext'
-import { postLoginPath } from './lib/navigation'
+import { firstNavPath, postLoginPath } from './lib/navigation'
 import { LandingPage } from './pages/LandingPage'
 import { LoginPage } from './pages/LoginPage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { FieldSafetyPage } from './pages/portal/FieldSafetyPage'
 import { IncidentCommandPage } from './pages/portal/IncidentCommandPage'
+import { CommandWallPage } from './pages/portal/CommandWallPage'
 import {
   AdminAudit,
   AdminCandidates,
@@ -120,6 +121,7 @@ export default function App() {
         <Route path="profile" element={<ProfilePage />} />
       </Route>
 
+      <Route path="/igp/wall" element={<WallGate />} />
       <Route path="/igp" element={<PortalGate portalId="igp" />}>
         <Route index element={<Navigate to="overview" replace />} />
         <Route path="overview" element={<IGPOverview />} />
@@ -135,4 +137,13 @@ export default function App() {
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
+}
+
+function WallGate() {
+  const { user, bootstrapping } = useAuth()
+  if (bootstrapping) return null
+  if (!user) return <Navigate to="/login" replace state={{ reason: 'auth' }} />
+  if (!user.onboardingComplete) return <Navigate to="/onboarding" replace />
+  if (user.portalId === 'field') return <Navigate to={firstNavPath(user.portalId)} replace />
+  return <CommandWallPage />
 }
