@@ -6,8 +6,8 @@ import {
   LayersControl,
   MapContainer,
   TileLayer,
-  Tooltip,
   useMap,
+  useMapEvents,
 } from 'react-leaflet'
 import { useQuery } from '@tanstack/react-query'
 import 'leaflet/dist/leaflet.css'
@@ -51,6 +51,7 @@ type Incident = {
 }
 type HistoryRow = { id: string | number; sender_id: string; sender_username: string; room_id: string; content: string; created_at: string }
 type Message = { id: string | number; senderId: string; senderUsername: string; roomId: string; content: string; createdAt: string }
+type HoverCard = { kind: 'officer' | 'incident'; id: string | number; x: number; y: number }
 
 const statusColor: Record<Officer['status'], string> = {
   sos: '#ef4444',
@@ -90,9 +91,14 @@ function MapFocus({ officer }: { officer: Officer | null }) {
   return null
 }
 
+function ClearHoverOnMapMovement({ onClear }: { onClear: () => void }) {
+  useMapEvents({ movestart: onClear, zoomstart: onClear })
+  return null
+}
+
 function OfficerDetails({ officer }: { officer: Officer }) {
   return (
-    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+    <dl className="grid min-w-0 grid-cols-[minmax(0,auto)_minmax(0,1fr)] gap-x-3 gap-y-1 whitespace-normal text-xs [&_dd]:min-w-0 [&_dd]:break-words [&_dt]:min-w-0 [&_dt]:break-words">
       <dt className="text-[var(--portal-muted)]">Service no.</dt><dd>{officer.serviceNumber || '—'}</dd>
       <dt className="text-[var(--portal-muted)]">Phone</dt><dd>{officer.phone || '—'}</dd>
       <dt className="text-[var(--portal-muted)]">Post</dt><dd>{officer.post || 'Unassigned'}</dd>
@@ -112,6 +118,9 @@ function OfficerDetails({ officer }: { officer: Officer }) {
 export function CommandOfficerMap() {
   const { socket, connected, messages, sendMessage, chatSendError, clearChatSendError, onlineOfficers, commandDataRevision } = useSocket()
   const [selected, setSelected] = useState<Officer | null>(null)
+  const [hoverCard, setHoverCard] = useState<HoverCard | null>(null)
+  const [hoverCardHeight, setHoverCardHeight] = useState(0)
+  const hoverCardRef = useRef<HTMLDivElement | null>(null)
   const [search, setSearch] = useState('')
   const [stateFilter, setStateFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -161,6 +170,11 @@ export function CommandOfficerMap() {
   const incidents = (incidentQuery.data ?? []).filter((incident) =>
     typeof incident.location?.lat === 'number' && Number.isFinite(incident.location.lat)
       && typeof incident.location?.lng === 'number' && Number.isFinite(incident.location.lng))
+  const hoverOfficer = hoverCard?.kind === 'officer' ? officers.find((officer) => officer.userId === hoverCard.id) : undefined
+  const hoverIncident = hoverCard?.kind === 'incident' ? incidents.find((incident) => incident.id === hoverCard.id) : undefined
+  const hoverCardKind = hoverCard?.kind
+  const hoverCardId = hoverCard?.id
+  const clearHoverCard = useCallback(() => setHoverCard(null), [])
   const counts = useMemo(() => officers.reduce((sum, officer) => ({ ...sum, [officer.status]: sum[officer.status] + 1 }), {
     sos: 0, missed: 0, due: 0, ok: 0, not_started: 0,
   }), [officers])
@@ -181,6 +195,13 @@ export function CommandOfficerMap() {
   }, [])
 
   useEffect(() => () => photoCache.current.forEach((url) => URL.revokeObjectURL(url)), [])
+  useEffect(() => {
+    const card = hoverCardRef.current
+    if (!hoverCardKind || hoverCardId === undefined || !card) return
+    const observer = new ResizeObserver(() => setHoverCardHeight(card.getBoundingClientRect().height))
+    observer.observe(card)
+    return () => observer.disconnect()
+  }, [hoverCardKind, hoverCardId, photoUrls])
   useEffect(() => {
     const initialUpdate = window.setTimeout(() => setNow(Date.now()), 0)
     const timer = window.setInterval(() => setNow(Date.now()), 30_000)
@@ -313,9 +334,10 @@ export function CommandOfficerMap() {
               </button>
             ))}
           </div>
-          <div className="overflow-hidden rounded-xl border border-[color:var(--portal-border)]">
+          <div className="relative overflow-hidden rounded-xl border border-[color:var(--portal-border)]">
             <MapContainer center={[9.082, 8.675]} zoom={6} style={{ height: 'min(68vh, 700px)', width: '100%', background: '#dbeafe' }} scrollWheelZoom>
               <MapFocus officer={selected} />
+              <ClearHoverOnMapMovement onClear={clearHoverCard} />
               <LayersControl position="topright">
                 <LayersControl.BaseLayer checked name="OpenStreetMap">
                   <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
@@ -346,16 +368,14 @@ export function CommandOfficerMap() {
                             pathOptions={{ color: statusColor[officer.status], fillColor: statusColor[officer.status], fillOpacity: 0.9, weight: 2, dashArray, className: officer.status === 'sos' ? 'officer-sos-pulse' : undefined }}
                             eventHandlers={{
                               click: () => selectOfficer(officer),
-                              mouseover: () => { if (officer.hasPhoto) void fetchPhoto(officer.userId) },
+                              mouseover: (event) => {
+                                setHoverCard({ kind: 'officer', id: officer.userId, x: event.containerPoint.x, y: event.containerPoint.y })
+                                if (officer.hasPhoto) void fetchPhoto(officer.userId)
+                              },
+                              mousemove: (event) => setHoverCard({ kind: 'officer', id: officer.userId, x: event.containerPoint.x, y: event.containerPoint.y }),
+                              mouseout: clearHoverCard,
                             }}
                           >
-                            <Tooltip direction="top" opacity={0.98}>
-                              <div className="w-56 space-y-2 text-xs">
-                                {photoUrls[officer.userId] ? <img src={photoUrls[officer.userId]} alt="" className="h-24 w-full rounded object-cover" /> : <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-600 text-lg font-semibold text-white">{officer.name.charAt(0).toUpperCase()}</div>}
-                                <strong>{officer.name}</strong>
-                                <OfficerDetails officer={officer} />
-                              </div>
-                            </Tooltip>
                           </CircleMarker>
                         </Fragment>
                       )
@@ -365,16 +385,53 @@ export function CommandOfficerMap() {
                 <LayersControl.Overlay checked name="Incidents">
                   <LayerGroup>
                     {incidents.map((incident) => (
-                      <CircleMarker key={incident.id} center={[incident.location.lat!, incident.location.lng!]} radius={7} pathOptions={{ color: incidentColor[incident.severity] ?? '#ef4444', fillColor: incidentColor[incident.severity] ?? '#ef4444', fillOpacity: 0.85, weight: 2 }}>
-                        <Tooltip direction="top">
-                          <div className="text-xs"><strong>{incident.title}</strong><div>{incident.typeLabel} · {incident.severity.toUpperCase()}</div><div>{fmtDate(incident.createdAt)}</div><div>{incident.location.puCode ? `${incident.location.puCode} · ${incident.location.puName}` : 'No PU'}</div></div>
-                        </Tooltip>
-                      </CircleMarker>
+                      <CircleMarker
+                        key={incident.id}
+                        center={[incident.location.lat!, incident.location.lng!]}
+                        radius={7}
+                        pathOptions={{ color: incidentColor[incident.severity] ?? '#ef4444', fillColor: incidentColor[incident.severity] ?? '#ef4444', fillOpacity: 0.85, weight: 2 }}
+                        eventHandlers={{
+                          mouseover: (event) => setHoverCard({ kind: 'incident', id: incident.id, x: event.containerPoint.x, y: event.containerPoint.y }),
+                          mousemove: (event) => setHoverCard({ kind: 'incident', id: incident.id, x: event.containerPoint.x, y: event.containerPoint.y }),
+                          mouseout: clearHoverCard,
+                        }}
+                      />
                     ))}
                   </LayerGroup>
                 </LayersControl.Overlay>
               </LayersControl>
             </MapContainer>
+            {hoverCard ? (
+              <div
+                ref={hoverCardRef}
+                className="pointer-events-none absolute z-[1000] w-64 max-h-[70vh] overflow-y-auto rounded-lg border border-[color:var(--portal-border)] bg-[var(--portal-card-bg)] p-3 text-xs text-[var(--portal-fg)] shadow-xl whitespace-normal break-words"
+                style={{
+                  left: `clamp(8rem, ${hoverCard.x}px, calc(100% - 8rem))`,
+                  top: `${hoverCard.y}px`,
+                  maxHeight: 'calc(100% - 24px)',
+                  transform: hoverCard.y < (hoverCardHeight || (hoverCard.kind === 'officer' ? 360 : 120)) + 12
+                    ? 'translate(-50%, 12px)'
+                    : 'translate(-50%, calc(-100% - 12px))',
+                }}
+              >
+                {hoverOfficer ? (
+                  <div className="space-y-2">
+                    {photoUrls[hoverOfficer.userId]
+                      ? <img src={photoUrls[hoverOfficer.userId]} alt="" className="h-24 w-full rounded object-cover" />
+                      : <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-600 text-lg font-semibold text-white">{hoverOfficer.name.charAt(0).toUpperCase()}</div>}
+                    <strong>{hoverOfficer.name}</strong>
+                    <OfficerDetails officer={hoverOfficer} />
+                  </div>
+                ) : hoverIncident ? (
+                  <div className="space-y-1">
+                    <strong>{hoverIncident.title}</strong>
+                    <div>{hoverIncident.typeLabel} · {hoverIncident.severity.toUpperCase()}</div>
+                    <div>{fmtDate(hoverIncident.createdAt)}</div>
+                    <div>{hoverIncident.location.puCode ? `${hoverIncident.location.puCode} · ${hoverIncident.location.puName}` : 'No PU'}</div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-3 text-[11px] text-[var(--portal-muted)]">
             {(Object.keys(statusLabel) as Officer['status'][]).map((status) => <span key={status} style={{ color: statusColor[status] }}>● {statusLabel[status]}</span>)}
