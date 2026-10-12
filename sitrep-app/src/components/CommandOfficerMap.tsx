@@ -303,7 +303,7 @@ export function CommandOfficerMap() {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[color:var(--portal-border)] bg-[var(--portal-card-bg)] p-3 text-xs">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)] p-3 text-xs">
         <input aria-label="Search officers" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, service no. or PU" className="min-w-56 rounded-lg border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)] px-3 py-2" />
         <select aria-label="Filter by state" value={stateFilter} onChange={(event) => setStateFilter(event.target.value)} className="rounded-lg border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)] px-3 py-2">
           <option value="">All states</option>{stateNames.map((name) => <option key={name!}>{name}</option>)}
@@ -316,7 +316,7 @@ export function CommandOfficerMap() {
         <span className="text-[var(--portal-muted)]">Data as of {mapQuery.data?.dataAsOf ? new Date(mapQuery.data.dataAsOf).toLocaleTimeString() : '—'}</span>
       </div>
       {searchMatches.length ? (
-        <div className="flex flex-wrap gap-1 rounded-lg border border-[color:var(--portal-border)] bg-[var(--portal-card-bg)] p-2">
+        <div className="flex flex-wrap gap-1 rounded-lg border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)] p-2">
           {searchMatches.map((officer) => (
             <button key={officer.userId} type="button" onClick={() => selectOfficer(officer)} className="rounded px-2 py-1 text-left text-xs hover:bg-white/10">
               {officer.name} · {officer.serviceNumber || officer.puCode || officer.username}
@@ -329,7 +329,7 @@ export function CommandOfficerMap() {
         <div className="min-w-0 space-y-2">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
             {(Object.keys(statusLabel) as Officer['status'][]).map((status) => (
-              <button key={status} type="button" onClick={() => setStatusFilter(statusFilter === status ? '' : status)} className={`rounded-lg border border-[color:var(--portal-border)] bg-[var(--portal-card-bg)] p-2 text-left text-xs ${statusFilter === status ? 'ring-1 ring-[#00c46a]' : ''}`}>
+              <button key={status} type="button" onClick={() => setStatusFilter(statusFilter === status ? '' : status)} className={`rounded-lg border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)] p-2 text-left text-xs ${statusFilter === status ? 'ring-1 ring-[#00c46a]' : ''}`}>
                 <span style={{ color: statusColor[status] }}>● {statusLabel[status]}</span><strong className="ml-2">{counts[status]}</strong>
               </button>
             ))}
@@ -404,7 +404,7 @@ export function CommandOfficerMap() {
             {hoverCard ? (
               <div
                 ref={hoverCardRef}
-                className="pointer-events-none absolute z-[1000] w-64 max-h-[70vh] overflow-y-auto rounded-lg border border-[color:var(--portal-border)] bg-[var(--portal-card-bg)] p-3 text-xs text-[var(--portal-fg)] shadow-xl whitespace-normal break-words"
+                className="pointer-events-none absolute z-[1000] w-64 max-h-[70vh] overflow-y-auto rounded-lg border border-[color:var(--portal-border)] bg-[#0b1220]/95 p-3 text-xs text-[var(--portal-fg)] shadow-xl whitespace-normal break-words"
                 style={{
                   left: `clamp(8rem, ${hoverCard.x}px, calc(100% - 8rem))`,
                   top: `${hoverCard.y}px`,
@@ -438,7 +438,7 @@ export function CommandOfficerMap() {
             <span>○ Blue ring: online</span><span>┄ Dashed: assigned PU</span>
             {mapQuery.data?.officers.some((officer) => !officer.position) ? <span>{mapQuery.data.officers.filter((officer) => !officer.position).length} without position</span> : null}
           </div>
-          <div className="max-h-36 overflow-y-auto rounded-xl border border-[color:var(--portal-border)] bg-[var(--portal-card-bg)] p-2">
+          <div className="max-h-36 overflow-y-auto rounded-xl border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)] p-2">
             <div className="mb-1 text-xs font-semibold">No position</div>
             {mapQuery.data?.officers.filter((officer) => !officer.position).map((officer) => (
               <button key={officer.userId} onClick={() => selectOfficer(officer)} className="mr-2 rounded px-2 py-1 text-left text-xs hover:bg-white/10">{officer.name} · {officer.serviceNumber || officer.username}</button>
@@ -447,7 +447,7 @@ export function CommandOfficerMap() {
           </div>
         </div>
 
-        <aside className="max-h-[calc(68vh+120px)] min-h-72 overflow-y-auto rounded-xl border border-[color:var(--portal-border)] bg-[var(--portal-card-bg)] p-4">
+        <aside className="max-h-[calc(68vh+120px)] min-h-72 overflow-y-auto rounded-xl border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)] p-4">
           {selected ? (
             <div className="space-y-3">
               <div className="flex items-start justify-between gap-2">
