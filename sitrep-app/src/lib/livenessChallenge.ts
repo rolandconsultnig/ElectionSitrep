@@ -177,6 +177,7 @@ export function advanceLivenessChallenge(state: LivenessState, frame: LivenessFr
       return result(next)
     }
 
+    // The clip subject's own-left turn raised yawRatio from 0.968 to 3.425.
     const targetReached = current.turnDirection === 'left'
       ? (frame.yawRatio ?? 0.5) >= 0.68
       : (frame.yawRatio ?? 0.5) <= 0.32

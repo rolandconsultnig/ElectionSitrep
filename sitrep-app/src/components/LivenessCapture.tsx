@@ -167,18 +167,22 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
         }
         streamRef.current = stream
         const video = videoRef.current
-        if (video) {
-          video.srcObject = stream
-          video.muted = true
-          video.playsInline = true
-          try {
-            await video.play()
-          } catch {
-            setError('Could not start video preview. Reload the page or try Chrome.')
-            setPermission('denied')
-            stopStream()
-            return
-          }
+        if (!video) {
+          setError('Camera preview is unavailable. Reload the page and try again.')
+          setPermission('denied')
+          stopStream()
+          return
+        }
+        video.srcObject = stream
+        video.muted = true
+        video.playsInline = true
+        try {
+          await video.play()
+        } catch {
+          setError('Could not start video preview. Reload the page or try Chrome.')
+          setPermission('denied')
+          stopStream()
+          return
         }
         setPermission('granted')
       } catch (cause) {
@@ -295,16 +299,15 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
       ) : null}
 
       <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-[color:var(--portal-border)] bg-black/80">
-        {permission === 'granted' ? (
-          <video
-            ref={videoRef}
-            className="h-full w-full scale-x-[-1] object-cover"
-            playsInline
-            muted
-            autoPlay
-          />
-        ) : (
-          <div className="flex h-full min-h-full w-full flex-col items-center justify-center gap-2 bg-black/80 px-6 text-center">
+        <video
+          ref={videoRef}
+          className={`h-full w-full scale-x-[-1] object-cover ${permission === 'granted' ? '' : 'invisible'}`}
+          playsInline
+          muted
+          autoPlay
+        />
+        {permission !== 'granted' ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/80 px-6 text-center">
             <p className="text-sm font-semibold text-white/95">
               {insecureContext ? 'Live camera unavailable on plain HTTP' : 'Live camera required'}
             </p>
@@ -312,7 +315,7 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
               {permission === 'pending' ? 'Initializing live face verification…' : 'Allow camera access to take your live photo.'}
             </p>
           </div>
-        )}
+        ) : null}
         {permission === 'granted' && !captured ? (
           <>
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
