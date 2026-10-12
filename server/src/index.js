@@ -839,20 +839,14 @@ app.put('/api/me/onboarding', authMiddleware, async (req, res) => {
   const client = await pool.connect()
   try {
     const body = req.body || {}
-    
-    // Debug logging - log what we received
-    console.log('[onboarding] Received body keys:', Object.keys(body))
-    console.log('[onboarding] firstName:', body.firstName, '| lastName:', body.lastName)
-    console.log('[onboarding] serviceNumber:', body.serviceNumber, '| phone:', body.phone)
-    console.log('[onboarding] pictureDataUrl length:', body.pictureDataUrl?.length || 0)
-    
+
     const firstName = String(body.firstName || '').trim()
     const lastName = String(body.lastName || '').trim()
     const fullName = `${firstName} ${lastName}`.trim()
     const serviceNumber = String(body.serviceNumber || '').trim()
     const phone = String(body.phone || '').trim()
     const pictureDataUrl = String(body.pictureDataUrl || '')
-    const livenessVerified = Boolean(body.livenessVerified)
+    const livenessVerified = body.livenessVerified === true
     const livenessCheckedAt = body.livenessCheckedAt ? new Date(body.livenessCheckedAt) : new Date()
     const newPassword = String(body.newPassword || '')
     const confirmPassword = String(body.confirmPassword || '')
@@ -898,6 +892,14 @@ app.put('/api/me/onboarding', authMiddleware, async (req, res) => {
     const obDone = ucheck.rows[0].onboarding_complete
     const mustPwd = ucheck.rows[0].password_must_change
     const needNewPassword = !obDone || mustPwd
+    if (!obDone && !livenessVerified) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'Live face verification is required' })
+    }
+    if (!obDone && picMime !== 'image/jpeg') {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'Initial onboarding photo must be JPEG' })
+    }
 
     if (needNewPassword) {
       if (newPassword.length < 8) {
@@ -5561,5 +5563,4 @@ setInterval(() => {
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`[election-sitrep-api] listening on 0.0.0.0:${PORT}`)
 })
-
 

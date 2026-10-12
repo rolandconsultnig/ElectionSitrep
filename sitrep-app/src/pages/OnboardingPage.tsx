@@ -66,7 +66,7 @@ export function OnboardingPage() {
       return
     }
     if (!livenessVerified || !pictureDataUrl) {
-      setFormError('Complete live photo verification (blinks + Capture photo) before continuing.')
+      setFormError('Complete the live camera verification before continuing.')
       return
     }
     if (newPassword.length < 8) {
@@ -187,8 +187,8 @@ export function OnboardingPage() {
           <div>
             <p className="sr-label">Live photograph</p>
             <p className="mb-3 text-xs text-[var(--portal-muted)]">
-              Position your face in frame. After two detected blinks, tap <strong className="text-[var(--sr-heading)]">Capture photo</strong>{' '}
-              to save your portrait — use good lighting and avoid covering your face.
+              Follow the prompts to align your face, blink twice, and turn your head. Your photo is captured automatically
+              after you look straight ahead — use good lighting and avoid covering your face.
             </p>
             <LivenessCapture key={livenessReset} resetKey={livenessReset} onVerified={handleLivenessVerified} />
             {livenessVerified ? (

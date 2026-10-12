@@ -4,7 +4,12 @@ import { isLocalSessionToken } from '../lib/local-session'
 import { colors, radii, space } from '../lib/theme'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import * as ImageManipulator from 'expo-image-manipulator'
-import { judgeFrames, sampleFrame, type FrameSample } from '../lib/liveness'
+import { sampleFrame } from '../lib/liveness'
+import {
+  advanceMobileLiveness,
+  createMobileLivenessState,
+  type MobileFrame,
+} from '../lib/livenessMachine'
 import { Redirect } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import {
@@ -22,6 +27,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 export default function OnboardingScreen() {
   const { token, user, ready, refreshUser } = useAuth()
   const cameraRef = useRef<CameraView>(null)
+  const cancelVerificationRef = useRef(false)
+  const machineRef = useRef(createMobileLivenessState())
   const [perm, requestPerm] = useCameraPermissions()
 
   const [fullName, setFullName] = useState('')
@@ -34,6 +41,7 @@ export default function OnboardingScreen() {
   const [error, setError] = useState<string | null>(null)
   const [showCamera, setShowCamera] = useState(false)
   const [verifying, setVerifying] = useState(false)
+  const [verificationInstruction, setVerificationInstruction] = useState('Centre your face, then start verification.')
 
   useEffect(() => {
     const p = user?.profile
@@ -41,10 +49,16 @@ export default function OnboardingScreen() {
     setFullName(p.name ?? '')
     setServiceNumber(p.serviceNumber ?? '')
     setPhone(p.phone ?? '')
-    if (p.pictureDataUrl?.startsWith('data:image/jpeg') || p.pictureDataUrl?.startsWith('data:image/png')) {
+    if (!user.onboardingComplete) {
+      setJpegDataUrl(null)
+    } else if (p.pictureDataUrl?.startsWith('data:image/jpeg') || p.pictureDataUrl?.startsWith('data:image/png')) {
       setJpegDataUrl(p.pictureDataUrl)
     }
   }, [user?.id])
+
+  useEffect(() => () => {
+    cancelVerificationRef.current = true
+  }, [])
 
   if (!ready || !token) return null
   if (isLocalSessionToken(token)) return <Redirect href="/" />
@@ -53,35 +67,52 @@ export default function OnboardingScreen() {
 
   const needPassword = !user.onboardingComplete || user.passwordMustChange
 
-  async function capturePhoto() {
+  async function startVerification() {
     setError(null)
     if (!cameraRef.current || verifying) return
     setVerifying(true)
+    cancelVerificationRef.current = false
+    machineRef.current = createMobileLivenessState()
+    setVerificationInstruction('Look straight at the camera and hold still.')
     try {
-      // Take several frames over a few seconds and require a real, blinking face.
-      const frames: FrameSample[] = []
-      let lastUri: string | null = null
-      for (let i = 0; i < 4; i++) {
-        const photo = await cameraRef.current!.takePictureAsync({ quality: 0.5, skipProcessing: true })
+      while (!cancelVerificationRef.current) {
+        const photo = await cameraRef.current?.takePictureAsync({
+          quality: 0.3,
+          skipProcessing: true,
+          shutterSound: false,
+        })
+        if (cancelVerificationRef.current) break
         if (!photo?.uri) throw new Error('Camera did not return an image.')
-        lastUri = photo.uri
+        let sample
         try {
-          frames.push(await sampleFrame(photo.uri))
+          sample = await sampleFrame(photo.uri)
         } catch {
-          frames.push({ uri: photo.uri, faceCount: 0, minEyeOpen: null })
+          sample = {
+            uri: photo.uri,
+            faceCount: 0,
+            minEyeOpen: null,
+            rotationY: null,
+            faceWidthFraction: null,
+          }
         }
-        if (i < 3) await new Promise((r) => setTimeout(r, 900))
+        if (cancelVerificationRef.current) break
+        const frame: MobileFrame = { ...sample, t: Date.now() }
+        const transition = advanceMobileLiveness(machineRef.current, frame)
+        machineRef.current = transition.state
+        setVerificationInstruction(transition.resetMessage ?? transition.instruction)
+        if (!transition.captureNow) continue
+
+        const manip = await ImageManipulator.manipulateAsync(photo.uri, [], {
+          compress: 0.85,
+          format: ImageManipulator.SaveFormat.JPEG,
+          base64: true,
+        })
+        if (!manip.base64) throw new Error('Could not encode photo.')
+        if (cancelVerificationRef.current) break
+        setJpegDataUrl(`data:image/jpeg;base64,${manip.base64}`)
+        setShowCamera(false)
+        break
       }
-      const verdict = judgeFrames(frames)
-      if (!verdict.ok) throw new Error(verdict.reason ?? 'Face verification failed.')
-      const manip = await ImageManipulator.manipulateAsync(lastUri!, [], {
-        compress: 0.85,
-        format: ImageManipulator.SaveFormat.JPEG,
-        base64: true,
-      })
-      if (!manip.base64) throw new Error('Could not encode photo.')
-      setJpegDataUrl(`data:image/jpeg;base64,${manip.base64}`)
-      setShowCamera(false)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Photo capture failed.')
     } finally {
@@ -91,6 +122,10 @@ export default function OnboardingScreen() {
 
   async function onSave() {
     setError(null)
+    if (!user) {
+      setError('User information is unavailable.')
+      return
+    }
     if (!fullName.trim() || !serviceNumber.trim() || !phone.trim()) {
       setError('Name, service number, and phone are required.')
       return
@@ -99,7 +134,15 @@ export default function OnboardingScreen() {
       jpegDataUrl &&
       (jpegDataUrl.startsWith('data:image/jpeg') || jpegDataUrl.startsWith('data:image/png'))
     if (!picOk) {
-      setError('Add a profile photo (JPEG from camera, or PNG/JPEG from your existing profile).')
+      setError(
+        !user.onboardingComplete
+          ? 'A live photo captured in this session is required to complete onboarding.'
+          : 'Add a profile photo.',
+      )
+      return
+    }
+    if (!user.onboardingComplete && !jpegDataUrl.startsWith('data:image/jpeg')) {
+      setError('A live JPEG photo captured in this session is required to complete onboarding.')
       return
     }
     if (needPassword) {
@@ -153,19 +196,30 @@ export default function OnboardingScreen() {
   if (showCamera) {
     return (
       <View style={{ flex: 1, backgroundColor: '#000' }}>
-        <CameraView ref={cameraRef} style={{ flex: 1 }} facing="front" />
+        <CameraView ref={cameraRef} style={{ flex: 1 }} facing="front" animateShutter={false} />
         <View style={styles.camHint}>
           <Text style={styles.camHintText}>
-            {verifying ? 'Verifying your face — hold still…' : 'Centre your face and blink slowly when you tap Capture'}
+            {verificationInstruction}
           </Text>
           {error ? <Text style={styles.camErr}>{error}</Text> : null}
         </View>
         <SafeAreaView style={styles.camBar}>
-          <Pressable onPress={() => setShowCamera(false)} style={styles.secondary} disabled={verifying}>
+          <Pressable
+            onPress={() => {
+              cancelVerificationRef.current = true
+              setVerifying(false)
+              setShowCamera(false)
+            }}
+            style={styles.secondary}
+          >
             <Text style={styles.secondaryText}>Cancel</Text>
           </Pressable>
-          <Pressable onPress={capturePhoto} style={[styles.btn, verifying && { opacity: 0.7 }]} disabled={verifying}>
-            {verifying ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Capture</Text>}
+          <Pressable
+            onPress={startVerification}
+            style={[styles.btn, verifying && { opacity: 0.7 }]}
+            disabled={verifying}
+          >
+            {verifying ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Start verification</Text>}
           </Pressable>
         </SafeAreaView>
       </View>
