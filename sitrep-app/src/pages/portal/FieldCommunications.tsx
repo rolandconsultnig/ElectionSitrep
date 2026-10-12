@@ -19,7 +19,7 @@ type HistoryRow = {
   created_at: string
 }
 
-type PendingMessage = { tempId: string; content: string }
+type PendingMessage = { tempId: string; content: string; roomId: string }
 
 type IncomingCallInfo = { callId: string; callerId: string; callerUsername: string; callType: CallType }
 
@@ -42,6 +42,7 @@ export function FieldCommunications() {
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [pending, setPending] = useState<PendingMessage[]>([])
   const [notice, setNotice] = useState<string | null>(null)
+  const [recipientSelection, setRecipientSelection] = useState<{ partnerId: string | null; changedAt: number }>({ partnerId: null, changedAt: 0 })
 
   // Call state
   const [incomingCall, setIncomingCall] = useState<IncomingCallInfo | null>(null)
@@ -106,13 +107,33 @@ export function FieldCommunications() {
     return merged.sort(byTime)
   }, [history, messages])
 
+  const myId = String(user?.id ?? '')
+  const partners = useMemo(() => {
+    const usernames = new Map<string, string>()
+    for (const message of thread) {
+      if (!message.roomId.startsWith('dm_')) continue
+      const ids = message.roomId.slice(3).split('_')
+      const partnerId = ids.length === 2 ? ids.find((id) => id !== myId) : undefined
+      if (!partnerId || !ids.includes(myId)) continue
+      if (message.senderId === partnerId || !usernames.has(partnerId)) usernames.set(partnerId, message.senderId === partnerId ? message.senderUsername : partnerId)
+    }
+    return [...usernames].map(([id, username]) => ({ id, username }))
+  }, [thread, myId])
+  const latestIncomingDm = useMemo(() => thread
+    .filter((message) => message.roomId.startsWith('dm_') && message.senderId !== myId)
+    .reduce<typeof thread[number] | null>((latest, message) => !latest || byTime(latest, message) < 0 ? message : latest, null),
+  [thread, myId])
+  const activePartnerId = latestIncomingDm && new Date(latestIncomingDm.createdAt).getTime() > recipientSelection.changedAt
+    ? latestIncomingDm.senderId
+    : recipientSelection.partnerId
+
   // ---- Flush queued messages when the socket reconnects ----
   useEffect(() => {
     if (!socket) return
     const onConnect = () => {
       setPending((prev) => {
         if (prev.length === 0) return prev
-        prev.forEach((q) => sendMessage('portal_management', q.content))
+        prev.forEach((q) => sendMessage(q.roomId, q.content))
         return []
       })
     }
@@ -323,19 +344,27 @@ export function FieldCommunications() {
   }
 
   // ---- Chat actions ----
-  const handleSend = (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
     const content = input.trim()
     if (!content) return
-    if (!connected) {
-      setPending((prev) => [...prev, { tempId: crypto.randomUUID(), content }])
+    const roomId = activePartnerId ? `user_${activePartnerId}` : 'portal_management'
+    if (connected) {
+      sendMessage(roomId, content)
+    } else if (activePartnerId) {
+      try {
+        await apiJson(`/api/chat/dm/${encodeURIComponent(activePartnerId)}`, {
+          method: 'POST',
+          body: JSON.stringify({ content }),
+        })
+      } catch {
+        setPending((prev) => [...prev, { tempId: crypto.randomUUID(), content, roomId }])
+      }
     } else {
-      sendMessage('portal_management', content)
+      setPending((prev) => [...prev, { tempId: crypto.randomUUID(), content, roomId }])
     }
     setInput('')
   }
-
-  const myId = String(user?.id ?? '')
 
   return (
     <div className="space-y-4 flex flex-col h-full">
@@ -478,13 +507,24 @@ export function FieldCommunications() {
           })}
           {pending.map((q) => (
             <div key={q.tempId} className="flex flex-col items-end">
-              <span className="text-[10px] text-yellow-700 mb-0.5">Queued — sends when reconnected</span>
+              <span className="text-[10px] text-yellow-700 mb-0.5">Queued for {q.roomId.startsWith('user_') ? partners.find((partner) => `user_${partner.id}` === q.roomId)?.username ?? 'direct message' : 'HQ group'} — sends when reconnected</span>
               <div className="px-3 py-2 rounded-lg max-w-[85%] text-sm bg-blue-200 text-blue-900 italic">{q.content}</div>
             </div>
           ))}
           <div ref={chatEndRef} />
         </div>
-        <form onSubmit={handleSend} className="mt-4 flex gap-2">
+        <label className="mt-4 flex items-center gap-2 text-xs text-[var(--portal-muted)]">
+          Send to
+          <select
+            value={activePartnerId ?? 'portal_management'}
+            onChange={(event) => setRecipientSelection({ partnerId: event.target.value === 'portal_management' ? null : event.target.value, changedAt: Date.now() })}
+            className="rounded-lg border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)] px-2 py-1.5 text-[var(--portal-fg)]"
+          >
+            <option value="portal_management">HQ group</option>
+            {partners.map((partner) => <option key={partner.id} value={partner.id}>{partner.username}</option>)}
+          </select>
+        </label>
+        <form onSubmit={(event) => void handleSend(event)} className="mt-2 flex gap-2">
           <input
             type="text"
             value={input}

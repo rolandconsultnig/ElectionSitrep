@@ -11,11 +11,12 @@ export function initWebSockets(httpServer, pool, JWT_SECRET) {
     }
   })
 
-  const mgmtRoomSize = () => io.sockets.adapter.rooms.get('portal_management')?.size ?? 0
+  const hqRoomSize = () => ['portal_management', 'portal_igp', 'portal_admin']
+    .reduce((count, room) => count + (io.sockets.adapter.rooms.get(room)?.size ?? 0), 0)
 
-  /** Tell field officers how many HQ (management) users are currently online. */
+  /** Tell field officers how many command portal users are currently online. */
   const broadcastHqPresence = () => {
-    io.to('portal_field').emit('hq_presence', { count: mgmtRoomSize() })
+    io.to('portal_field').emit('hq_presence', { count: hqRoomSize() })
   }
 
   // Middleware to authenticate socket connections
@@ -48,7 +49,7 @@ export function initWebSockets(httpServer, pool, JWT_SECRET) {
         socketId: socket.id
       })
       // Immediate HQ presence snapshot for this officer
-      socket.emit('hq_presence', { count: mgmtRoomSize() })
+      socket.emit('hq_presence', { count: hqRoomSize() })
     } else {
       // For management/admin/command, send them the current list of online field officers
       const fieldRoom = io.sockets.adapter.rooms.get('portal_field')
@@ -66,6 +67,7 @@ export function initWebSockets(httpServer, pool, JWT_SECRET) {
         }
       }
       socket.emit('initial_active_officers', activeOfficers)
+      if (['management', 'igp', 'admin'].includes(user.portal)) broadcastHqPresence()
     }
 
     socket.on('disconnect', () => {
@@ -146,7 +148,7 @@ export function initWebSockets(httpServer, pool, JWT_SECRET) {
     // Field officer places a call to HQ (any management user)
     socket.on('initiate_call', (data = {}) => {
       const callType = data.callType === 'audio' ? 'audio' : 'video'
-      if (mgmtRoomSize() === 0) {
+      if (hqRoomSize() === 0) {
         socket.emit('call_unavailable')
         return
       }

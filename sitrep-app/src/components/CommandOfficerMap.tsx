@@ -75,6 +75,12 @@ const relativeTime = (value: string | null | undefined) => {
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
   return `${Math.floor(seconds / 86400)}d ago`
 }
+const positionLabel = (position: Position | null) => {
+  if (!position) return 'No position'
+  if (position.source === 'gps') return `Live GPS · ${relativeTime(position.at)}`
+  if (position.source === 'checkin') return `Last check-in · ${relativeTime(position.at)}`
+  return 'Assigned PU (not a live fix)'
+}
 const fmtDate = (value: string | null | undefined) => value ? new Date(value).toLocaleString() : 'Never'
 function MapFocus({ officer }: { officer: Officer | null }) {
   const map = useMap()
@@ -95,7 +101,7 @@ function OfficerDetails({ officer }: { officer: Officer }) {
       <dt className="text-[var(--portal-muted)]">Status</dt><dd style={{ color: statusColor[officer.status] }}>{statusLabel[officer.status]}</dd>
       <dt className="text-[var(--portal-muted)]">Last seen</dt><dd>{relativeTime(officer.lastSeenAt)}</dd>
       <dt className="text-[var(--portal-muted)]">Position</dt>
-      <dd>{officer.position ? `${officer.position.source.replace('_', ' ')} · ${relativeTime(officer.position.at)}` : 'No position'}</dd>
+      <dd>{positionLabel(officer.position)}</dd>
       <dt className="text-[var(--portal-muted)]">Battery / network</dt><dd>{officer.battery == null ? '—' : `${officer.battery}%`} · {officer.network || '—'}</dd>
       <dt className="text-[var(--portal-muted)]">Connection</dt><dd>{officer.online ? 'Online' : 'Offline'}</dd>
       <dt className="text-[var(--portal-muted)]">Onboarding / liveness</dt><dd>{officer.onboardingComplete ? 'Complete' : 'Incomplete'} · {officer.livenessVerified ? 'Verified' : 'Unverified'}</dd>
@@ -266,7 +272,10 @@ export function CommandOfficerMap() {
     }
   }
 
-  const selectOfficer = (officer: Officer) => setSelected(officer)
+  const selectOfficer = (officer: Officer) => {
+    setSelected(officer)
+    if (officer.hasPhoto) void fetchPhoto(officer.userId)
+  }
 
   if (mapQuery.isLoading) return <div className="sr-card p-8 text-center text-sm text-[var(--portal-muted)]">Loading live officer positions…</div>
   if (mapQuery.isError) return <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{mapQuery.error.message}</p>
@@ -342,7 +351,7 @@ export function CommandOfficerMap() {
                           >
                             <Tooltip direction="top" opacity={0.98}>
                               <div className="w-56 space-y-2 text-xs">
-                                {photoUrls[officer.userId] ? <img src={photoUrls[officer.userId]} alt="" className="h-24 w-full rounded object-cover" /> : null}
+                                {photoUrls[officer.userId] ? <img src={photoUrls[officer.userId]} alt="" className="h-24 w-full rounded object-cover" /> : <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-600 text-lg font-semibold text-white">{officer.name.charAt(0).toUpperCase()}</div>}
                                 <strong>{officer.name}</strong>
                                 <OfficerDetails officer={officer} />
                               </div>
@@ -388,7 +397,7 @@ export function CommandOfficerMap() {
                 <div><h2 className="font-semibold">{selected.name}</h2><p className="text-xs text-[var(--portal-muted)]">{selected.username}</p></div>
                 <button type="button" onClick={() => setSelected(null)} aria-label="Close officer details">×</button>
               </div>
-              {photoUrls[selected.userId] ? <img src={photoUrls[selected.userId]} alt={selected.name} className="h-36 w-full rounded-lg object-cover" /> : selected.hasPhoto ? <button type="button" onClick={() => { void fetchPhoto(selected.userId) }} className="text-xs text-[#00c46a]">Load photo</button> : null}
+              {photoUrls[selected.userId] ? <img src={photoUrls[selected.userId]} alt={selected.name} className="h-36 w-full rounded-lg object-cover" /> : <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-600 text-3xl font-semibold text-white">{selected.name.charAt(0).toUpperCase()}</div>}
               <OfficerDetails officer={selected} />
               <div className="border-t border-[color:var(--portal-border)] pt-3">
                 <h3 className="mb-2 text-sm font-semibold">Direct message</h3>
