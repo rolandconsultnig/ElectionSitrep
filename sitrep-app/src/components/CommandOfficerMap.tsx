@@ -91,8 +91,18 @@ function MapFocus({ officer }: { officer: Officer | null }) {
   return null
 }
 
-function ClearHoverOnMapMovement({ onClear }: { onClear: () => void }) {
-  useMapEvents({ movestart: onClear, zoomstart: onClear })
+/** Prefer above the marker, then below; otherwise pin inside the map so the card is never cut off. */
+function hoverCardTop(y: number, cardHeight: number, mapHeight: number) {
+  const gap = 12
+  const margin = 8
+  if (y - gap - cardHeight >= margin) return y - gap - cardHeight
+  if (!mapHeight || y + gap + cardHeight <= mapHeight - margin) return y + gap
+  return Math.max(margin, mapHeight - cardHeight - margin)
+}
+
+function ClearHoverOnMapMovement({ onClear, onHeight }: { onClear: () => void; onHeight: (height: number) => void }) {
+  const map = useMapEvents({ movestart: onClear, zoomstart: onClear, resize: () => onHeight(map.getSize().y) })
+  useEffect(() => onHeight(map.getSize().y), [map, onHeight])
   return null
 }
 
@@ -120,6 +130,7 @@ export function CommandOfficerMap() {
   const [selected, setSelected] = useState<Officer | null>(null)
   const [hoverCard, setHoverCard] = useState<HoverCard | null>(null)
   const [hoverCardHeight, setHoverCardHeight] = useState(0)
+  const [mapHeight, setMapHeight] = useState(0)
   const hoverCardRef = useRef<HTMLDivElement | null>(null)
   const [search, setSearch] = useState('')
   const [stateFilter, setStateFilter] = useState('')
@@ -337,7 +348,7 @@ export function CommandOfficerMap() {
           <div className="relative overflow-hidden rounded-xl border border-[color:var(--portal-border)]">
             <MapContainer center={[9.082, 8.675]} zoom={6} style={{ height: 'min(68vh, 700px)', width: '100%', background: '#dbeafe' }} scrollWheelZoom>
               <MapFocus officer={selected} />
-              <ClearHoverOnMapMovement onClear={clearHoverCard} />
+              <ClearHoverOnMapMovement onClear={clearHoverCard} onHeight={setMapHeight} />
               <LayersControl position="topright">
                 <LayersControl.BaseLayer checked name="OpenStreetMap">
                   <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
@@ -407,11 +418,9 @@ export function CommandOfficerMap() {
                 className="pointer-events-none absolute z-[1000] w-64 max-h-[70vh] overflow-y-auto rounded-lg border border-[color:var(--portal-border)] bg-[#0b1220]/95 p-3 text-xs text-[var(--portal-fg)] shadow-xl whitespace-normal break-words"
                 style={{
                   left: `clamp(8rem, ${hoverCard.x}px, calc(100% - 8rem))`,
-                  top: `${hoverCard.y}px`,
-                  maxHeight: 'calc(100% - 24px)',
-                  transform: hoverCard.y < (hoverCardHeight || (hoverCard.kind === 'officer' ? 360 : 120)) + 12
-                    ? 'translate(-50%, 12px)'
-                    : 'translate(-50%, calc(-100% - 12px))',
+                  top: `${hoverCardTop(hoverCard.y, hoverCardHeight || (hoverCard.kind === 'officer' ? 360 : 120), mapHeight)}px`,
+                  maxHeight: 'calc(100% - 16px)',
+                  transform: 'translateX(-50%)',
                 }}
               >
                 {hoverOfficer ? (
