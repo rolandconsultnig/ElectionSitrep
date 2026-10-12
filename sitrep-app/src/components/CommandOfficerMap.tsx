@@ -339,7 +339,7 @@ export function CommandOfficerMap() {
                       const dashArray = position.source === 'assigned_pu' ? '4 4' : undefined
                       return (
                         <Fragment key={officer.userId}>
-                          {officer.online ? <CircleMarker center={[position.lat, position.lng]} radius={13} pathOptions={{ color: '#0ea5e9', fillOpacity: 0, weight: 3, dashArray }} /> : null}
+                          {officer.online ? <CircleMarker center={[position.lat, position.lng]} radius={13} interactive={false} pathOptions={{ color: '#0ea5e9', fillOpacity: 0, weight: 3, dashArray }} /> : null}
                           <CircleMarker
                             center={[position.lat, position.lng]}
                             radius={officer.status === 'sos' ? 10 : 8}
