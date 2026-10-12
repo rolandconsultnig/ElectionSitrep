@@ -2,24 +2,12 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import { chartColors, chartTooltipTheme } from '../../charts/register'
-import { NigeriaMap } from '../../components/NigeriaMap'
+import { CommandOfficerMap } from '../../components/CommandOfficerMap'
 import { IGPExecutiveDashboard } from '../../components/IGPExecutiveDashboard'
 import { apiJson } from '../../lib/api'
 import type { ElectionResultsPayload, ExecutiveDashboardSummary } from './igp-portal-types'
-import type { GeoFeatureCollection } from '../../components/operations-map-types'
 
 const card = 'sr-card'
-
-type FieldOpsMap = {
-  active: {
-    userId: string
-    displayName: string
-    lat: number
-    lng: number
-    stateHint: string
-  }[]
-  inactive: { displayName: string; lat: number; lng: number; reason: string }[]
-}
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-NG').format(n)
@@ -29,13 +17,6 @@ function useExecutiveDashboard() {
   return useQuery({
     queryKey: ['igp-dashboard-summary'],
     queryFn: () => apiJson<ExecutiveDashboardSummary>('/api/igp/dashboard-summary'),
-  })
-}
-
-function useFieldOpsMap() {
-  return useQuery({
-    queryKey: ['igp-field-operations-map'],
-    queryFn: () => apiJson<FieldOpsMap>('/api/igp/field-operations-map'),
   })
 }
 
@@ -412,61 +393,14 @@ export function IGPResults() {
 }
 
 export function IGPHotspots() {
-  const mapQ = useFieldOpsMap()
-  const statesLayer = useQuery({
-    queryKey: ['geo-layer-states'],
-    queryFn: () => apiJson<GeoFeatureCollection>('/api/geo/layers/states'),
-  })
-
-  const pinProps = useMemo(() => {
-    const data = mapQ.data
-    if (!data) return []
-    return [
-      ...data.active.map((a) => ({
-        lat: a.lat,
-        lng: a.lng,
-        label: `${a.displayName} · ${a.stateHint}`,
-        severity: 'green' as const,
-      })),
-      ...data.inactive.slice(0, 48).map((u) => ({
-        lat: u.lat,
-        lng: u.lng,
-        label: `${u.displayName} — ${u.reason}`,
-        severity: 'amber' as const,
-      })),
-    ]
-  }, [mapQ.data])
-
   return (
     <div className="space-y-6">
       <IGPReadOnlyBanner />
       <header>
-        <h1 className="font-(--font-syne) text-2xl font-bold text-[var(--portal-fg)]">National deployment map</h1>
-        <p className="mt-1 text-sm text-[var(--portal-muted)]">
-          Field officers plotted from provisioned NPF accounts (coordinates derived for demo layout) — green active, amber pending (§M29)
-        </p>
+        <h1 className="font-(--font-syne) text-2xl font-bold text-[var(--portal-fg)]">Live Officer &amp; Incident Map</h1>
+        <p className="mt-1 text-sm text-[var(--portal-muted)]">Live officer positions, safety status, and open incidents.</p>
       </header>
-
-      {mapQ.isError ? (
-        <p className="rounded-lg border border-[#f05b4d]/30 bg-[#f05b4d]/10 px-3 py-2 text-sm text-[#fca5a5]" role="alert">
-          {mapQ.error instanceof Error ? mapQ.error.message : 'Could not load map data'}
-        </p>
-      ) : null}
-
-      {mapQ.isLoading || statesLayer.isLoading ? (
-        <div className={`${card} py-16 text-center text-sm text-[var(--portal-muted)]`}>Loading deployment…</div>
-      ) : pinProps.length === 0 ? (
-        <div className={`${card} py-16 text-center text-sm text-[var(--portal-muted)]`}>
-          No field officers provisioned yet — use Admin → credential batches to deploy accounts.
-        </div>
-      ) : (
-        <NigeriaMap 
-          pins={pinProps} 
-          statesGeo={statesLayer.data}
-          height="400px" 
-          hint="Executive security overview — field roster positions. Click any state to zoom in." 
-        />
-      )}
+      <CommandOfficerMap />
     </div>
   )
 }

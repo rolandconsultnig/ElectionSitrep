@@ -319,7 +319,7 @@ export const PORTALS: Record<PortalId, PortalMeta> = {
       {
         section: 'Intelligence',
         items: [
-          { id: 'hotspots', moduleCode: 'M29', label: 'National Hotspot Map', icon: '🔥', path: 'hotspots' },
+          { id: 'hotspots', moduleCode: 'M29', label: 'Live Officer & Incident Map', icon: '🔥', path: 'hotspots' },
           { id: 'timeline', moduleCode: 'M30', label: 'Event Timeline', icon: '⏱', path: 'timeline' },
         ],
       },

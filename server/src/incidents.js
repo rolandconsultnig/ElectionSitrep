@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import bcrypt from 'bcrypt'
 import { createHash } from 'node:crypto'
+import { officerStatus, resolvePosition } from './commandOfficerMap.js'
 
 export const SEVERITIES = ['low', 'medium', 'high', 'critical']
 export const LEVELS = ['dpo', 'area', 'state', 'fhq']
@@ -68,7 +69,7 @@ async function officerGeo(db, userId) {
   return r.rows[0] ?? null
 }
 
-async function commandScope(db, userId) {
+export async function commandScope(db, userId) {
   const r = await db.query(
     `SELECT jurisdiction_level, jurisdiction_state_id, jurisdiction_lga_id FROM app_users WHERE id = $1`,
     [userId],
@@ -694,13 +695,16 @@ export function createIncidentRouter({ pool, authMiddleware, requireAnyPortal, g
     const battery = num(req.body?.batteryPct)
     await pool.query(
       `INSERT INTO officer_safety (user_id, interval_minutes, last_ok_at, next_due_at, missed_flagged_at, last_lat, last_lng,
-         battery_pct, network, telemetry_at)
-       VALUES ($1, $2, now(), now() + make_interval(mins => $2), NULL, $3, $4, $5, $6, now())
+         battery_pct, network, telemetry_at, position_source)
+       VALUES ($1, $2, now(), now() + make_interval(mins => $2), NULL, $3::double precision, $4::double precision,
+         $5::integer, $6::varchar, now(),
+         CASE WHEN $3::double precision IS NOT NULL AND $4::double precision IS NOT NULL THEN 'checkin' ELSE NULL END)
        ON CONFLICT (user_id) DO UPDATE SET interval_minutes = $2, last_ok_at = now(),
          next_due_at = now() + make_interval(mins => $2), missed_flagged_at = NULL,
-         last_lat = COALESCE($3, officer_safety.last_lat), last_lng = COALESCE($4, officer_safety.last_lng),
-         battery_pct = COALESCE($5, officer_safety.battery_pct), network = COALESCE($6, officer_safety.network),
-         telemetry_at = now()`,
+         last_lat = COALESCE($3::double precision, officer_safety.last_lat), last_lng = COALESCE($4::double precision, officer_safety.last_lng),
+       battery_pct = COALESCE($5::integer, officer_safety.battery_pct), network = COALESCE($6::varchar, officer_safety.network),
+         telemetry_at = now(),
+         position_source = CASE WHEN $3::double precision IS NOT NULL AND $4::double precision IS NOT NULL THEN 'checkin' ELSE officer_safety.position_source END`,
       [
         req.auth.sub,
         interval,
@@ -763,6 +767,97 @@ export function createIncidentRouter({ pool, authMiddleware, requireAnyPortal, g
         telemetryAt: o.telemetry_at,
       })),
     })
+  })
+
+  r.get('/command/officers/map', authMiddleware, command, async (req, res) => {
+    try {
+      const scope = await commandScope(pool, req.auth.sub)
+      const params = []
+      const sc = scopeSql(scope, 'gl', params)
+      const q = await pool.query(
+        `SELECT u.id, u.username, u.onboarding_complete, op.full_name, op.service_number, op.phone,
+                op.liveness_verified, (op.picture_data IS NOT NULL) AS has_photo,
+                gp.code AS pu_code, gp.name AS pu_name, gp.lat AS pu_lat, gp.lng AS pu_lng,
+                gw.name AS ward_name, gl.id AS lga_id, gl.name AS lga_name, gl.state_id,
+                gs.name AS state_name, s.last_ok_at, s.next_due_at, s.missed_flagged_at,
+                s.last_lat, s.last_lng, s.position_source, s.battery_pct, s.network, s.telemetry_at,
+                EXISTS (SELECT 1 FROM sos_alerts a WHERE a.user_id = u.id AND a.status = 'active') AS sos_active
+         FROM app_users u
+         LEFT JOIN officer_profiles op ON op.user_id = u.id
+         LEFT JOIN officer_safety s ON s.user_id = u.id
+         LEFT JOIN geo_polling_units gp ON gp.id = op.assigned_polling_unit_id
+         LEFT JOIN geo_wards gw ON gw.id = gp.ward_id
+         LEFT JOIN (SELECT id, name, state_id, id AS lga_id FROM geo_lgas) gl ON gl.id = gw.lga_id
+         LEFT JOIN geo_states gs ON gs.id = gl.state_id
+         WHERE u.portal = 'field'${sc}
+         ORDER BY sos_active DESC, (s.missed_flagged_at IS NOT NULL) DESC, s.next_due_at NULLS LAST, u.username
+         `,
+        params,
+      )
+      const io = getIo()
+      res.json({
+        dataAsOf: new Date().toISOString(),
+        officers: q.rows.map((o) => ({
+          userId: o.id,
+          username: o.username,
+          name: o.full_name || o.username,
+          serviceNumber: o.service_number,
+          phone: o.phone,
+          post: o.pu_code ? `${o.pu_code} · ${o.pu_name}` : null,
+          puCode: o.pu_code,
+          wardName: o.ward_name,
+          lgaName: o.lga_name,
+          stateName: o.state_name,
+          status: officerStatus({ sosActive: o.sos_active, missedAt: o.missed_flagged_at, nextDueAt: o.next_due_at }),
+          onboardingComplete: Boolean(o.onboarding_complete),
+          livenessVerified: Boolean(o.liveness_verified),
+          hasPhoto: Boolean(o.has_photo),
+          battery: o.battery_pct,
+          network: o.network,
+          lastSeenAt: o.telemetry_at,
+          online: Boolean(io?.sockets?.adapter?.rooms?.get(`user_${o.id}`)?.size),
+          position: resolvePosition(
+            {
+              last_lat: o.last_lat,
+              last_lng: o.last_lng,
+              position_source: o.position_source,
+              telemetry_at: o.telemetry_at,
+            },
+            { lat: o.pu_lat, lng: o.pu_lng },
+          ),
+        })),
+      })
+    } catch (error) {
+      console.error('[command/officers/map]', error)
+      res.status(500).json({ error: 'Could not load officer map' })
+    }
+  })
+
+  r.get('/command/officers/:userId/photo', authMiddleware, command, async (req, res) => {
+    try {
+      const scope = await commandScope(pool, req.auth.sub)
+      const params = [req.params.userId]
+      const sc = scopeSql(scope, 'gl', params)
+      const q = await pool.query(
+        `SELECT op.picture_data, op.picture_content_type
+         FROM app_users u
+         LEFT JOIN officer_profiles op ON op.user_id = u.id
+         LEFT JOIN geo_polling_units gp ON gp.id = op.assigned_polling_unit_id
+         LEFT JOIN geo_wards gw ON gw.id = gp.ward_id
+         LEFT JOIN (SELECT id, name, state_id, id AS lga_id FROM geo_lgas) gl ON gl.id = gw.lga_id
+         WHERE u.portal = 'field' AND u.id::text = $1${sc}`,
+        params,
+      )
+      const row = q.rows[0]
+      if (!row?.picture_data) return res.status(404).json({ error: 'Photo not found' })
+      res.set('Content-Type', row.picture_content_type || 'image/jpeg')
+      res.set('Cache-Control', 'private, no-store')
+      res.send(row.picture_data)
+    } catch (error) {
+      if (error.code === '22P02') return res.status(404).json({ error: 'Photo not found' })
+      console.error('[command/officers/photo]', error)
+      res.status(500).json({ error: 'Could not load officer photo' })
+    }
   })
 
   r.put('/safety/settings', authMiddleware, requireAnyPortal('admin', 'management'), async (req, res) => {

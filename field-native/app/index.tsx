@@ -1,14 +1,16 @@
-import { fieldContextRequest } from '../lib/api'
+import { apiFetch, fieldContextRequest } from '../lib/api'
 import { useAuth } from '../lib/auth-context'
 import { getApiBaseUrl } from '../lib/config'
 import { isLocalSessionToken } from '../lib/local-session'
 import { listPending } from '../lib/pending-queue'
 import { flushPendingVoteSync } from '../lib/sync-pending'
 import { colors, radii, space } from '../lib/theme'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { useFocusEffect } from '@react-navigation/native'
 import { useQuery } from '@tanstack/react-query'
 import NetInfo from '@react-native-community/netinfo'
 import { Redirect, router } from 'expo-router'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
@@ -18,7 +20,29 @@ export default function HomeScreen() {
   const [syncStatus, setSyncStatus] = useState<string | null>(null)
   const [syncErrors, setSyncErrors] = useState<string[]>([])
   const [bootstrapTimeout, setBootstrapTimeout] = useState(false)
+  const [unreadMessages, setUnreadMessages] = useState(0)
   const localMode = isLocalSessionToken(token)
+
+  const refreshUnreadMessages = useCallback(async () => {
+    if (!token || !user || localMode) return
+    try {
+      const [result, lastRead] = await Promise.all([
+        apiFetch<{ messages: { sender_id: string; created_at: string }[] }>('/api/chat/dm/history?limit=500', { token }),
+        AsyncStorage.getItem(`@command_dm_last_read_${user.id}`),
+      ])
+      const lastReadMs = lastRead ? new Date(lastRead).getTime() : 0
+      setUnreadMessages(result.messages.filter((message) =>
+        String(message.sender_id) !== String(user.id) && new Date(message.created_at).getTime() > lastReadMs).length)
+    } catch {
+      setUnreadMessages(0)
+    }
+  }, [token, user, localMode])
+
+  useFocusEffect(useCallback(() => {
+    void refreshUnreadMessages()
+    const timer = setInterval(() => void refreshUnreadMessages(), 15_000)
+    return () => clearInterval(timer)
+  }, [refreshUnreadMessages]))
 
   async function refreshPendingCount() {
     const p = await listPending()
@@ -180,6 +204,11 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
+        <Pressable onPress={() => router.push('/messages')} style={styles.messageButton}>
+          <Text style={styles.messageButtonText}>Messages from Command</Text>
+          {unreadMessages > 0 ? <Text style={styles.unreadBadge}>{unreadMessages}</Text> : null}
+        </Pressable>
+
         {(pendingCount > 0 || syncErrors.length > 0) ? (
           <View style={styles.banner}>
             <Text style={styles.bannerText}>
@@ -253,6 +282,9 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: space.lg },
   kicker: { fontSize: 13, color: colors.muted, fontWeight: '600' },
   title: { fontSize: 22, fontWeight: '700', color: colors.text },
+  messageButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space.md, padding: space.md, borderRadius: radii.md, backgroundColor: colors.primary, },
+  messageButtonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  unreadBadge: { minWidth: 24, height: 24, overflow: 'hidden', borderRadius: 12, textAlign: 'center', textAlignVertical: 'center', backgroundColor: '#fff', color: colors.primary, fontWeight: '800' },
   muted: { fontSize: 14, color: colors.muted, marginTop: 4, lineHeight: 20 },
   signOut: { paddingVertical: space.sm, paddingHorizontal: space.md },
   signOutText: { color: colors.primary, fontWeight: '600', fontSize: 15 },

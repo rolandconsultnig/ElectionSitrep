@@ -34,6 +34,7 @@ function NavStack() {
         <Stack.Screen name="login" options={{ headerShown: false, title: 'Sign in' }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false, title: 'Profile' }} />
         <Stack.Screen name="network-settings" options={{ title: 'Network settings', headerShown: true }} />
+        <Stack.Screen name="messages" options={{ title: 'Messages from Command', headerShown: true }} />
         <Stack.Screen name="tally/[slug]" options={{ title: 'PU tally', headerShown: true }} />
       </Stack>
       {!ready && (
