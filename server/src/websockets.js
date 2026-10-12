@@ -148,7 +148,7 @@ export function initWebSockets(httpServer, pool, JWT_SECRET) {
     // Field officer places a call to HQ (any management user)
     socket.on('initiate_call', (data = {}) => {
       const callType = data.callType === 'audio' ? 'audio' : 'video'
-      if (hqRoomSize() === 0) {
+      if ((io.sockets.adapter.rooms.get('portal_management')?.size ?? 0) === 0) {
         socket.emit('call_unavailable')
         return
       }
