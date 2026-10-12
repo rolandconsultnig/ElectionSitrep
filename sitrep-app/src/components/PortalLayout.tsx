@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useSocket } from '../contexts/SocketContext'
 import type { NavItem, PortalId } from '../lib/navigation'
@@ -93,12 +93,17 @@ function NavItemNode({ item, portalId, setMobileNavOpen }: { item: NavItem; port
 
 export function PortalLayout({ portalId }: Props) {
   const navigate = useNavigate()
+  const location = useLocation()
   const { user, logout } = useAuth()
-  const { onlineOfficers } = useSocket()
+  const { onlineOfficers, messages } = useSocket()
   const activeFieldOfficers = Object.values(onlineOfficers || {})
   const meta = PORTALS[portalId]
   const [now, setNow] = useState(() => new Date())
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [dismissedDmId, setDismissedDmId] = useState<string | null>(null)
+  const latestIncomingDm = portalId === 'field' && !location.pathname.startsWith('/field/communications')
+    ? [...messages].reverse().find((message) => message.roomId.startsWith('dm_') && String(message.senderId) !== String(user?.id))
+    : undefined
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000)
@@ -317,6 +322,14 @@ export function PortalLayout({ portalId }: Props) {
         <main className="relative min-h-0 flex-1 overflow-y-auto">
           <div className="sr-grid-bg pointer-events-none" aria-hidden />
           <div className="relative z-[1] mx-auto max-w-[1600px] p-4 md:p-8">
+            {latestIncomingDm && String(latestIncomingDm.id) !== dismissedDmId ? (
+              <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-[#00c46a]/40 bg-[#00c46a]/10 px-4 py-3 text-sm">
+                <button type="button" onClick={() => navigate('/field/communications')} className="text-left">
+                  New message from <strong>{latestIncomingDm.senderUsername}</strong> · Open communications
+                </button>
+                <button type="button" aria-label="Dismiss new message notice" onClick={() => setDismissedDmId(String(latestIncomingDm.id))}>×</button>
+              </div>
+            ) : null}
             <Outlet />
             {portalId !== 'field' && <CommandAlertCenter basePath={`/${portalId}`} />}
           </div>

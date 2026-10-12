@@ -12,19 +12,31 @@ interface ChatMessage {
   createdAt: string
 }
 
+type SosAlert = {
+  officerId: string
+  officerUsername: string
+  timestamp: string
+  coords: { lat: number; lng: number } | null
+  notes: string
+}
+type FlashDirective = { id: string; title: string; priority: string; issuedBy: string; issuedAt: string }
+
 interface SocketContextValue {
   socket: Socket | null
   connected: boolean
   messages: ChatMessage[]
   sendMessage: (roomId: string, content: string) => void
+  chatSendError: string | null
+  clearChatSendError: () => void
   onlineOfficers: Record<string, { userId: string; username: string; socketId: string; coords?: { lat: number; lng: number } }>
   /** Number of HQ (management portal) users currently online; -1 = unknown */
   hqOnlineCount: number
-  activeSosAlerts: Array<{ officerId: string; officerUsername: string; timestamp: string; coords?: { lat: number; lng: number }; notes: string }>
-  flashDirectives: Array<{ id: string; title: string; priority: string; issuedBy: string; issuedAt: string }>
+  activeSosAlerts: SosAlert[]
+  commandDataRevision: number
+  flashDirectives: FlashDirective[]
   sendPanicSos: (notes?: string) => void
   sendOfficerCheckin: (status?: string) => void
-  emitWallSync: (syncState: any) => void
+  emitWallSync: (syncState: unknown) => void
 }
 
 const SocketContext = createContext<SocketContextValue | null>(null)
@@ -35,10 +47,12 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null)
   const [connected, setConnected] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [chatSendError, setChatSendError] = useState<string | null>(null)
+  const [commandDataRevision, setCommandDataRevision] = useState(0)
   const [onlineOfficers, setOnlineOfficers] = useState<Record<string, { userId: string; username: string; socketId: string; coords?: { lat: number; lng: number } }>>({})
   const [hqOnlineCount, setHqOnlineCount] = useState(-1)
-  const [activeSosAlerts, setActiveSosAlerts] = useState<Array<{ officerId: string; officerUsername: string; timestamp: string; coords?: { lat: number; lng: number }; notes: string }>>([])
-  const [flashDirectives, setFlashDirectives] = useState<Array<{ id: string; title: string; priority: string; issuedBy: string; issuedAt: string }>>([])
+  const [activeSosAlerts, setActiveSosAlerts] = useState<SosAlert[]>([])
+  const [flashDirectives, setFlashDirectives] = useState<FlashDirective[]>([])
   const lastCoords = useRef<{ lat: number; lng: number } | null>(null)
   
   // To avoid constant re-renders taking down the stream
@@ -72,20 +86,28 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     newSocket.on('disconnect', () => setConnected(false))
 
     newSocket.on('chat_message', (msg: ChatMessage) => {
-      setMessages((prev: ChatMessage[]) => [...prev, msg])
+      setMessages((prev: ChatMessage[]) => prev.some((current) => String(current.id) === String(msg.id)) ? prev : [...prev, msg])
+    })
+
+    newSocket.on('chat_send_error', (result: { error?: string }) => {
+      setChatSendError(result.error ?? 'Could not send message')
     })
 
     // Panic SOS alerts
-    newSocket.on('panic_sos_alert', (alertData: any) => {
+    newSocket.on('panic_sos_alert', (alertData: SosAlert) => {
       setActiveSosAlerts((prev) => [alertData, ...prev])
+      setCommandDataRevision((revision) => revision + 1)
     })
+    newSocket.on('sos_alert', () => setCommandDataRevision((revision) => revision + 1))
+    newSocket.on('checkin_missed', () => setCommandDataRevision((revision) => revision + 1))
+    newSocket.on('incident_alert', () => setCommandDataRevision((revision) => revision + 1))
 
     // Flash Command Directives
-    newSocket.on('flash_directive_received', (dirData: any) => {
+    newSocket.on('flash_directive_received', (dirData: FlashDirective) => {
       setFlashDirectives((prev) => [dirData, ...prev])
     })
 
-    // Management portal specific events
+    // Command portal presence and location events
     newSocket.on('initial_active_officers', (officers: Array<{ userId: string; username: string; socketId: string }>) => {
       setOnlineOfficers((prev) => {
         const next = { ...prev }
@@ -152,9 +174,14 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
   const sendMessage = (roomId: string, content: string) => {
     if (socket && connected) {
-      socket.emit('send_chat_message', { roomId, content })
+      setChatSendError(null)
+      socket.emit('send_chat_message', { roomId, content }, (result: { ok?: boolean; error?: string }) => {
+        if (!result?.ok) setChatSendError(result?.error ?? 'Could not send message')
+      })
     }
   }
+
+  const clearChatSendError = () => setChatSendError(null)
 
   const sendPanicSos = (notes?: string) => {
     if (socket && connected) {
@@ -171,7 +198,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const emitWallSync = (syncState: any) => {
+  const emitWallSync = (syncState: unknown) => {
     if (socket && connected) {
       socket.emit('emit_wall_sync', syncState)
     }
@@ -183,9 +210,12 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       connected,
       messages,
       sendMessage,
+      chatSendError,
+      clearChatSendError,
       onlineOfficers,
       hqOnlineCount,
       activeSosAlerts,
+      commandDataRevision,
       flashDirectives,
       sendPanicSos,
       sendOfficerCheckin,

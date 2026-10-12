@@ -1,0 +1,10 @@
+.officer-sos-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: officer-sos-pulse 1.4s ease-out infinite;
+}
+
+@keyframes officer-sos-pulse {
+  0%, 100% { stroke-width: 2; opacity: 1; }
+  50% { stroke-width: 6; opacity: 0.55; }
+}

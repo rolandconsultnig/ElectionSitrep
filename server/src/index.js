@@ -11,6 +11,7 @@ import { createServer } from 'http'
 import { pool } from './db.js'
 import { initWebSockets } from './websockets.js'
 import { createOtaRouter } from './ota.js'
+import { createChatRouter } from './chat.js'
 import { checkDuressLogin, createIncident, createIncidentRouter, runSafetyTick } from './incidents.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -96,6 +97,7 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '12mb' }))
 app.use(sanitizeInput) // Sanitize all incoming requests
 app.use('/api', createIncidentRouter({ pool, authMiddleware, requireAnyPortal, getIo: () => io }))
+app.use('/api/chat', createChatRouter({ pool, authMiddleware, getIo: () => io }))
 app.use('/api/ota', createOtaRouter(process.env.OTA_DIR || path.join(__dirname, '../../ota')))
 
 // Simple in-memory rate limiter for auth endpoints
@@ -5561,5 +5563,4 @@ setInterval(() => {
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`[election-sitrep-api] listening on 0.0.0.0:${PORT}`)
 })
-
 

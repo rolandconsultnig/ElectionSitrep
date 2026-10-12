@@ -1,6 +1,7 @@
 import { Server } from 'socket.io'
 import jwt from 'jsonwebtoken'
 import { joinCommandRooms } from './incidents.js'
+import { ChatError, persistAndDeliverChatMessage, sendAuthorizedDm } from './chat.js'
 
 export function initWebSockets(httpServer, pool, JWT_SECRET) {
   const io = new Server(httpServer, {
@@ -31,15 +32,17 @@ export function initWebSockets(httpServer, pool, JWT_SECRET) {
 
   io.on('connection', (socket) => {
     const user = socket.user
+    const personalRoom = `user_${user.sub}`
+    const wasOnline = Boolean(io.sockets.adapter.rooms.get(personalRoom)?.size)
     
     // Join a room based on their portal
     socket.join(`portal_${user.portal}`)
     // Also join a personal room for 1:1 signaling
-    socket.join(`user_${user.sub}`)
+    socket.join(personalRoom)
     joinCommandRooms(pool, socket, user.sub, user.portal).catch((e) => console.error('[ws] command rooms', e))
 
     if (user.portal === 'field') {
-      io.to('portal_management').emit('field_officer_online', {
+      if (!wasOnline) io.to('portal_management').to('portal_igp').to('portal_admin').emit('field_officer_online', {
         userId: user.sub,
         username: user.username,
         socketId: socket.id
@@ -67,67 +70,72 @@ export function initWebSockets(httpServer, pool, JWT_SECRET) {
 
     socket.on('disconnect', () => {
       if (user.portal === 'field') {
-        io.to('portal_management').emit('field_officer_offline', {
-          userId: user.sub
-        })
+        if (!io.sockets.adapter.rooms.get(personalRoom)?.size) {
+          io.to('portal_management').to('portal_igp').to('portal_admin').emit('field_officer_offline', { userId: user.sub })
+        }
       } else {
         broadcastHqPresence()
       }
     })
 
     // GPS location update
-    socket.on('gps_update', (coords) => {
-      // coords: { lat, lng, timestamp }
-      io.to('portal_management').emit('field_officer_location', {
+    socket.on('gps_update', async (coords = {}) => {
+      if (user.portal !== 'field' || !coords || typeof coords !== 'object') return
+      const { lat, lng } = coords
+      if (typeof lat !== 'number' || !Number.isFinite(lat) || lat < -90 || lat > 90 ||
+          typeof lng !== 'number' || !Number.isFinite(lng) || lng < -180 || lng > 180) return
+
+      const now = Date.now()
+      if (now - (socket.data.lastGpsPersistAttempt ?? 0) >= 20_000) {
+        socket.data.lastGpsPersistAttempt = now
+        try {
+          await pool.query(
+            `INSERT INTO officer_safety (user_id, last_lat, last_lng, telemetry_at, position_source)
+             VALUES ($1, $2, $3, now(), 'gps')
+             ON CONFLICT (user_id) DO UPDATE SET last_lat = EXCLUDED.last_lat, last_lng = EXCLUDED.last_lng,
+               telemetry_at = now(), position_source = 'gps'`,
+            [user.sub, lat, lng],
+          )
+        } catch (error) {
+          console.error('[ws] gps persistence failed', error)
+        }
+      }
+
+      io.to('portal_management').to('portal_igp').to('portal_admin').emit('field_officer_location', {
         userId: user.sub,
         username: user.username,
-        coords
+        coords: { lat, lng },
+        timestamp: new Date().toISOString(),
+        source: 'gps',
       })
     })
 
     // Chat messaging
-    socket.on('send_chat_message', async (data) => {
+    socket.on('send_chat_message', async (data, acknowledge) => {
       const { roomId: rawRoomId, content: rawContent } = data || {}
-      if (!rawRoomId || typeof rawContent !== 'string' || !rawContent.trim()) return
-      const content = rawContent.trim().slice(0, 4000)
-
-      // Direct messages are persisted under a canonical pair room (dm_<lo>_<hi>)
-      // so BOTH participants read the same history, while delivery still uses
-      // the per-user rooms each socket has joined.
-      let persistRoom = rawRoomId
-      let dmTarget = null
-      if (rawRoomId.startsWith('user_')) {
-        dmTarget = rawRoomId.slice(5)
-        const a = String(user.sub)
-        const b = String(dmTarget)
-        const [lo, hi] = a < b ? [a, b] : [b, a]
-        persistRoom = `dm_${lo}_${hi}`
-      }
-
-      // Save to database
       try {
-        const res = await pool.query(
-          `INSERT INTO chat_messages (sender_id, room_id, content) VALUES ($1, $2, $3) RETURNING id, created_at`,
-          [user.sub, persistRoom, content]
-        )
-        const msg = {
-          id: res.rows[0].id,
-          senderId: user.sub,
-          senderUsername: user.username,
-          roomId: persistRoom,
-          content,
-          createdAt: res.rows[0].created_at
+        if (typeof rawContent !== 'string' || !rawContent.trim() || rawContent.trim().length > 4000) {
+          throw new ChatError('Message must be 1–4000 characters', 400)
         }
-        if (dmTarget !== null) {
-          io.to(`user_${dmTarget}`).emit('chat_message', msg)
-          if (String(user.sub) !== String(dmTarget)) {
-            socket.emit('chat_message', msg) // send back to sender
-          }
+        const content = rawContent.trim()
+        let message
+        if (typeof rawRoomId === 'string' && rawRoomId.startsWith('user_')) {
+          message = await sendAuthorizedDm(pool, io, user.sub, rawRoomId.slice(5), content)
+        } else if (rawRoomId === 'portal_management') {
+          message = await persistAndDeliverChatMessage(pool, io, {
+            sender: { id: user.sub, username: user.username, portal: user.portal },
+            roomId: rawRoomId,
+            content,
+          })
         } else {
-          io.to(persistRoom).emit('chat_message', msg)
+          throw new ChatError('Unsupported chat room', 403)
         }
+        if (typeof acknowledge === 'function') acknowledge({ ok: true, message })
       } catch (err) {
-        console.error('Error saving chat message:', err)
+        const response = { ok: false, error: err.message ?? 'Could not send message' }
+        if (typeof acknowledge === 'function') acknowledge(response)
+        socket.emit('chat_send_error', response)
+        if (!(err instanceof ChatError)) console.error('Error saving chat message:', err)
       }
     })
 
@@ -257,4 +265,3 @@ export function initWebSockets(httpServer, pool, JWT_SECRET) {
 
   return io
 }
-
