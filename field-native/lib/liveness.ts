@@ -1,64 +1,46 @@
 import FaceDetection, { type FaceDetectionOptions } from '@react-native-ml-kit/face-detection'
+import { Image } from 'react-native'
 
 export type FrameSample = {
   uri: string
   faceCount: number
   minEyeOpen: number | null
+  rotationY: number | null
+  faceWidthFraction: number | null
 }
 
 const DETECTION_OPTS: FaceDetectionOptions = {
-  performanceMode: 'accurate',
+  performanceMode: 'fast',
   classificationMode: 'all',
   minFaceSize: 0.15,
+}
+
+function getImageWidth(uri: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    Image.getSize(
+      uri,
+      (width) => resolve(width),
+      () => resolve(null),
+    )
+  })
 }
 
 export async function sampleFrame(uri: string): Promise<FrameSample> {
   const faces = (await FaceDetection.detect(uri, DETECTION_OPTS)) ?? []
   if (faces.length !== 1) {
-    return { uri, faceCount: faces.length, minEyeOpen: null }
+    return { uri, faceCount: faces.length, minEyeOpen: null, rotationY: null, faceWidthFraction: null }
   }
-  const f = faces[0]
-  const eyes = [f.leftEyeOpenProbability, f.rightEyeOpenProbability].filter(
-    (v): v is number => typeof v === 'number'
+  const face = faces[0]
+  const eyes = [face.leftEyeOpenProbability, face.rightEyeOpenProbability].filter(
+    (value): value is number => typeof value === 'number',
   )
+  const imageWidth = await getImageWidth(uri)
+  const frameWidth = (face as unknown as { frame?: { width?: number } }).frame?.width
   return {
     uri,
     faceCount: 1,
     minEyeOpen: eyes.length ? Math.min(...eyes) : null,
+    rotationY: typeof face.rotationY === 'number' ? face.rotationY : null,
+    faceWidthFraction: imageWidth && frameWidth ? frameWidth / imageWidth : null,
   }
-}
-
-export type LivenessVerdict = {
-  ok: boolean
-  reason: string | null
-}
-
-/**
- * Judges a sequence of frames: exactly one face in each, and a blink —
- * eye-open probability crosses from open (>= OPEN) to closed (<= CLOSED)
- * and back, or starts closed and opens. Rejects photos/screens that never blink.
- */
-export function judgeFrames(frames: FrameSample[]): LivenessVerdict {
-  const withFace = frames.filter((f) => f.faceCount === 1)
-  if (withFace.length < Math.min(2, frames.length)) {
-    const anyMulti = frames.some((f) => f.faceCount > 1)
-    return {
-      ok: false,
-      reason: anyMulti
-        ? 'More than one face detected — capture one face only.'
-        : 'No face detected — centre your face in good light.',
-    }
-  }
-  const eyeVals = withFace.map((f) => f.minEyeOpen).filter((v): v is number => v !== null)
-  if (eyeVals.length < 2) {
-    return { ok: false, reason: 'Eyes not visible — look directly at the camera.' }
-  }
-  const OPEN = 0.6
-  const CLOSED = 0.25
-  const sawOpen = eyeVals.some((v) => v >= OPEN)
-  const sawClosed = eyeVals.some((v) => v <= CLOSED)
-  if (!(sawOpen && sawClosed)) {
-    return { ok: false, reason: 'Liveness check failed — blink slowly while looking at the camera.' }
-  }
-  return { ok: true, reason: null }
 }
