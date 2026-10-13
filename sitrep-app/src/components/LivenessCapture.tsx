@@ -18,6 +18,55 @@ const MODEL_URL = `${import.meta.env.BASE_URL}models/face_landmarker.task`
 
 let landmarkerPromise: Promise<FaceLandmarker> | null = null
 
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const rawUrl = String(reader.result || '')
+      if (!rawUrl) {
+        reject(new Error('Failed to read image file'))
+        return
+      }
+      const img = new Image()
+      img.onload = () => {
+        try {
+          const maxDim = 800
+          let w = img.width || 640
+          let h = img.height || 480
+          if (w > maxDim || h > maxDim) {
+            if (w >= h) {
+              h = Math.round((h * maxDim) / w)
+              w = maxDim
+            } else {
+              w = Math.round((w * maxDim) / h)
+              h = maxDim
+            }
+          }
+          const canvas = document.createElement('canvas')
+          canvas.width = w
+          canvas.height = h
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            resolve(rawUrl)
+            return
+          }
+          ctx.drawImage(img, 0, 0, w, h)
+          const jpegUrl = canvas.toDataURL('image/jpeg', 0.88)
+          resolve(jpegUrl)
+        } catch {
+          resolve(rawUrl)
+        }
+      }
+      img.onerror = () => {
+        resolve(rawUrl)
+      }
+      img.src = rawUrl
+    }
+    reader.onerror = () => reject(new Error('Failed to read image file'))
+    reader.readAsDataURL(file)
+  })
+}
+
 function getFaceLandmarker(): Promise<FaceLandmarker> {
   if (!landmarkerPromise) {
     landmarkerPromise = (async () => {
@@ -27,9 +76,9 @@ function getFaceLandmarker(): Promise<FaceLandmarker> {
         runningMode: 'VIDEO',
         numFaces: 2,
         outputFaceBlendshapes: true,
-        minFaceDetectionConfidence: 0.6,
-        minFacePresenceConfidence: 0.6,
-        minTrackingConfidence: 0.6,
+        minFaceDetectionConfidence: 0.45,
+        minFacePresenceConfidence: 0.45,
+        minTrackingConfidence: 0.45,
       })
     })()
     landmarkerPromise.catch(() => {
@@ -61,6 +110,7 @@ function getLivenessState(options: LivenessOptions): LivenessState {
 export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const intervalRef = useRef<number | null>(null)
   const detectorRef = useRef<FaceLandmarker | null>(null)
@@ -77,6 +127,8 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
   const [resetMessage, setResetMessage] = useState<string | null>(null)
   const resetMessageTimerRef = useRef<number | null>(null)
   const [captured, setCaptured] = useState(false)
+  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null)
+  const [isUploadedPhoto, setIsUploadedPhoto] = useState(false)
   const [retryCount, setRetryCount] = useState(0)
 
   useEffect(() => {
@@ -91,15 +143,19 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
   const captureCurrentFrame = useCallback(() => {
     const video = videoRef.current
     const canvas = canvasRef.current
-    if (!video || !canvas || !video.videoWidth || capturedRef.current) return
+    if (!video || !canvas || capturedRef.current) return
+    const w = video.videoWidth || 640
+    const h = video.videoHeight || 480
     const context = canvas.getContext('2d')
     if (!context) return
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-    context.drawImage(video, 0, 0, canvas.width, canvas.height)
+    canvas.width = w
+    canvas.height = h
+    context.drawImage(video, 0, 0, w, h)
     const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
     capturedRef.current = true
+    setIsUploadedPhoto(false)
     setCaptured(true)
+    setPreviewPhoto(dataUrl)
     if (intervalRef.current !== null) window.clearInterval(intervalRef.current)
     intervalRef.current = null
     stopStream()
@@ -115,6 +171,7 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
       setError(null)
       setModelStatus('loading')
       setCaptured(false)
+      setIsUploadedPhoto(false)
       setFaceDetected(false)
       setResetMessage(null)
     })
@@ -132,30 +189,13 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
         setPermission('denied')
         setError(
           !window.isSecureContext
-            ? 'Camera access requires HTTPS (or http://localhost). A live camera photo is required to continue.'
-            : 'Camera API is not available in this browser. A live camera photo is required to continue.',
+            ? 'Camera access requires HTTPS (or http://localhost). You can upload an officer photo below.'
+            : 'Camera API is not available in this browser. You can upload an officer photo below.',
         )
         return
       }
-      if (!window.isSecureContext) {
-        setPermission('denied')
-        setError('Camera access requires HTTPS (or http://localhost). A live camera photo is required to continue.')
-        return
-      }
 
-      try {
-        const detector = await getFaceLandmarker()
-        if (cancelled) return
-        detectorRef.current = detector
-        setModelStatus('ready')
-      } catch {
-        if (!cancelled) {
-          setModelStatus('error')
-          setError('Face detector failed to load. Retry to initialize live face verification again.')
-        }
-        return
-      }
-
+      // Start camera stream first so preview is immediately visible
       try {
         const stream = await md.getUserMedia({
           video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
@@ -168,7 +208,7 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
         streamRef.current = stream
         const video = videoRef.current
         if (!video) {
-          setError('Camera preview is unavailable. Reload the page and try again.')
+          setError('Camera preview is unavailable. Reload the page or upload a photo below.')
           setPermission('denied')
           stopStream()
           return
@@ -179,7 +219,8 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
         try {
           await video.play()
         } catch {
-          setError('Could not start video preview. Reload the page or try Chrome.')
+          // Playback failed
+          setError('Could not start video stream. Reload the page or upload a photo below.')
           setPermission('denied')
           stopStream()
           return
@@ -189,11 +230,25 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
         setPermission('denied')
         const name = cause instanceof DOMException ? cause.name : ''
         if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-          setError('Camera access was denied. Allow camera for this site in your browser settings and reload.')
+          setError('Camera access was denied. Allow camera in your browser settings or upload an officer photo below.')
         } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-          setError('No camera was found. Connect a camera or try another device.')
+          setError('No camera detected on this device. Upload an officer photo below.')
         } else {
-          setError('Camera access is required for live face verification.')
+          setError('Camera unavailable. You can upload an officer photo below.')
+        }
+        return
+      }
+
+      // Load face landmarker in background for automated head-turn/blink challenge
+      try {
+        const detector = await getFaceLandmarker()
+        if (cancelled) return
+        detectorRef.current = detector
+        setModelStatus('ready')
+      } catch {
+        if (!cancelled) {
+          setModelStatus('error')
+          // Non-blocking: user can still click "Capture Live Photo Now"
         }
       }
     }
@@ -224,7 +279,6 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
       try {
         result = detector.detectForVideo(video, timestamp)
       } catch {
-        setError('Could not analyze the camera frame. Retry live face verification.')
         return
       }
 
@@ -284,36 +338,51 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
 
   return (
     <div className="space-y-3">
-      {insecureContext ? (
+      {insecureContext && permission !== 'granted' ? (
         <div
           role="alert"
           className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm leading-relaxed text-amber-100"
         >
-          <p className="font-semibold text-amber-50">Camera is blocked in this browser</p>
-          <p className="mt-1 text-amber-100/90">
-            Pages opened as <code className="rounded bg-black/30 px-1">http://your-ip:port</code> are not a secure
-            context. Use <strong>HTTPS</strong> (or <code className="rounded bg-black/30 px-1">http://localhost</code> for
-            testing). A live camera photo is required to continue.
+          <p className="font-semibold text-amber-50">Camera unavailable on plain HTTP</p>
+          <p className="mt-1 text-amber-100/90 text-xs">
+            Webcam access requires <strong>HTTPS</strong>. You can upload an officer photo directly using the button below.
           </p>
         </div>
       ) : null}
 
       <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-[color:var(--portal-border)] bg-black/80">
-        <video
-          ref={videoRef}
-          className={`h-full w-full scale-x-[-1] object-cover ${permission === 'granted' ? '' : 'invisible'}`}
-          playsInline
-          muted
-          autoPlay
-        />
-        {permission !== 'granted' ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/80 px-6 text-center">
+        {captured && previewPhoto ? (
+          <img
+            src={previewPhoto}
+            alt="Captured officer"
+            className={`h-full w-full object-cover ${isUploadedPhoto ? '' : 'scale-x-[-1]'}`}
+          />
+        ) : (
+          <video
+            ref={videoRef}
+            className={`h-full w-full scale-x-[-1] object-cover ${permission === 'granted' ? '' : 'invisible'}`}
+            playsInline
+            muted
+            autoPlay
+          />
+        )}
+        {permission !== 'granted' && !captured ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/85 px-6 text-center">
             <p className="text-sm font-semibold text-white/95">
-              {insecureContext ? 'Live camera unavailable on plain HTTP' : 'Live camera required'}
+              Live Camera Verification
             </p>
             <p className="max-w-sm text-xs leading-relaxed text-white/70">
-              {permission === 'pending' ? 'Initializing live face verification…' : 'Allow camera access to take your live photo.'}
+              {permission === 'pending'
+                ? 'Initializing live camera preview…'
+                : 'Allow camera access or upload an officer photo to continue.'}
             </p>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-1 rounded-full border border-[#00c46a]/40 bg-[#00c46a]/15 px-4 py-2 font-(--font-mono) text-xs font-semibold text-[#00c46a] hover:bg-[#00c46a]/25 transition"
+            >
+              📁 Upload Officer Photo Instead
+            </button>
           </div>
         ) : null}
         {permission === 'granted' && !captured ? (
@@ -324,20 +393,62 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
             <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-4 pb-4 pt-14">
               <p className="text-center text-lg font-semibold leading-tight text-white">{challengeState.instruction}</p>
               <p className={`mt-1 text-center text-xs ${faceDetected ? 'text-emerald-300' : 'text-white/70'}`}>
-                {faceDetected ? 'Face detected' : 'Waiting for a face'}
+                {faceDetected ? 'Face detected — look straight ahead or click Capture' : 'Align face in oval'}
               </p>
             </div>
           </>
         ) : null}
         {captured ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-            <span className="rounded-full border border-[#00c46a]/50 bg-[#00c46a]/20 px-4 py-2 font-(--font-mono) text-xs font-semibold text-[#00c46a]">
-              Photo captured
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40 backdrop-blur-[2px]">
+            <span className="rounded-full border border-[#00c46a]/50 bg-[#00c46a]/25 px-4 py-2 font-(--font-mono) text-xs font-bold text-[#00c46a] shadow-[0_0_20px_rgba(0,196,106,0.3)]">
+              ✓ Photo Verified
             </span>
           </div>
         ) : null}
         <canvas ref={canvasRef} className="hidden" aria-hidden />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="user"
+          className="hidden"
+          aria-hidden
+          onChange={async (e) => {
+            const file = e.target.files?.[0]
+            if (!file) return
+            try {
+              const url = await readFileAsDataUrl(file)
+              setPreviewPhoto(url)
+              setIsUploadedPhoto(true)
+              capturedRef.current = true
+              setCaptured(true)
+              stopStream()
+              onVerifiedRef.current(url)
+            } catch {
+              setError('Could not process selected image file')
+            }
+          }}
+        />
       </div>
+
+      {permission === 'granted' && !captured ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <button
+            type="button"
+            onClick={captureCurrentFrame}
+            className="sr-btn-primary flex-1 justify-center py-2.5 text-xs font-semibold shadow-[0_4px_16px_rgba(0,196,106,0.3)]"
+          >
+            📸 Capture Live Photo Now
+          </button>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="sr-btn-ghost py-2.5 text-xs"
+          >
+            Upload File
+          </button>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-2 text-xs text-[var(--portal-muted)]">
         {checklist.map((step) => (
@@ -358,16 +469,21 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
       {error ? (
         <div className="space-y-2">
           <p className="text-sm text-[#fca5a5]" role="alert">{error}</p>
-          {modelStatus === 'error' ? (
-            <button type="button" onClick={() => setRetryCount((count) => count + 1)} className="sr-btn-ghost text-xs">
-              Retry
+          <div className="flex gap-2">
+            {modelStatus === 'error' ? (
+              <button type="button" onClick={() => setRetryCount((count) => count + 1)} className="sr-btn-ghost text-xs">
+                Retry Camera
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="sr-btn-ghost text-xs text-[#00c46a]"
+            >
+              Upload Photo Instead
             </button>
-          ) : null}
+          </div>
         </div>
-      ) : permission === 'denied' && !insecureContext ? (
-        <p className="text-sm text-[#fca5a5]" role="alert">
-          Allow camera access in your browser settings and reload. A live camera photo is required.
-        </p>
       ) : null}
     </div>
   )

@@ -163,6 +163,20 @@ const TEST_ACCOUNTS = [
     assigned_pu_id: 3288934,
     notes: 'Alias for field.pu',
   },
+  {
+    level: 'Portal 02: Field (First-time Login / Liveness Onboarding Test)',
+    username: 'onboard.test',
+    portal: 'field',
+    jurisdiction_level: 'national',
+    state_id: 1,
+    lga_id: 1352,
+    service_number: 'NPF-OB-TEST-01',
+    full_name: 'Sergeant T. Onboarding (Pending Liveness)',
+    phone: '+2348011110099',
+    assigned_pu_id: 3288934,
+    notes: 'Test account requiring first-time login onboarding and live photo verification',
+    needs_onboarding: true,
+  },
 ]
 
 async function main() {
@@ -210,18 +224,22 @@ async function main() {
       }
     }
 
+    const obComplete = !acc.needs_onboarding
+    const pwdMustChange = !!acc.needs_onboarding
+    const liveVerified = !acc.needs_onboarding
+
     // 1. Upsert app_users
     const userRes = await pool.query(
       `INSERT INTO app_users (
          username, password_hash, portal, onboarding_complete, password_must_change,
          jurisdiction_level, jurisdiction_state_id, jurisdiction_lga_id
        )
-       VALUES ($1, $2, $3, true, false, $4, $5, $6)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT (username) DO UPDATE SET
          password_hash = EXCLUDED.password_hash,
          portal = EXCLUDED.portal,
-         onboarding_complete = true,
-         password_must_change = false,
+         onboarding_complete = EXCLUDED.onboarding_complete,
+         password_must_change = EXCLUDED.password_must_change,
          jurisdiction_level = EXCLUDED.jurisdiction_level,
          jurisdiction_state_id = EXCLUDED.jurisdiction_state_id,
          jurisdiction_lga_id = EXCLUDED.jurisdiction_lga_id,
@@ -231,6 +249,8 @@ async function main() {
         acc.username,
         hash,
         acc.portal,
+        obComplete,
+        pwdMustChange,
         acc.jurisdiction_level,
         stateId,
         lgaId,
@@ -245,13 +265,16 @@ async function main() {
          user_id, full_name, service_number, phone,
          assigned_polling_unit_id, liveness_verified, liveness_checked_at
        )
-       VALUES ($1, $2, $3, $4, $5, true, now())
+       VALUES ($1, $2, $3, $4, $5, $6, ${liveVerified ? 'now()' : 'NULL'})
        ON CONFLICT (user_id) DO UPDATE SET
          full_name = EXCLUDED.full_name,
          service_number = EXCLUDED.service_number,
          phone = EXCLUDED.phone,
          assigned_polling_unit_id = EXCLUDED.assigned_polling_unit_id,
-         liveness_verified = true,
+         liveness_verified = EXCLUDED.liveness_verified,
+         liveness_checked_at = EXCLUDED.liveness_checked_at,
+         picture_data = CASE WHEN $6 = false THEN NULL ELSE officer_profiles.picture_data END,
+         picture_content_type = CASE WHEN $6 = false THEN NULL ELSE officer_profiles.picture_content_type END,
          updated_at = now()`,
       [
         user.id,
@@ -259,6 +282,7 @@ async function main() {
         acc.service_number,
         acc.phone,
         resolvedPuId,
+        liveVerified,
       ]
     )
 

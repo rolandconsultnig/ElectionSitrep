@@ -39,10 +39,10 @@ export type LivenessResult = {
   resetMessage: string | null
 }
 
-const FRONTAL_MIN = 0.4
-const FRONTAL_MAX = 0.6
-const FACE_WIDTH_MIN = 0.25
-const ALIGN_MS = 600
+const FRONTAL_MIN = 0.38
+const FRONTAL_MAX = 0.62
+const FACE_WIDTH_MIN = 0.16
+const ALIGN_MS = 400
 const NO_FACE_MS = 1000
 const TIMEOUT_MS = 30_000
 
@@ -90,7 +90,7 @@ function isFrontal(yawRatio: number | undefined): boolean {
 }
 
 function eyesOpen(frame: LivenessFrame): boolean {
-  return (frame.blinkL ?? 1) < 0.2 && (frame.blinkR ?? 1) < 0.2
+  return (frame.blinkL ?? 1) < 0.32 && (frame.blinkR ?? 0) < 0.32
 }
 
 function instructionForChallenge(state: LivenessState): string {
@@ -154,7 +154,7 @@ export function advanceLivenessChallenge(state: LivenessState, frame: LivenessFr
 
     if (challenge === 'blink') {
       const bothOpen = eyesOpen(frame)
-      const bothClosed = (frame.blinkL ?? 0) > 0.5 && (frame.blinkR ?? 0) > 0.5
+      const bothClosed = (frame.blinkL ?? 0) > 0.45 && (frame.blinkR ?? 0) > 0.45
       let blinkStage = current.blinkStage
       let blinkCount = current.blinkCount
       let completedBlink = current.completed.blink
@@ -177,13 +177,13 @@ export function advanceLivenessChallenge(state: LivenessState, frame: LivenessFr
       return result(next)
     }
 
-    // The clip subject's own-left turn raised yawRatio from 0.968 to 3.425.
+    // Target turn reached
     const targetReached = current.turnDirection === 'left'
-      ? (frame.yawRatio ?? 0.5) >= 0.68
-      : (frame.yawRatio ?? 0.5) <= 0.32
+      ? (frame.yawRatio ?? 0.5) >= 0.64
+      : (frame.yawRatio ?? 0.5) <= 0.36
     const wrongDirection = current.turnDirection === 'left'
-      ? (frame.yawRatio ?? 0.5) <= 0.32
-      : (frame.yawRatio ?? 0.5) >= 0.68
+      ? (frame.yawRatio ?? 0.5) <= 0.28
+      : (frame.yawRatio ?? 0.5) >= 0.72
     if (wrongDirection) return reset(current, frame.t, 'Wrong direction — start again')
     if (!targetReached) return result({ ...current, instruction: instructionForChallenge(current) })
     let next: LivenessState = {

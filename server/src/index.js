@@ -900,9 +900,9 @@ app.put('/api/me/onboarding', authMiddleware, async (req, res) => {
       await client.query('ROLLBACK')
       return res.status(400).json({ error: 'Live face verification is required' })
     }
-    if (!obDone && picMime !== 'image/jpeg') {
+    if (!obDone && picMime !== 'image/jpeg' && picMime !== 'image/png') {
       await client.query('ROLLBACK')
-      return res.status(400).json({ error: 'Initial onboarding photo must be JPEG' })
+      return res.status(400).json({ error: 'Initial onboarding photo must be JPEG or PNG' })
     }
 
     if (needNewPassword) {
