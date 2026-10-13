@@ -170,6 +170,46 @@ async function main() {
   const hash = await bcrypt.hash(COMMON_PASSWORD, 10)
 
   for (const acc of TEST_ACCOUNTS) {
+    let stateId = acc.state_id
+    let lgaId = acc.lga_id
+    let resolvedPuId = null
+
+    if (acc.state_id) {
+      const s = await pool.query(`SELECT id FROM geo_states WHERE id = $1`, [acc.state_id])
+      if (s.rows.length) {
+        stateId = s.rows[0].id
+      } else {
+        const anyS = await pool.query(`SELECT id FROM geo_states ORDER BY id LIMIT 1`)
+        stateId = anyS.rows[0]?.id ?? null
+      }
+    }
+
+    if (acc.lga_id) {
+      const l = await pool.query(`SELECT id FROM geo_lgas WHERE id = $1`, [acc.lga_id])
+      if (l.rows.length) {
+        lgaId = l.rows[0].id
+      } else if (stateId) {
+        const anyL = await pool.query(`SELECT id FROM geo_lgas WHERE state_id = $1 ORDER BY id LIMIT 1`, [stateId])
+        lgaId = anyL.rows[0]?.id ?? null
+      }
+    }
+
+    if (acc.portal === 'field' && !acc.service_number.includes('DPO')) {
+      if (lgaId) {
+        const pu = await pool.query(
+          `SELECT gp.id FROM geo_polling_units gp
+           JOIN geo_wards gw ON gw.id = gp.ward_id
+           WHERE gw.lga_id = $1 ORDER BY gp.id LIMIT 1`,
+          [lgaId]
+        )
+        resolvedPuId = pu.rows[0]?.id ?? null
+      }
+      if (!resolvedPuId) {
+        const anyPu = await pool.query(`SELECT id FROM geo_polling_units ORDER BY id LIMIT 1`)
+        resolvedPuId = anyPu.rows[0]?.id ?? null
+      }
+    }
+
     // 1. Upsert app_users
     const userRes = await pool.query(
       `INSERT INTO app_users (
@@ -192,8 +232,8 @@ async function main() {
         hash,
         acc.portal,
         acc.jurisdiction_level,
-        acc.state_id,
-        acc.lga_id,
+        stateId,
+        lgaId,
       ]
     )
 
@@ -218,7 +258,7 @@ async function main() {
         acc.full_name,
         acc.service_number,
         acc.phone,
-        acc.assigned_pu_id,
+        resolvedPuId,
       ]
     )
 
