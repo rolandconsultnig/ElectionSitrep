@@ -11,6 +11,7 @@
     "build-migration-013": "node scripts/build-migration-013-polling-units.mjs",
     "build-migration-014": "node scripts/build-migration-014-pu-gps.mjs",
     "seed": "node scripts/seed.js",
+    "seed:test-users": "node scripts/create_test_users.mjs",
     "import-party-logos": "node scripts/import-party-logos.mjs",
     "build-parties": "python ../scripts/build_parties_annex.py"
   },

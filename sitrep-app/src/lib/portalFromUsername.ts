@@ -16,8 +16,11 @@ export function portalFromUsername(raw: string): PortalId | null {
   if (!u) return null
 
   // Explicit portal.token (first segment)
-  const explicit = u.match(/^(admin|field|management|igp)[._-]/i)
-  if (explicit) return explicit[1].toLowerCase() as PortalId
+  const explicit = u.match(/^(admin|field|management|mgmt|igp)[._-]/i)
+  if (explicit) {
+    const p = explicit[1].toLowerCase()
+    return (p === 'mgmt' ? 'management' : p) as PortalId
+  }
 
   // Whole-token shortcuts
   if (u === 'admin' || u === 'sysadmin') return 'admin'
