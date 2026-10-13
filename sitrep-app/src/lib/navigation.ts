@@ -207,6 +207,7 @@ export const PORTALS: Record<PortalId, PortalMeta> = {
           { id: 'incident-command', moduleCode: 'M22a', label: 'Incident command', icon: '🚨', path: 'incident-command' },
           { id: 'incidents', moduleCode: 'M22', label: 'Incident Tracker', icon: '⚠', path: 'incidents' },
           { id: 'turnout', moduleCode: 'M23', label: 'Turnout Analysis', icon: '📈', path: 'turnout' },
+          { id: 'predictive', moduleCode: 'M23b', label: 'Predictive Crime Analytics', icon: '🔮', path: 'predictive' },
         ],
       },
       {
@@ -321,6 +322,7 @@ export const PORTALS: Record<PortalId, PortalMeta> = {
         items: [
           { id: 'hotspots', moduleCode: 'M29', label: 'Live Officer & Incident Map', icon: '🔥', path: 'hotspots' },
           { id: 'timeline', moduleCode: 'M30', label: 'Event Timeline', icon: '⏱', path: 'timeline' },
+          { id: 'predictive', moduleCode: 'M29b', label: 'Predictive Crime Analytics', icon: '🔮', path: 'predictive' },
         ],
       },
       {

@@ -11,6 +11,7 @@ import { createServer } from 'http'
 import { pool } from './db.js'
 import { initWebSockets } from './websockets.js'
 import { createOtaRouter } from './ota.js'
+import { createAnalyticsRouter } from './analytics.js'
 import { createChatRouter } from './chat.js'
 import { checkDuressLogin, createIncident, createIncidentRouter, runSafetyTick } from './incidents.js'
 
@@ -98,6 +99,7 @@ app.use(express.json({ limit: '12mb' }))
 app.use(sanitizeInput) // Sanitize all incoming requests
 app.use('/api', createIncidentRouter({ pool, authMiddleware, requireAnyPortal, getIo: () => io }))
 app.use('/api/chat', createChatRouter({ pool, authMiddleware, getIo: () => io }))
+app.use('/api/analytics', createAnalyticsRouter({ pool, authMiddleware, requireAnyPortal }))
 app.use('/api/ota', createOtaRouter(process.env.OTA_DIR || path.join(__dirname, '../../ota')))
 
 // Simple in-memory rate limiter for auth endpoints
@@ -3547,6 +3549,9 @@ app.get('/api/operations/materials', authMiddleware, async (req, res) => {
   }
 })
 
+/** Must stay in sync with sensitive_materials_custody.material_type CHECK constraint. */
+const SENSITIVE_MATERIAL_TYPES = ['bvas', 'ballot_box', 'ec8a_sheet', 'ballot_papers', 'stamp_and_ink']
+
 app.post('/api/operations/materials', authMiddleware, async (req, res) => {
   try {
     const {
@@ -3567,6 +3572,9 @@ app.post('/api/operations/materials', authMiddleware, async (req, res) => {
 
     if (!materialType || !serialOrBarcode) {
       return res.status(400).json({ error: 'materialType and serialOrBarcode are required' })
+    }
+    if (!SENSITIVE_MATERIAL_TYPES.includes(String(materialType).toLowerCase())) {
+      return res.status(400).json({ error: `materialType must be one of: ${SENSITIVE_MATERIAL_TYPES.join(', ')}` })
     }
 
     const election = await resolveElectionHelper(electionSlug)
@@ -3594,7 +3602,7 @@ app.post('/api/operations/materials', authMiddleware, async (req, res) => {
       RETURNING *`,
       [
         election.id,
-        materialType,
+        String(materialType).toLowerCase(),
         serialOrBarcode,
         pollingUnitId,
         wardId,
@@ -4502,6 +4510,11 @@ app.get('/api/intelligence/stakeholders', authMiddleware, async (req, res) => {
   }
 })
 
+/** Must stay in sync with accredited_stakeholders.category CHECK constraint. */
+const STAKEHOLDER_CATEGORIES = [
+  'domestic_observer', 'international_observer', 'media_press', 'cso_ngo', 'inec_monitor', 'diplomatic_mission',
+]
+
 app.post('/api/intelligence/stakeholders', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
   try {
     const {
@@ -4522,6 +4535,9 @@ app.post('/api/intelligence/stakeholders', authMiddleware, requireAnyPortal('man
 
     if (!category || !organizationName || !leadContactName || !contactPhone || !accreditationNumber) {
       return res.status(400).json({ error: 'category, organizationName, leadContactName, contactPhone, and accreditationNumber are required' })
+    }
+    if (!STAKEHOLDER_CATEGORIES.includes(String(category).toLowerCase())) {
+      return res.status(400).json({ error: `category must be one of: ${STAKEHOLDER_CATEGORIES.join(', ')}` })
     }
 
     const election = await resolveElectionHelper(electionSlug)
@@ -4546,7 +4562,7 @@ app.post('/api/intelligence/stakeholders', authMiddleware, requireAnyPortal('man
       RETURNING *`,
       [
         election?.id || null,
-        category,
+        String(category).toLowerCase(),
         organizationName,
         leadContactName,
         contactPhone,
@@ -4886,6 +4902,9 @@ app.get('/api/coordination/agencies', authMiddleware, async (req, res) => {
   }
 })
 
+/** Must stay in sync with joint_taskforce_agencies.agency_code CHECK constraint. */
+const TASKFORCE_AGENCY_CODES = ['NPF', 'NA', 'NN', 'NAF', 'NSCDC', 'DSS', 'FRSC', 'NIS', 'NDLEA']
+
 app.post('/api/coordination/agencies', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
   try {
     const {
@@ -4905,8 +4924,18 @@ app.post('/api/coordination/agencies', authMiddleware, requireAnyPortal('managem
       status = 'active',
     } = req.body || {}
 
-    if (!agencyCode || !agencyName || !sectorName || !liaisonOfficerName || !tacticalCallsign) {
-      return res.status(400).json({ error: 'agencyCode, agencyName, sectorName, liaisonOfficerName, and tacticalCallsign are required' })
+    if (
+      !agencyCode || !agencyName || !sectorName || !liaisonOfficerName ||
+      !liaisonOfficerRank || !liaisonOfficerPhone || !tacticalCallsign || !radioFrequency
+    ) {
+      return res.status(400).json({
+        error:
+          'agencyCode, agencyName, sectorName, liaisonOfficerName, liaisonOfficerRank, ' +
+          'liaisonOfficerPhone, tacticalCallsign, and radioFrequency are required',
+      })
+    }
+    if (!TASKFORCE_AGENCY_CODES.includes(String(agencyCode).toUpperCase())) {
+      return res.status(400).json({ error: `agencyCode must be one of: ${TASKFORCE_AGENCY_CODES.join(', ')}` })
     }
 
     const election = await resolveElectionHelper(electionSlug)
@@ -4921,7 +4950,7 @@ app.post('/api/coordination/agencies', authMiddleware, requireAnyPortal('managem
       RETURNING *`,
       [
         election?.id || null,
-        agencyCode,
+        String(agencyCode).toUpperCase(),
         agencyName,
         sectorName,
         stateId,
@@ -5243,7 +5272,7 @@ app.get('/api/technology/offline-sync/telemetry', authMiddleware, async (req, re
     const outboxQ = await pool.query(
       `SELECT COUNT(*)::int AS total_captured,
               COUNT(CASE WHEN photo_data IS NOT NULL THEN 1 END)::int AS with_photos,
-              MAX(created_at) AS last_sync_at
+              MAX(received_at) AS last_sync_at
        FROM field_capture_outbox`
     )
 

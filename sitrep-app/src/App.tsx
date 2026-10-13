@@ -74,6 +74,7 @@ import {
   ScenarioPlanningPage,
   TribunalEvidencePage,
 } from './pages/portal/IntelligencePortalPages'
+import { PredictiveAnalyticsPage } from './pages/portal/PredictiveAnalyticsPages'
 import {
   InterAgencyTaskforcePage,
   CommandDirectivesPage,
@@ -178,6 +179,7 @@ export default function App() {
         <Route path="incidents" element={<MgmtIncidents />} />
         <Route path="incident-command" element={<IncidentCommandPage />} />
         <Route path="turnout" element={<MgmtTurnout />} />
+        <Route path="predictive" element={<PredictiveAnalyticsPage />} />
         <Route path="orders" element={<MgmtOrders />} />
         <Route path="units" element={<MgmtUnits />} />
         <Route path="communications" element={<ManagementCommunications />} />
@@ -204,6 +206,7 @@ export default function App() {
         <Route path="results" element={<IGPResults />} />
         <Route path="hotspots" element={<IGPHotspots />} />
         <Route path="timeline" element={<IGPTimeline />} />
+        <Route path="predictive" element={<PredictiveAnalyticsPage />} />
         <Route path="briefing" element={<IGPBriefing />} />
         <Route path="profile" element={<ProfilePage />} />
       </Route>

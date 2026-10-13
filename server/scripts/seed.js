@@ -38,6 +38,30 @@ const commandUsers = [
   { username: 'lagos.command', level: 'state', stateName: 'Lagos' },
   { username: 'kano.command', level: 'state', stateName: 'Kano' },
   { username: 'area.ibadan', level: 'area', stateName: 'Oyo', lgaName: 'Ibadan North' },
+  { username: 'dpo.ibadan', level: 'area', stateName: 'Oyo', lgaName: 'Ibadan North' },
+]
+
+/**
+ * Field officers with an assigned polling unit, so reporting, DM authorization,
+ * and command interop work with real geo scoping across two states.
+ */
+const fieldOfficers = [
+  {
+    username: 'field.officer1',
+    fullName: 'Demo Officer One',
+    serviceNumber: 'NPF-FIELD-0001',
+    phone: '08000000001',
+    stateName: 'Oyo',
+    lgaName: 'Ibadan North',
+  },
+  {
+    username: 'field.officer2',
+    fullName: 'Demo Officer Two',
+    serviceNumber: 'NPF-FIELD-0002',
+    phone: '08000000002',
+    stateName: 'Lagos',
+    lgaName: null, // first LGA of the state
+  },
 ]
 
 async function main() {
@@ -172,6 +196,59 @@ async function main() {
       const scope =
         cu.level === 'national' ? 'Force HQ (national)' : cu.level === 'state' ? `${cu.stateName} State` : `${cu.lgaName} Area (LGA id ${lgaId})`
       console.log(`  command account ${cu.username} → ${scope}`)
+    }
+
+    // Field officers with polling-unit assignments (drives incident geo scoping,
+    // scoped DM authorization, and the officer map).
+    for (const fo of fieldOfficers) {
+      const s = await client.query('SELECT id FROM geo_states WHERE lower(name) = lower($1) LIMIT 1', [fo.stateName])
+      const stateId = s.rows[0]?.id ?? null
+      if (!stateId) {
+        console.warn(`  field account ${fo.username}: state ${fo.stateName} not found, skipped assignment`)
+        continue
+      }
+      let lgaId = null
+      if (fo.lgaName) {
+        const l = await client.query('SELECT id FROM geo_lgas WHERE lower(name) = lower($1) AND state_id = $2 LIMIT 1', [fo.lgaName, stateId])
+        lgaId = l.rows[0]?.id ?? null
+      }
+      if (!lgaId) {
+        const anyLga = await client.query('SELECT id FROM geo_lgas WHERE state_id = $1 ORDER BY name LIMIT 1', [stateId])
+        lgaId = anyLga.rows[0]?.id ?? null
+      }
+      const pu = await client.query(
+        `SELECT gp.id, gp.code FROM geo_polling_units gp
+         JOIN geo_wards gw ON gw.id = gp.ward_id
+         WHERE gw.lga_id = $1 ORDER BY gp.code LIMIT 1`,
+        [lgaId],
+      )
+      const puId = pu.rows[0]?.id ?? null
+
+      const u = await client.query(
+        `INSERT INTO app_users (username, password_hash, portal, onboarding_complete, password_must_change)
+         VALUES ($1, $2, 'field', true, false)
+         ON CONFLICT (username) DO UPDATE SET
+           password_hash = EXCLUDED.password_hash,
+           portal = 'field',
+           onboarding_complete = true,
+           password_must_change = false,
+           updated_at = now()
+         RETURNING id`,
+        [fo.username, demoHash],
+      )
+      const userId = u.rows[0].id
+      await client.query(
+        `INSERT INTO officer_profiles (user_id, full_name, service_number, phone, assigned_polling_unit_id, liveness_verified)
+         VALUES ($1, $2, $3, $4, $5, true)
+         ON CONFLICT (user_id) DO UPDATE SET
+           full_name = EXCLUDED.full_name,
+           service_number = EXCLUDED.service_number,
+           phone = EXCLUDED.phone,
+           assigned_polling_unit_id = EXCLUDED.assigned_polling_unit_id,
+           updated_at = now()`,
+        [userId, fo.fullName, fo.serviceNumber, fo.phone, puId],
+      )
+      console.log(`  field account ${fo.username} → PU ${pu.rows[0]?.code ?? 'UNASSIGNED'} (LGA id ${lgaId})`)
     }
 
     const ac = await client.query(`SELECT COUNT(*)::int AS c FROM audit_log`)

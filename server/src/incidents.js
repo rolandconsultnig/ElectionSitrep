@@ -652,6 +652,22 @@ export function createIncidentRouter({ pool, authMiddleware, requireAnyPortal, g
   })
 
   r.post('/sos/:id/resolve', authMiddleware, commandWrite, async (req, res) => {
+    // Jurisdiction check: a command tier may only resolve SOS alerts inside its scope.
+    const scope = await commandScope(pool, req.auth.sub)
+    if (scope.level !== 'national') {
+      const params = [req.params.id]
+      const sc = scopeSql(scope, 'g', params)
+      const visible = await pool.query(
+        `SELECT s.id FROM sos_alerts s
+         LEFT JOIN officer_profiles op ON op.user_id = s.user_id
+         LEFT JOIN geo_polling_units gp ON gp.id = op.assigned_polling_unit_id
+         LEFT JOIN geo_wards gw ON gw.id = gp.ward_id
+         LEFT JOIN (SELECT id AS lga_id, state_id FROM geo_lgas) g ON g.lga_id = gw.lga_id
+         WHERE s.id = $1 AND s.status = 'active'${sc}`,
+        params,
+      )
+      if (!visible.rows.length) return res.status(404).json({ error: 'No active SOS in your jurisdiction' })
+    }
     const up = await pool.query(
       `UPDATE sos_alerts SET status = 'resolved', resolved_at = now(), resolved_by = $2,
          note = COALESCE(note || E'\n', '') || $3
