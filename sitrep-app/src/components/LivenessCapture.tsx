@@ -248,7 +248,12 @@ export function LivenessCapture({ onVerified, resetKey = 0 }: Props) {
       } catch {
         if (!cancelled) {
           setModelStatus('error')
-          // Non-blocking: user can still click "Capture Live Photo Now"
+          // Keep the flow usable: tell the officer why the automated challenge
+          // is not progressing and point at the manual capture fallback.
+          setError(
+            'Automated face challenge could not start (vision model failed to load — check your connection). ' +
+              'You can still capture your photo with the button below, or upload a photo.',
+          )
         }
       }
     }
