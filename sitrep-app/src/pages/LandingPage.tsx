@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BrandLogo } from '../components/BrandLogo'
-import { CommandStructureTabs } from '../components/CommandStructureTabs'
+import { CommandOrganogram } from '../components/CommandOrganogram'
 import { Reveal } from '../components/Reveal'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { useAuth } from '../contexts/AuthContext'
@@ -557,8 +557,7 @@ export function LandingPage() {
               Reports climb. Visibility stays scoped.
             </h2>
             <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[var(--portal-muted)]">
-              Explore the five public tiers of the Nigeria Police Force: Force HQ, Zonal Commands, State Commands,
-              Divisional HQs and Police Stations.
+              Click an office to open the commands beneath it.
             </p>
             <Link
               to="/directory"
@@ -567,7 +566,7 @@ export function LandingPage() {
               Open full directory →
             </Link>
           </Reveal>
-          <CommandStructureTabs />
+          <CommandOrganogram />
         </section>
 
         {/* Capabilities */}
