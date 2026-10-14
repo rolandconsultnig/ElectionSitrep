@@ -131,8 +131,8 @@ function CountUp({ target, suffix = '' }: { target: number; suffix?: string }) {
       typeof IntersectionObserver === 'undefined' ||
       window.matchMedia('(prefers-reduced-motion: reduce)').matches
     ) {
-      setValue(target)
-      return
+      const reducedMotionRaf = window.requestAnimationFrame(() => setValue(target))
+      return () => window.cancelAnimationFrame(reducedMotionRaf)
     }
     let raf = 0
     const io = new IntersectionObserver(
@@ -214,6 +214,12 @@ export function LandingPage() {
                   {link.label}
                 </a>
               ))}
+              <Link
+                to="/directory"
+                className="sr-link-nav rounded-full px-3 py-1.5 font-(--font-mono) text-[10px] font-semibold uppercase tracking-wider"
+              >
+                Directory
+              </Link>
             </nav>
             {!user ? (
               <Link
@@ -467,10 +473,17 @@ export function LandingPage() {
                 <span className="z-10 flex size-10 shrink-0 items-center justify-center rounded-full border border-[#00c46a]/40 bg-[#00c46a]/10 font-(--font-mono) text-[9px] font-bold tracking-wider text-[#00c46a] shadow-[0_0_16px_rgba(0,196,106,0.15)]">
                   {c.tag}
                 </span>
-                <div className="flex-1 rounded-xl border border-[color:var(--portal-border)] bg-[color:var(--portal-table-row-hover)] px-4 py-3 transition-colors hover:border-[#00c46a]/30">
-                  <p className="text-sm font-semibold text-[var(--sr-heading)]">{c.tier}</p>
-                  <p className="mt-0.5 text-xs text-[var(--portal-muted)]">{c.detail}</p>
-                </div>
+                {i < 3 ? (
+                  <Link to="/directory" className="flex-1 rounded-xl border border-[color:var(--portal-border)] bg-[color:var(--portal-table-row-hover)] px-4 py-3 transition-colors hover:border-[#00c46a]/30">
+                    <p className="text-sm font-semibold text-[var(--sr-heading)]">{c.tier}</p>
+                    <p className="mt-0.5 text-xs text-[var(--portal-muted)]">{c.detail}</p>
+                  </Link>
+                ) : (
+                  <div className="flex-1 rounded-xl border border-[color:var(--portal-border)] bg-[color:var(--portal-table-row-hover)] px-4 py-3 transition-colors hover:border-[#00c46a]/30">
+                    <p className="text-sm font-semibold text-[var(--sr-heading)]">{c.tier}</p>
+                    <p className="mt-0.5 text-xs text-[var(--portal-muted)]">{c.detail}</p>
+                  </div>
+                )}
               </Reveal>
             ))}
           </ol>
