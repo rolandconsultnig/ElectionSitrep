@@ -14,6 +14,7 @@ import { createOtaRouter } from './ota.js'
 import { createAnalyticsRouter } from './analytics.js'
 import { createEc8aOcrRouter } from './ec8aOcr.js'
 import { createChatRouter } from './chat.js'
+import { createCommandDirectoryRouter } from './commandDirectory.js'
 import { checkDuressLogin, createIncident, createIncidentRouter, runSafetyTick } from './incidents.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -99,6 +100,7 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '12mb' }))
 app.use(sanitizeInput) // Sanitize all incoming requests
 app.use('/api', createIncidentRouter({ pool, authMiddleware, requireAnyPortal, getIo: () => io }))
+app.use('/api', createCommandDirectoryRouter({ pool, authMiddleware, optionalAuth, requireAdmin }))
 app.use('/api/chat', createChatRouter({ pool, authMiddleware, getIo: () => io }))
 app.use('/api/analytics', createAnalyticsRouter({ pool, authMiddleware, requireAnyPortal }))
 app.use('/api/operations/results', createEc8aOcrRouter({ pool, authMiddleware, requireAnyPortal }))
@@ -264,6 +266,19 @@ function authMiddleware(req, res, next) {
   } catch {
     return res.status(401).json({ error: 'Invalid or expired token' })
   }
+}
+
+function optionalAuth(req, _res, next) {
+  const h = req.headers.authorization
+  const token = h?.startsWith('Bearer ') ? h.slice(7) : null
+  if (token) {
+    try {
+      req.auth = jwt.verify(token, JWT_SECRET)
+    } catch {
+      req.auth = undefined
+    }
+  }
+  return next()
 }
 
 function requireAdmin(req, res, next) {
@@ -5596,4 +5611,3 @@ setInterval(() => {
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`[election-sitrep-api] listening on 0.0.0.0:${PORT}`)
 })
-
