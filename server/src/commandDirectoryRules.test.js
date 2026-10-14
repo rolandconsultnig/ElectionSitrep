@@ -40,12 +40,22 @@ test('rejects an imported office that names itself as its parent', () => {
 })
 
 test('omits personal OIC contacts unless authenticated serialization is requested', () => {
-  const row = { id: 4, level: 'station', name: 'Example', oic_phone: '08000000000', oic_email: 'test@example.invalid' }
+  const row = {
+    id: 4,
+    level: 'station',
+    name: 'Example',
+    oic_phone: '08000000000',
+    oic_email: 'test@example.invalid',
+    updated_by: 'internal-user-uuid',
+  }
   const publicOffice = serializeOffice(row)
   assert.equal(Object.hasOwn(publicOffice, 'oicPhone'), false)
   assert.equal(Object.hasOwn(publicOffice, 'oicEmail'), false)
-  assert.equal(serializeOffice(row, { includePersonal: true }).oicPhone, row.oic_phone)
-  assert.equal(serializeOffice(row, { includePersonal: true }).oicEmail, row.oic_email)
+  assert.equal(Object.hasOwn(publicOffice, 'updatedBy'), false)
+  const adminOffice = serializeOffice(row, { includePersonal: true, includeUpdatedBy: true })
+  assert.equal(adminOffice.oicPhone, row.oic_phone)
+  assert.equal(adminOffice.oicEmail, row.oic_email)
+  assert.equal(adminOffice.updatedBy, row.updated_by)
 })
 
 test('parses row errors and resolves parent codes defined earlier in the CSV', () => {

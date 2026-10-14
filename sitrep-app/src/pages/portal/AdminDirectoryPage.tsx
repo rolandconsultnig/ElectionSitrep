@@ -188,7 +188,9 @@ export function AdminDirectoryPage() {
             >
               <span className="font-(--font-mono) text-[9px] uppercase tracking-wider text-[#00c46a]">{LEVEL_LABELS[office.level]}</span>
               <h2 className="mt-1 break-words font-semibold text-[var(--portal-fg)]">{office.name}</h2>
-              <p className="mt-1 text-xs text-[var(--portal-muted)]">{office.code || 'No code'} · {office.childCount} child offices</p>
+              <p className="mt-1 text-xs text-[var(--portal-muted)]">
+                {office.code || 'No code'} · {office.childCount} {office.childCount === 1 ? 'child office' : 'child offices'}
+              </p>
               {!office.isActive ? <span className="mt-2 inline-block rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-400">Inactive</span> : null}
             </button>
             <button type="button" onClick={() => openEdit(office)} className="rounded-lg border border-[color:var(--portal-border)] px-3 py-1.5 text-xs text-[var(--portal-muted)] hover:text-[var(--portal-fg)]">

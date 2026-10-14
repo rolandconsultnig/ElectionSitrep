@@ -58,7 +58,7 @@ export function validateOffice(input, parentLevel, { forceHqExists = false } = {
   return null
 }
 
-export function serializeOffice(row, { includePersonal = false } = {}) {
+export function serializeOffice(row, { includePersonal = false, includeUpdatedBy = false } = {}) {
   const value = (camel, snake) => row[camel] ?? row[snake] ?? null
   const office = {
     id: row.id,
@@ -80,12 +80,12 @@ export function serializeOffice(row, { includePersonal = false } = {}) {
       : Number(row.childCount ?? row.child_count),
     createdAt: value('createdAt', 'created_at'),
     updatedAt: value('updatedAt', 'updated_at'),
-    updatedBy: value('updatedBy', 'updated_by'),
   }
   if (includePersonal) {
     office.oicPhone = value('oicPhone', 'oic_phone')
     office.oicEmail = value('oicEmail', 'oic_email')
   }
+  if (includeUpdatedBy) office.updatedBy = value('updatedBy', 'updated_by')
   return Object.fromEntries(Object.entries(office).filter(([, item]) => item !== undefined))
 }
 

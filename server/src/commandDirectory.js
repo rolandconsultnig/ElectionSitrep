@@ -228,7 +228,7 @@ export function createCommandDirectoryRouter({ pool, authMiddleware, optionalAut
         where.push(`o.level = 'force_hq'`)
       }
       const rows = await listOffices(pool, where, values, true)
-      return res.json({ offices: rows.map((row) => serializeOffice(row, { includePersonal: true })) })
+      return res.json({ offices: rows.map((row) => serializeOffice(row, { includePersonal: true, includeUpdatedBy: true })) })
     } catch (error) {
       console.error('[admin/directory/offices]', error)
       return res.status(500).json({ error: 'Failed to load offices' })
@@ -269,7 +269,7 @@ export function createCommandDirectoryRouter({ pool, authMiddleware, optionalAut
       const id = inserted.rows[0].id
       await writeAudit(client, req.auth.sub, 'create', id, { id })
       await client.query('COMMIT')
-      return res.status(201).json({ office: serializeOffice(await getOffice(pool, id), { includePersonal: true }) })
+      return res.status(201).json({ office: serializeOffice(await getOffice(pool, id), { includePersonal: true, includeUpdatedBy: true }) })
     } catch (error) {
       await client?.query('ROLLBACK').catch(() => {})
       if (error.code === '23505') return res.status(409).json({ error: 'Office code already exists or Force HQ is already configured' })
@@ -309,7 +309,7 @@ export function createCommandDirectoryRouter({ pool, authMiddleware, optionalAut
       }
       await writeAudit(client, req.auth.sub, 'update', id, { id })
       await client.query('COMMIT')
-      return res.json({ office: serializeOffice(await getOffice(pool, id), { includePersonal: true }) })
+      return res.json({ office: serializeOffice(await getOffice(pool, id), { includePersonal: true, includeUpdatedBy: true }) })
     } catch (error) {
       await client?.query('ROLLBACK').catch(() => {})
       if (error.code === '23505') return res.status(409).json({ error: 'Office code already exists or Force HQ is already configured' })

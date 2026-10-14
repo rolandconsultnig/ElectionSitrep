@@ -3,7 +3,9 @@ import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { BrandLogo } from '../components/BrandLogo'
 import { ThemeToggle } from '../components/ThemeToggle'
+import { useAuth } from '../contexts/AuthContext'
 import { apiJson } from '../lib/api'
+import { postLoginPath } from '../lib/navigation'
 
 type BreadcrumbItem = { id: number; level: string; name: string }
 type Office = {
@@ -54,6 +56,7 @@ function ListedValue({ label, value, href }: { label: string; value: string | nu
 
 export function DirectoryPage() {
   const { officeId } = useParams()
+  const { user } = useAuth()
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
@@ -91,10 +94,10 @@ export function DirectoryPage() {
           <div className="flex items-center gap-3">
             <Link to="/" className="sr-link-nav rounded-full px-3 py-1.5 font-(--font-mono) text-[10px] font-semibold uppercase tracking-wider">Home</Link>
             <Link
-              to="/login"
+              to={user ? postLoginPath(user) : '/login'}
               className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-b from-[#00c46a] to-[#00a35a] px-4 py-2 font-(--font-mono) text-[10px] font-bold uppercase tracking-wider text-[#04251f] shadow-[0_4px_20px_rgba(0,196,106,0.35)] transition hover:brightness-110"
             >
-              Sign in <span aria-hidden>→</span>
+              {user ? 'Open your portal' : 'Sign in'} <span aria-hidden>→</span>
             </Link>
             <ThemeToggle />
           </div>
