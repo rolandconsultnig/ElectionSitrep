@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BrandLogo } from '../components/BrandLogo'
 import { CommandStructureTabs } from '../components/CommandStructureTabs'
@@ -13,6 +13,14 @@ const SECTION_LINKS = [
   { id: 'capabilities', label: 'Capabilities' },
   { id: 'igp-message', label: "IGP's message" },
   { id: 'about', label: 'About' },
+] as const
+
+const DIRECTORY_TIERS = [
+  { label: 'Force HQ', tier: 'force_hq' },
+  { label: 'Zonal Commands', tier: 'zonal' },
+  { label: 'State Commands', tier: 'state' },
+  { label: 'Divisional HQs', tier: 'division' },
+  { label: 'Police Stations', tier: 'station' },
 ] as const
 
 const COVERAGE_STATS = [
@@ -172,6 +180,11 @@ export function LandingPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const progressRef = useRef<HTMLDivElement | null>(null)
+  const directoryMenuRef = useRef<HTMLDivElement | null>(null)
+  const directoryTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const directoryMenuItemsRef = useRef<Array<HTMLAnchorElement | null>>([])
+  const directoryFocusIndexRef = useRef(0)
+  const [directoryMenuOpen, setDirectoryMenuOpen] = useState(false)
 
   useEffect(() => {
     const onScroll = () => {
@@ -185,6 +198,54 @@ export function LandingPage() {
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
+
+  useEffect(() => {
+    if (!directoryMenuOpen) return
+    directoryMenuItemsRef.current[directoryFocusIndexRef.current]?.focus()
+    const onPointerDown = (event: PointerEvent) => {
+      if (!directoryMenuRef.current?.contains(event.target as Node)) setDirectoryMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [directoryMenuOpen])
+
+  function closeDirectoryMenu(returnFocus = false) {
+    setDirectoryMenuOpen(false)
+    if (returnFocus) directoryTriggerRef.current?.focus()
+  }
+
+  function handleDirectoryMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'Escape' && directoryMenuOpen) {
+      event.preventDefault()
+      closeDirectoryMenu(true)
+      return
+    }
+    if (event.key === 'Tab' && directoryMenuOpen) {
+      setDirectoryMenuOpen(false)
+      return
+    }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+
+    if (!directoryMenuOpen) {
+      if (event.target !== directoryTriggerRef.current) return
+      event.preventDefault()
+      directoryFocusIndexRef.current = event.key === 'ArrowUp' ? DIRECTORY_TIERS.length : 0
+      setDirectoryMenuOpen(true)
+      return
+    }
+
+    const currentIndex = directoryMenuItemsRef.current.findIndex((item) => item === document.activeElement)
+    let nextIndex = currentIndex
+    if (event.key === 'Home') nextIndex = 0
+    else if (event.key === 'End') nextIndex = directoryMenuItemsRef.current.length - 1
+    else if (event.key === 'ArrowDown') nextIndex = (currentIndex + 1) % directoryMenuItemsRef.current.length
+    else if (event.key === 'ArrowUp') {
+      nextIndex = (currentIndex + directoryMenuItemsRef.current.length - 1) % directoryMenuItemsRef.current.length
+    }
+    event.preventDefault()
+    directoryFocusIndexRef.current = nextIndex
+    directoryMenuItemsRef.current[nextIndex]?.focus()
+  }
 
   return (
     <div className="sr-app-bg relative min-h-full">
@@ -207,12 +268,58 @@ export function LandingPage() {
                   {link.label}
                 </a>
               ))}
-              <Link
-                to="/directory"
-                className="sr-link-nav rounded-full px-3 py-1.5 font-(--font-mono) text-[10px] font-semibold uppercase tracking-wider"
+              <div
+                ref={directoryMenuRef}
+                className="relative z-[100]"
+                onKeyDown={handleDirectoryMenuKeyDown}
               >
-                Directory
-              </Link>
+                <button
+                  ref={directoryTriggerRef}
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={directoryMenuOpen}
+                  aria-controls="landing-directory-menu"
+                  onClick={() => {
+                    if (!directoryMenuOpen) directoryFocusIndexRef.current = 0
+                    setDirectoryMenuOpen(!directoryMenuOpen)
+                  }}
+                  className="sr-link-nav rounded-full px-3 py-1.5 font-(--font-mono) text-[10px] font-semibold uppercase tracking-wider"
+                >
+                  Directory <span aria-hidden>▾</span>
+                </button>
+                <div
+                  id="landing-directory-menu"
+                  role="menu"
+                  aria-label="Command directory"
+                  hidden={!directoryMenuOpen}
+                  className="absolute right-0 top-full z-[100] mt-2 w-64 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-[color:var(--portal-border)] bg-[color:var(--sr-header-bg)] p-1 shadow-xl backdrop-blur-xl"
+                >
+                  {DIRECTORY_TIERS.map(({ label, tier }, index) => (
+                    <Link
+                      key={tier}
+                      ref={(element) => { directoryMenuItemsRef.current[index] = element }}
+                      role="menuitem"
+                      tabIndex={-1}
+                      to={`/?tier=${tier}#command`}
+                      onClick={() => closeDirectoryMenu(true)}
+                      className="flex min-h-10 items-center rounded-lg px-3 py-2 font-(--font-mono) text-[10px] font-semibold uppercase tracking-wider text-[var(--portal-muted)] transition hover:bg-[color:var(--portal-table-row-hover)] hover:text-[#00c46a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00c46a]/60"
+                    >
+                      {label}
+                    </Link>
+                  ))}
+                  <div role="separator" className="my-1 border-t border-[color:var(--portal-border)]" />
+                  <Link
+                    ref={(element) => { directoryMenuItemsRef.current[DIRECTORY_TIERS.length] = element }}
+                    role="menuitem"
+                    tabIndex={-1}
+                    to="/directory"
+                    onClick={() => closeDirectoryMenu(true)}
+                    className="flex min-h-10 items-center rounded-lg px-3 py-2 font-(--font-mono) text-[10px] font-semibold uppercase tracking-wider text-[#00c46a] transition hover:bg-[color:var(--portal-table-row-hover)] hover:text-[var(--sr-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00c46a]/60"
+                  >
+                    Full directory →
+                  </Link>
+                </div>
+              </div>
             </nav>
             {!user ? (
               <Link

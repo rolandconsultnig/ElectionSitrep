@@ -1,6 +1,6 @@
 import { useQueries } from '@tanstack/react-query'
-import { useRef, useState, type KeyboardEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { apiJson } from '../lib/api'
 
 type OfficeLevel = 'force_hq' | 'zonal' | 'state' | 'division' | 'station'
@@ -56,6 +56,8 @@ const NEXT_LEVEL_LABELS: Partial<Record<OfficeLevel, string>> = {
 export function CommandStructureTabs() {
   const [activeLevel, setActiveLevel] = useState<OfficeLevel>('force_hq')
   const [filter, setFilter] = useState<ParentFilter | null>(null)
+  const [searchParams] = useSearchParams()
+  const tierParam = searchParams.get('tier')
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const officeQueries = useQueries({
     queries: COMMAND_LEVELS.map(({ level }) => ({
@@ -64,6 +66,17 @@ export function CommandStructureTabs() {
       staleTime: 60_000,
     })),
   })
+
+  useEffect(() => {
+    const requestedLevel = COMMAND_LEVELS.find(({ level }) => level === tierParam)?.level
+    if (!requestedLevel) return
+    const frame = window.requestAnimationFrame(() => {
+      setActiveLevel(requestedLevel)
+      setFilter(null)
+      document.getElementById('command')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [tierParam])
 
   const activeIndex = COMMAND_LEVELS.findIndex(({ level }) => level === activeLevel)
   const activeTab = COMMAND_LEVELS[activeIndex]
