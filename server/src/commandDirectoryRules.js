@@ -66,6 +66,7 @@ export function serializeOffice(row, { includePersonal = false, includeUpdatedBy
     name: row.name,
     code: row.code ?? null,
     parentId: value('parentId', 'parent_id'),
+    parentName: value('parentName', 'parent_name'),
     stateId: value('stateId', 'state_id'),
     stateName: value('stateName', 'state_name'),
     address: row.address ?? null,
