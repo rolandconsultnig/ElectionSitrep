@@ -16,6 +16,7 @@ const OFFICE_SELECT = `
          o.sort_order AS "sortOrder", o.is_active AS "isActive",
          o.created_at AS "createdAt", o.updated_at AS "updatedAt",
          o.updated_by AS "updatedBy",
+         (SELECT parent.name FROM police_offices parent WHERE parent.id = o.parent_id) AS "parentName",
          (SELECT COUNT(*)::int FROM police_offices child WHERE child.parent_id = o.id AND child.is_active = TRUE) AS "childCount"
   FROM police_offices o
   LEFT JOIN geo_states s ON s.id = o.state_id
@@ -178,7 +179,8 @@ export function createCommandDirectoryRouter({ pool, authMiddleware, optionalAut
       } else {
         where.push(`o.level = 'force_hq'`)
       }
-      const offices = await listOffices(pool, where, values, false, q ? 50 : null)
+      const levelListing = !q && parentId == null && Boolean(level)
+      const offices = await listOffices(pool, where, values, false, q ? 50 : levelListing ? 500 : null)
       const includePersonal = Boolean(req.auth)
       const serialized = await Promise.all(offices.map(async (row) => {
         const office = serializeOffice(row, { includePersonal })

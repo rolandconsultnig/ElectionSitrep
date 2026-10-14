@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { BrandLogo } from '../components/BrandLogo'
+import { CommandStructureTabs } from '../components/CommandStructureTabs'
 import { Reveal } from '../components/Reveal'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { useAuth } from '../contexts/AuthContext'
@@ -58,14 +59,6 @@ const PORTAL_CARDS = [
     bar: 'bg-[#d9b64a]',
     glow: 'rgba(0, 200, 150, 0.16)',
   },
-] as const
-
-const COMMAND_CHAIN = [
-  { tier: 'Force Headquarters', detail: 'National situation room · IGP & command staff', tag: 'FHQ' },
-  { tier: 'Zonal Commands', detail: 'Multi-state coordination and reinforcement', tag: 'ZONAL' },
-  { tier: 'State Commands', detail: 'State-scoped dashboards · 36 states + FCT', tag: 'STATE' },
-  { tier: 'Area Commands', detail: 'LGA-scoped feeds, wards and polling units', tag: 'AREA' },
-  { tier: 'Polling Units', detail: 'Field officers file from the point of voting', tag: 'PU' },
 ] as const
 
 const CAPABILITIES = [
@@ -457,36 +450,17 @@ export function LandingPage() {
               Reports climb. Visibility stays scoped.
             </h2>
             <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[var(--portal-muted)]">
-              Each tier of the Nigeria Police Force operates its own situation room. A state command dashboard contains
-              that state alone; an area command contains its LGA; Force Headquarters holds the national picture.
+              Explore the five public tiers of the Nigeria Police Force: Force HQ, Zonal Commands, State Commands,
+              Divisional HQs and Police Stations.
             </p>
+            <Link
+              to="/directory"
+              className="mt-4 inline-flex font-(--font-mono) text-[10px] font-semibold uppercase tracking-wider text-[#00c46a] transition hover:text-[var(--sr-heading)]"
+            >
+              Open full directory →
+            </Link>
           </Reveal>
-          <ol className="mt-8 space-y-0">
-            {COMMAND_CHAIN.map((c, i) => (
-              <Reveal as="li" key={c.tier} delay={i * 80} className="relative flex gap-4 pb-6 last:pb-0">
-                {i < COMMAND_CHAIN.length - 1 ? (
-                  <span
-                    className="absolute left-[19px] top-10 h-full w-px bg-gradient-to-b from-[#00c46a]/50 via-[color:var(--portal-border)] to-transparent"
-                    aria-hidden
-                  />
-                ) : null}
-                <span className="z-10 flex size-10 shrink-0 items-center justify-center rounded-full border border-[#00c46a]/40 bg-[#00c46a]/10 font-(--font-mono) text-[9px] font-bold tracking-wider text-[#00c46a] shadow-[0_0_16px_rgba(0,196,106,0.15)]">
-                  {c.tag}
-                </span>
-                {i < 3 ? (
-                  <Link to="/directory" className="flex-1 rounded-xl border border-[color:var(--portal-border)] bg-[color:var(--portal-table-row-hover)] px-4 py-3 transition-colors hover:border-[#00c46a]/30">
-                    <p className="text-sm font-semibold text-[var(--sr-heading)]">{c.tier}</p>
-                    <p className="mt-0.5 text-xs text-[var(--portal-muted)]">{c.detail}</p>
-                  </Link>
-                ) : (
-                  <div className="flex-1 rounded-xl border border-[color:var(--portal-border)] bg-[color:var(--portal-table-row-hover)] px-4 py-3 transition-colors hover:border-[#00c46a]/30">
-                    <p className="text-sm font-semibold text-[var(--sr-heading)]">{c.tier}</p>
-                    <p className="mt-0.5 text-xs text-[var(--portal-muted)]">{c.detail}</p>
-                  </div>
-                )}
-              </Reveal>
-            ))}
-          </ol>
+          <CommandStructureTabs />
         </section>
 
         {/* Capabilities */}
