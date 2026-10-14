@@ -12,6 +12,7 @@ import { pool } from './db.js'
 import { initWebSockets } from './websockets.js'
 import { createOtaRouter } from './ota.js'
 import { createAnalyticsRouter } from './analytics.js'
+import { createEc8aOcrRouter } from './ec8aOcr.js'
 import { createChatRouter } from './chat.js'
 import { checkDuressLogin, createIncident, createIncidentRouter, runSafetyTick } from './incidents.js'
 
@@ -100,6 +101,7 @@ app.use(sanitizeInput) // Sanitize all incoming requests
 app.use('/api', createIncidentRouter({ pool, authMiddleware, requireAnyPortal, getIo: () => io }))
 app.use('/api/chat', createChatRouter({ pool, authMiddleware, getIo: () => io }))
 app.use('/api/analytics', createAnalyticsRouter({ pool, authMiddleware, requireAnyPortal }))
+app.use('/api/operations/results', createEc8aOcrRouter({ pool, authMiddleware, requireAnyPortal }))
 app.use('/api/ota', createOtaRouter(process.env.OTA_DIR || path.join(__dirname, '../../ota')))
 
 // Simple in-memory rate limiter for auth endpoints

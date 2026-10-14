@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiJson } from '../../lib/api'
+import { Ec8aPhotoCapture } from './Ec8aPhotoCapture'
 
 export type Ec8aRecord = {
   id: number
@@ -556,6 +557,33 @@ export function FieldEc8aEvidenceCapture({
   const [calculatedHash, setCalculatedHash] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [ocrApplied, setOcrApplied] = useState<string | null>(null)
+  const [showOcrText, setShowOcrText] = useState(false)
+
+  const ocrMutation = useMutation({
+    mutationFn: async () => {
+      if (!photoUrl.startsWith('data:image/')) {
+        throw new Error('Capture or upload the sheet photo first — OCR needs an image (not a URL).')
+      }
+      return apiJson<{ rows: number[][]; numbers: number[]; text: string; hint: string }>(
+        '/api/operations/results/ec8a/ocr',
+        { method: 'POST', body: JSON.stringify({ imageDataUrl: photoUrl }) },
+      )
+    },
+  })
+
+  const applyOcrToParties = () => {
+    const numbers = ocrMutation.data?.numbers ?? []
+    if (!numbers.length || !parties.length) return
+    const next: Record<string, number> = {}
+    const applied: string[] = []
+    parties.slice(0, numbers.length).forEach((party, i) => {
+      next[party.abbreviation] = numbers[i]
+      applied.push(`${party.abbreviation}=${numbers[i]}`)
+    })
+    setPartyVotes(next)
+    setOcrApplied(`Applied in reading order — ${applied.join(' · ')}. Verify each figure against the sheet before submitting.`)
+  }
 
   const handleVoteChange = (abbr: string, val: string) => {
     const num = Math.max(0, parseInt(val, 10) || 0)
@@ -730,22 +758,102 @@ export function FieldEc8aEvidenceCapture({
         </div>
       </div>
 
-      {/* Photo Attachment URL / Base64 & Observer Witness */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-[color:var(--portal-border)] pt-4">
-        <div>
-          <label className="block text-xs font-medium text-[var(--portal-muted)] mb-1">
-            EC8A Result Sheet Photo (URL or Base64)
+      {/* Photo capture (camera / upload) + OCR figure extraction */}
+      <div className="space-y-3 border-t border-[color:var(--portal-border)] pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <label className="block text-xs font-medium text-[var(--portal-muted)]">
+            EC8A Result Sheet — Camera Capture &amp; OCR
           </label>
+          <button
+            type="button"
+            disabled={ocrMutation.isPending || !photoUrl}
+            onClick={() => ocrMutation.mutate()}
+            className="sr-btn-ghost px-3 py-1.5 text-xs font-semibold text-[#00c46a] disabled:opacity-50"
+          >
+            {ocrMutation.isPending ? '⏳ Reading sheet…' : '🔍 Extract figures (OCR)'}
+          </button>
+        </div>
+
+        <Ec8aPhotoCapture
+          currentPhoto={photoUrl.startsWith('data:image/') ? photoUrl : ''}
+          onCaptured={(dataUrl) => {
+            setPhotoUrl(dataUrl)
+            setCalculatedHash(null)
+            ocrMutation.reset()
+            setOcrApplied(null)
+          }}
+          onClear={() => {
+            setPhotoUrl('')
+            ocrMutation.reset()
+            setOcrApplied(null)
+          }}
+        />
+
+        {!photoUrl.startsWith('data:image/') ? (
           <input
             type="text"
             value={photoUrl}
             onChange={(e) => setPhotoUrl(e.target.value)}
-            placeholder="https://… or camera capture data"
+            placeholder="…or paste a photo URL / base64"
             className="w-full rounded-lg border border-[color:var(--portal-border)] bg-[color:var(--portal-input-bg)] px-3 py-2 text-xs text-[var(--portal-fg)] focus:border-[#00c46a] focus:outline-none"
           />
-        </div>
+        ) : null}
 
-        <div className="grid grid-cols-2 gap-2">
+        {ocrMutation.isError ? (
+          <p className="text-xs text-[#fca5a5]" role="alert">
+            {(ocrMutation.error as Error)?.message || 'OCR failed — check your connection and retry.'}
+          </p>
+        ) : null}
+
+        {ocrMutation.data ? (
+          <div className="rounded-xl border border-[color:var(--portal-border)] bg-[color:var(--portal-input-bg)]/40 p-3 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-[var(--portal-fg)]">
+                OCR found {ocrMutation.data.numbers.length} figure{ocrMutation.data.numbers.length === 1 ? '' : 's'} (reading order)
+              </span>
+              <div className="flex gap-2">
+                <button type="button" onClick={applyOcrToParties} className="sr-btn-primary px-3 py-1.5 text-[11px] font-semibold">
+                  Apply to party votes in order
+                </button>
+                <button type="button" onClick={() => setShowOcrText((s) => !s)} className="sr-btn-ghost px-3 py-1.5 text-[11px]">
+                  {showOcrText ? 'Hide raw text' : 'Show raw text'}
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {ocrMutation.data.numbers.map((n, i) => (
+                <span
+                  key={`${n}-${i}`}
+                  className="rounded-full border border-[color:var(--portal-border)] bg-[color:var(--portal-input-bg)] px-2.5 py-1 font-(--font-mono) text-[11px] text-[var(--portal-fg)]"
+                >
+                  {n.toLocaleString()}
+                </span>
+              ))}
+              {!ocrMutation.data.numbers.length ? (
+                <span className="text-xs text-[var(--portal-muted)]">
+                  No figures recognized — retake the photo (fill the frame, avoid glare) or type the figures manually.
+                </span>
+              ) : null}
+            </div>
+            {showOcrText ? (
+              <pre className="max-h-32 overflow-auto rounded-lg bg-black/30 p-2 font-(--font-mono) text-[10px] leading-relaxed text-[var(--portal-muted)]">
+                {ocrMutation.data.text || '(empty)'}
+              </pre>
+            ) : null}
+            <p className="text-[10px] text-[var(--portal-muted)]">{ocrMutation.data.hint}</p>
+          </div>
+        ) : null}
+
+        {ocrApplied ? (
+          <p className="rounded-lg border border-[#00c46a]/40 bg-[#00c46a]/10 p-2.5 text-xs text-[#00c46a]" role="status">
+            ✓ {ocrApplied}
+          </p>
+        ) : null}
+      </div>
+
+      {/* Observer witness */}
+      {/* Observer witness */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-[color:var(--portal-border)] pt-4">
           <div>
             <label className="block text-xs font-medium text-[var(--portal-muted)] mb-1">
               Observer / Agent Witness
@@ -770,7 +878,6 @@ export function FieldEc8aEvidenceCapture({
               className="w-full rounded-lg border border-[color:var(--portal-border)] bg-[color:var(--portal-input-bg)] px-3 py-2 text-xs text-[var(--portal-fg)] focus:border-[#00c46a] focus:outline-none"
             />
           </div>
-        </div>
       </div>
 
       {/* Submit Button */}
