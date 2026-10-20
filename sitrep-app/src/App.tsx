@@ -3,6 +3,7 @@ import { PortalGate } from './components/PortalGate'
 import { useAuth } from './contexts/AuthContext'
 import { postLoginPath } from './lib/navigation'
 import { LandingPage } from './pages/LandingPage'
+import { DirectoryPage } from './pages/DirectoryPage'
 import { LoginPage } from './pages/LoginPage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { ProfilePage } from './pages/ProfilePage'
@@ -20,6 +21,7 @@ import {
   AdminSettings,
   AdminUsers,
 } from './pages/portal/AdminPortalPages'
+import { AdminDirectoryPage } from './pages/portal/AdminDirectoryPage'
 import {
   FieldDashboard,
   FieldHistory,
@@ -106,6 +108,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
+      <Route path="/directory" element={<DirectoryPage />} />
+      <Route path="/directory/:officeId" element={<DirectoryPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/onboarding" element={<OnboardingGate />} />
       <Route path="/situation-room" element={<SituationRoomDashboard />} />
@@ -118,6 +122,7 @@ export default function App() {
         <Route path="parties" element={<AdminParties />} />
         <Route path="candidates" element={<AdminCandidates />} />
         <Route path="geography" element={<AdminGeography />} />
+        <Route path="directory" element={<AdminDirectoryPage />} />
         <Route path="operations-map" element={<AdminOperationsMap />} />
         <Route path="incident-command" element={<IncidentCommandPage />} />
         <Route path="users" element={<AdminUsers />} />

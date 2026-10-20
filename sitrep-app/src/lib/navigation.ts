@@ -71,6 +71,7 @@ export const PORTALS: Record<PortalId, PortalMeta> = {
             icon: '🔑',
             path: 'credential-batches',
           },
+          { id: 'directory', moduleCode: 'M06c', label: 'Command Directory', icon: '🏛', path: 'directory' },
         ],
       },
       {
