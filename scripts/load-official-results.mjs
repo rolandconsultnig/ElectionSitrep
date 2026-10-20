@@ -19,7 +19,7 @@ import { pool } from '../server/src/db.js'
 const DATA = [
   {
     slug: 'ekiti-gubernatorial-election',
-    stateId: 22,
+    stateCode: 'EK',
     votes: {
       APC: 319224, PDP: 40543, ADC: 12872, A: 564, AA: 126, AAC: 195, ADP: 1269,
       APM: 59, APP: 61, LP: 276, NNPP: 35, PRP: 163, SDP: 179, YPP: 98, ZLP: 113,
@@ -36,7 +36,7 @@ const DATA = [
   },
   {
     slug: 'osun-gubernatorial-election',
-    stateId: 36,
+    stateCode: 'OS',
     votes: {
       A: 511067, APC: 444815, ADC: 17180, ADP: 2946, ZLP: 2482, AA: 2308, APGA: 1474,
       AAC: 1458, YPP: 534, APM: 234, SDP: 155, APP: 114, PRP: 83,
@@ -63,6 +63,12 @@ async function main() {
       if (!el.rows.length) throw new Error(`Election not found: ${d.slug} — run configure-ekiti-osun-elections.mjs first`)
       const electionId = el.rows[0].id
 
+      // geo_states.id differs per environment (Ekiti is 22 locally, 16 in
+      // production), so resolve through the stable INEC two-letter code.
+      const st = await client.query(`SELECT id, name FROM geo_states WHERE code = $1`, [d.stateCode])
+      if (!st.rows.length) throw new Error(`No geo_states row for code ${d.stateCode}`)
+      const stateId = st.rows[0].id
+
       // election metadata: real category, state link, INEC close-of-voting time, official totals
       await client.query(
         `UPDATE elections SET
@@ -74,7 +80,7 @@ async function main() {
            official_totals = $3::jsonb,
            updated_at = now()
          WHERE id = $1`,
-        [electionId, d.stateId, JSON.stringify(d.totals)],
+        [electionId, stateId, JSON.stringify(d.totals)],
       )
 
       // official per-party results

@@ -12,7 +12,7 @@ const EKITI = {
   slug: 'ekiti-gubernatorial-election',
   name: 'Ekiti State Governorship Election 2026',
   date: '2026-06-20',
-  stateId: 22, // Ekiti
+  stateCode: 'EK',
   lgas: 16,
   pus: 2445,
   candidates: [
@@ -38,7 +38,7 @@ const OSUN = {
   slug: 'osun-gubernatorial-election',
   name: 'Osun State Governorship Election 2026',
   date: '2026-08-15',
-  stateId: 36, // Osun
+  stateCode: 'OS',
   lgas: 30,
   pus: 3763,
   candidates: [
@@ -58,7 +58,19 @@ const OSUN = {
   ],
 }
 
+/**
+ * geo_states.id is assigned by insertion order and differs between environments
+ * (Ekiti is 22 locally but 16 in production), so it can never be hardcoded.
+ * The INEC two-letter code is stable, so resolve through that.
+ */
+async function resolveState(client, code) {
+  const r = await client.query(`SELECT id, name FROM geo_states WHERE code = $1`, [code])
+  if (!r.rows.length) throw new Error(`No geo_states row for code ${code}`)
+  return r.rows[0]
+}
+
 async function configure(client, cfg) {
+  const state = await resolveState(client, cfg.stateCode)
   const el = await client.query(
     `INSERT INTO elections (slug, name, election_type, election_contest_types, election_date, jurisdictions_count, pu_count, status)
      VALUES ($1, $2, 'gubernatorial', '["governorship"]'::jsonb, $3, $4, $5, 'closed')
@@ -79,7 +91,7 @@ async function configure(client, cfg) {
   await client.query(
     `INSERT INTO election_scope_items (election_id, level, ref_id, included) VALUES ($1, 'state', $2, true)
      ON CONFLICT (election_id, level, ref_id) DO NOTHING`,
-    [electionId, cfg.stateId],
+    [electionId, state.id],
   )
 
   let added = 0
@@ -94,7 +106,7 @@ async function configure(client, cfg) {
     )
     added++
   }
-  return { electionId, added, missing }
+  return { electionId, added, missing, state }
 }
 
 async function main() {
@@ -103,7 +115,10 @@ async function main() {
     await client.query('BEGIN')
     for (const cfg of [EKITI, OSUN]) {
       const r = await configure(client, cfg)
-      console.log(`${cfg.name}: id=${r.electionId} candidates=${r.added}${r.missing.length ? ' MISSING PARTIES: ' + r.missing.join(',') : ''}`)
+      console.log(
+        `${cfg.name}: id=${r.electionId} state=${r.state.name}(${cfg.stateCode}/id ${r.state.id}) candidates=${r.added}` +
+          `${r.missing.length ? ' MISSING PARTIES: ' + r.missing.join(',') : ''}`,
+      )
     }
     await client.query('COMMIT')
   } catch (e) {
