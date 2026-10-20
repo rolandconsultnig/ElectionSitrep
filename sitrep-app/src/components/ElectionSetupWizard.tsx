@@ -9,11 +9,43 @@ type ApiParty = {
   abbreviation: string
 }
 
-type FullTree = {
-  states: { id: number; code: string; name: string }[]
-  lgas: { id: number; stateId: number; code: string; name: string }[]
-  wards: { id: number; lgaId: number; code: string; name: string }[]
-  pollingUnits: { id: number; wardId: number; code: string; name: string; lat: number; lng: number }[]
+type GeoState = { id: number; code: string; name: string }
+type GeoLga = { id: number; stateId: number; code: string; name: string }
+type GeoWard = { id: number; lgaId: number; code: string; name: string }
+type GeoPu = { id: number; wardId: number; code: string; name: string; lat: number; lng: number }
+
+// Geography loads lazily per level — the old /full-tree payload was ~25MB
+// (the whole 200k-PU catalog) and froze this wizard on real networks.
+function useGeoStates(enabled: boolean) {
+  return useQuery({
+    queryKey: ['geo-states'],
+    queryFn: () => apiJson<{ states: GeoState[] }>('/api/geography/states'),
+    enabled,
+  })
+}
+
+function useGeoLgas(stateId: number | null) {
+  return useQuery({
+    queryKey: ['geo-lgas', stateId],
+    queryFn: () => apiJson<{ lgas: GeoLga[] }>(`/api/geography/lgas?stateId=${stateId}`),
+    enabled: stateId !== null,
+  })
+}
+
+function useGeoWards(lgaId: number | null) {
+  return useQuery({
+    queryKey: ['geo-wards', lgaId],
+    queryFn: () => apiJson<{ wards: GeoWard[] }>(`/api/geography/wards?lgaId=${lgaId}`),
+    enabled: lgaId !== null,
+  })
+}
+
+function useGeoPus(wardId: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ['geo-pus', wardId],
+    queryFn: () => apiJson<{ pollingUnits: GeoPu[] }>(`/api/geography/polling-units?wardId=${wardId}`),
+    enabled,
+  })
 }
 
 const ALL_CONTEST_CODES: ContestCode[] = [
@@ -164,24 +196,23 @@ function geoBlocksToScopeItems(blocks: GeoStateBlock[]): { level: string; refId:
   return out
 }
 
-function hydrateGeoBlocksFromSetup(
-  data: {
-    states: { id: number; included: boolean }[]
-    lgas: { id: number; stateId: number; included: boolean }[]
-    wards: { id: number; lgaId: number; included: boolean }[]
-    pollingUnits: { id: number; wardId: number; included: boolean }[]
-  },
-  tree: FullTree,
-): GeoStateBlock[] {
+// The setup payload carries parent ids on every included row, so ancestry
+// resolves without the full geography catalog.
+function hydrateGeoBlocksFromSetup(data: {
+  states: { id: number; included: boolean }[]
+  lgas: { id: number; stateId: number; included: boolean }[]
+  wards: { id: number; lgaId: number; included: boolean }[]
+  pollingUnits: { id: number; wardId: number; included: boolean }[]
+}): GeoStateBlock[] {
+  const lgaById = new Map(data.lgas.map((l) => [l.id, l]))
+  const wardById = new Map(data.wards.map((w) => [w.id, w]))
   const includedPus = data.pollingUnits.filter((p) => p.included)
   if (includedPus.length > 0) {
     const byState = new Map<number, Map<number, { wardId: number; puId: number }[]>>()
     for (const row of includedPus) {
-      const pu = tree.pollingUnits.find((x) => x.id === row.id)
-      if (!pu) continue
-      const ward = tree.wards.find((w) => w.id === pu.wardId)
+      const ward = wardById.get(row.wardId)
       if (!ward) continue
-      const lga = tree.lgas.find((l) => l.id === ward.lgaId)
+      const lga = lgaById.get(ward.lgaId)
       if (!lga) continue
       const sid = lga.stateId
       if (!byState.has(sid)) byState.set(sid, new Map())
@@ -245,11 +276,7 @@ export function ElectionSetupWizard({ open, mode, editSlug, onClose, onSaved }: 
     enabled: open,
   })
 
-  const treeQuery = useQuery({
-    queryKey: ['geography-full-tree'],
-    queryFn: () => apiJson<FullTree>('/api/geography/full-tree'),
-    enabled: open,
-  })
+  const statesQuery = useGeoStates(open)
 
   const setupQuery = useQuery({
     queryKey: ['election-setup', editSlug],
@@ -276,7 +303,7 @@ export function ElectionSetupWizard({ open, mode, editSlug, onClose, onSaved }: 
   const [submitErr, setSubmitErr] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const tree = treeQuery.data
+  const states = statesQuery.data?.states
 
   const lockedStateId =
     needsStateScopedContest(contestTypes) && typeof govStateId === 'number'
@@ -286,10 +313,9 @@ export function ElectionSetupWizard({ open, mode, editSlug, onClose, onSaved }: 
   const [prevOpen, setPrevOpen] = useState(open)
   const [prevMode, setPrevMode] = useState(mode)
   const [prevSetupData, setPrevSetupData] = useState(setupQuery.data)
-  const [prevTree, setPrevTree] = useState(tree)
   const [prevLockedStateId, setPrevLockedStateId] = useState<number | null>(null)
 
-  if (open !== prevOpen || mode !== prevMode || setupQuery.data !== prevSetupData || tree !== prevTree || lockedStateId !== prevLockedStateId) {
+  if (open !== prevOpen || mode !== prevMode || setupQuery.data !== prevSetupData || lockedStateId !== prevLockedStateId) {
     let nextBlocks = geoBlocks
 
     if (open !== prevOpen || mode !== prevMode) {
@@ -308,10 +334,9 @@ export function ElectionSetupWizard({ open, mode, editSlug, onClose, onSaved }: 
       }
     }
 
-    if (setupQuery.data !== prevSetupData || tree !== prevTree) {
+    if (setupQuery.data !== prevSetupData) {
       setPrevSetupData(setupQuery.data)
-      setPrevTree(tree)
-      if (open && mode === 'edit' && setupQuery.data && tree) {
+      if (open && mode === 'edit' && setupQuery.data) {
         const e = setupQuery.data.election
         setName(e.name)
         setElectionDate(e.electionDate ?? '')
@@ -322,7 +347,7 @@ export function ElectionSetupWizard({ open, mode, editSlug, onClose, onSaved }: 
         const cand: Record<string, string> = {}
         for (const p of setupQuery.data.parties) cand[p.partyId] = p.candidateName
         setCandidateByParty(cand)
-        nextBlocks = hydrateGeoBlocksFromSetup(setupQuery.data, tree)
+        nextBlocks = hydrateGeoBlocksFromSetup(setupQuery.data)
       }
     }
 
@@ -347,7 +372,7 @@ export function ElectionSetupWizard({ open, mode, editSlug, onClose, onSaved }: 
     govStateId === 'all'
       ? 'All states'
       : govStateId !== ''
-        ? tree?.states.find((s) => s.id === Number(govStateId))?.name ?? ''
+        ? states?.find((s) => s.id === Number(govStateId))?.name ?? ''
         : ''
 
   function setBlockState(idx: number, stateId: number | '') {
@@ -529,7 +554,7 @@ export function ElectionSetupWizard({ open, mode, editSlug, onClose, onSaved }: 
 
   if (!open) return null
 
-  const loading = partiesQuery.isLoading || treeQuery.isLoading || (mode === 'edit' && setupQuery.isLoading)
+  const loading = partiesQuery.isLoading || statesQuery.isLoading || (mode === 'edit' && setupQuery.isLoading)
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -669,7 +694,7 @@ export function ElectionSetupWizard({ open, mode, editSlug, onClose, onSaved }: 
                       {contestTypes.includes('governorship') ? (
                         <option value="all">All states (nationwide)</option>
                       ) : null}
-                      {(tree?.states ?? []).map((s) => (
+                      {(states ?? []).map((s) => (
                         <option key={s.id} value={s.id}>
                           {s.name} ({s.code})
                         </option>
@@ -738,7 +763,7 @@ export function ElectionSetupWizard({ open, mode, editSlug, onClose, onSaved }: 
                         : ' Fresh election: same automatic full scope.'}
                     </p>
                   </div>
-                ) : !tree ? (
+                ) : !states ? (
                   <p className="text-sm text-[var(--portal-muted)]">Loading geography…</p>
                 ) : (
                   <div className="space-y-4">
@@ -752,176 +777,23 @@ export function ElectionSetupWizard({ open, mode, editSlug, onClose, onSaved }: 
                         : null}
                     </p>
                   <div className="space-y-6">
-                    {geoBlocks.map((block, bi) => {
-                      const stateOptions =
-                        lockedStateId !== null ? tree.states.filter((s) => s.id === lockedStateId) : tree.states
-                      const sid = block.stateId === '' ? null : Number(block.stateId)
-                      const lgasForState = sid === null ? [] : tree.lgas.filter((l) => l.stateId === sid)
-
-                      return (
-                        <div
-                          key={block.id}
-                          className="rounded-xl border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)]/30 p-4"
-                        >
-                          <div className="mb-3 flex flex-wrap items-end gap-2">
-                            <label className="block min-w-[200px] flex-1 text-[13px]">
-                              <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">State</span>
-                              <select
-                                value={block.stateId === '' ? '' : String(block.stateId)}
-                                onChange={(e) => {
-                                  const v = e.target.value
-                                  setBlockState(bi, v ? Number(v) : '')
-                                }}
-                                disabled={lockedStateId !== null}
-                                className="mt-1 w-full rounded-lg border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)] px-3 py-2 text-[var(--portal-fg)] disabled:opacity-80"
-                              >
-                                <option value="">Select state…</option>
-                                {stateOptions.map((s) => (
-                                  <option key={s.id} value={s.id}>
-                                    {s.name} ({s.code})
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            {geoBlocks.length > 1 ? (
-                              <button
-                                type="button"
-                                className="rounded-lg border border-[color:var(--portal-border)] px-3 py-2 text-[12px] text-[var(--portal-muted)] hover:bg-[var(--portal-table-row-hover)]"
-                                onClick={() => removeStateBlock(bi)}
-                              >
-                                Remove state
-                              </button>
-                            ) : null}
-                          </div>
-
-                          <div className="ml-0 space-y-4 border-l-2 border-[color:var(--portal-border)] pl-4 md:ml-2">
-                            {block.lgas.map((lg, li) => {
-                              const wardsForLga =
-                                lg.lgaId === '' ? [] : tree.wards.filter((w) => w.lgaId === Number(lg.lgaId))
-
-                              return (
-                                <div key={lg.id} className="space-y-2 rounded-lg border border-[color:var(--portal-border)]/80 p-3">
-                                  <div className="flex flex-wrap items-end gap-2">
-                                    <button
-                                      type="button"
-                                      className="mb-1 shrink-0 rounded-md border border-[#00c46a]/40 px-2 py-1 font-(--font-mono) text-[11px] font-bold text-[#00c46a] hover:bg-[#00c46a]/10"
-                                      onClick={() => addLgaRow(bi)}
-                                      title="Add another LGA under this state"
-                                    >
-                                      + LGA
-                                    </button>
-                                    <label className="block min-w-[180px] flex-1 text-[13px]">
-                                      <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">
-                                        Local government area
-                                      </span>
-                                      <select
-                                        value={lg.lgaId === '' ? '' : String(lg.lgaId)}
-                                        onChange={(e) => {
-                                          const v = e.target.value
-                                          setLgaId(bi, li, v ? Number(v) : '')
-                                        }}
-                                        disabled={sid === null}
-                                        className="mt-1 w-full rounded-lg border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)] px-3 py-2 text-[var(--portal-fg)] disabled:opacity-50"
-                                      >
-                                        <option value="">{sid === null ? 'Select state first…' : 'Select LGA…'}</option>
-                                        {lgasForState.map((l) => (
-                                          <option key={l.id} value={l.id}>
-                                            {l.name} ({l.code})
-                                          </option>
-                                        ))}
-                                      </select>
-                                      {sid !== null && lgasForState.length > 0 ? (
-                                        <p className="mt-1 font-(--font-mono) text-[10px] text-[var(--portal-dim)]">
-                                          {lgasForState.length} LGA{lgasForState.length === 1 ? '' : 's'} available for this state in the
-                                          database (full national INEC list requires importing complete geography data).
-                                        </p>
-                                      ) : null}
-                                    </label>
-                                    {block.lgas.length > 1 ? (
-                                      <button
-                                        type="button"
-                                        className="mb-1 rounded-lg border border-[color:var(--portal-border)] px-2 py-1 text-[11px] text-[var(--portal-muted)]"
-                                        onClick={() => removeLgaRow(bi, li)}
-                                      >
-                                        Remove LGA row
-                                      </button>
-                                    ) : null}
-                                  </div>
-
-                                  {lg.lgaId !== '' ? (
-                                    <div className="mt-3 space-y-2">
-                                      <div className="font-(--font-mono) text-[10px] font-semibold uppercase text-[var(--portal-dim)]">
-                                        Wards (tick to show polling units)
-                                      </div>
-                                      {wardsForLga.length === 0 ? (
-                                        <p className="text-[12px] text-[var(--portal-muted)]">No wards in catalog for this LGA.</p>
-                                      ) : (
-                                        <ul className="space-y-2">
-                                          {wardsForLga.map((w) => {
-                                            const pusInWard = tree.pollingUnits.filter((p) => p.wardId === w.id)
-                                            const open = lg.wardOpen[String(w.id)] ?? false
-                                            return (
-                                              <li
-                                                key={w.id}
-                                                className="overflow-hidden rounded-lg border border-[color:var(--portal-border)]/70 bg-[var(--portal-input-bg)]/50"
-                                              >
-                                                <label className="flex cursor-pointer items-start gap-3 px-3 py-2.5">
-                                                    <input
-                                                      type="checkbox"
-                                                      className="mt-0.5"
-                                                      checked={open}
-                                                      disabled={isRerunElection}
-                                                      onChange={(e) => toggleWard(bi, li, w.id, e.target.checked)}
-                                                    />
-                                                  <span className="text-[13px] leading-snug text-[var(--portal-fg)]">
-                                                    <span className="font-(--font-mono) text-[11px] text-[#00c46a]">{w.code}</span> — {w.name}
-                                                  </span>
-                                                </label>
-                                                {open ? (
-                                                  <div className="border-t border-[color:var(--portal-border)]/60 bg-[var(--portal-input-bg)]/80 px-3 py-2 pl-10">
-                                                    <div className="mb-2 font-(--font-mono) text-[10px] font-semibold uppercase text-[var(--portal-dim)]">
-                                                      Polling units
-                                                    </div>
-                                                    {pusInWard.length === 0 ? (
-                                                      <p className="text-[12px] text-[var(--portal-muted)]">No polling units for this ward.</p>
-                                                    ) : (
-                                                      <ul className="max-h-44 space-y-1.5 overflow-y-auto pr-1">
-                                                        {pusInWard.map((p) => (
-                                                          <li key={p.id}>
-                                                            <label className="flex cursor-pointer items-center gap-2 text-[12px] text-[var(--portal-muted)]">
-                                                              <input
-                                                                type="checkbox"
-                                                                checked={lg.puPick[String(w.id)]?.[String(p.id)] ?? false}
-                                                                disabled={isRerunElection}
-                                                                onChange={(e) => togglePu(bi, li, w.id, p.id, e.target.checked)}
-                                                              />
-                                                              <span>
-                                                                <span className="font-(--font-mono) text-[11px] text-[var(--portal-fg)]">
-                                                                  {p.code}
-                                                                </span>{' '}
-                                                                — {p.name}
-                                                              </span>
-                                                            </label>
-                                                          </li>
-                                                        ))}
-                                                      </ul>
-                                                    )}
-                                                  </div>
-                                                ) : null}
-                                              </li>
-                                            )
-                                          })}
-                                        </ul>
-                                      )}
-                                    </div>
-                                  ) : null}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )
-                    })}
+                    {geoBlocks.map((block, bi) => (
+                      <GeoBlockEditor
+                        key={block.id}
+                        block={block}
+                        states={states}
+                        lockedStateId={lockedStateId}
+                        canRemove={geoBlocks.length > 1}
+                        isRerunElection={isRerunElection}
+                        onStateChange={(v) => setBlockState(bi, v)}
+                        onRemoveBlock={() => removeStateBlock(bi)}
+                        onAddLga={() => addLgaRow(bi)}
+                        onLgaChange={(li, v) => setLgaId(bi, li, v)}
+                        onRemoveLga={(li) => removeLgaRow(bi, li)}
+                        onToggleWard={(li, wardId, checked) => toggleWard(bi, li, wardId, checked)}
+                        onTogglePu={(li, wardId, puId, checked) => togglePu(bi, li, wardId, puId, checked)}
+                      />
+                    ))}
                     <button
                       type="button"
                       className="rounded-lg border border-[#00c46a]/50 px-4 py-2.5 text-[13px] font-semibold text-[#00c46a] hover:bg-[#00c46a]/10"
@@ -958,5 +830,269 @@ export function ElectionSetupWizard({ open, mode, editSlug, onClose, onSaved }: 
         </div>
       </div>
     </div>
+  )
+}
+
+type GeoBlockEditorProps = {
+  block: GeoStateBlock
+  states: GeoState[]
+  lockedStateId: number | null
+  canRemove: boolean
+  isRerunElection: boolean
+  onStateChange: (stateId: number | '') => void
+  onRemoveBlock: () => void
+  onAddLga: () => void
+  onLgaChange: (lgaIdx: number, lgaId: number | '') => void
+  onRemoveLga: (lgaIdx: number) => void
+  onToggleWard: (lgaIdx: number, wardId: number, checked: boolean) => void
+  onTogglePu: (lgaIdx: number, wardId: number, puId: number, checked: boolean) => void
+}
+
+function GeoBlockEditor({
+  block,
+  states,
+  lockedStateId,
+  canRemove,
+  isRerunElection,
+  onStateChange,
+  onRemoveBlock,
+  onAddLga,
+  onLgaChange,
+  onRemoveLga,
+  onToggleWard,
+  onTogglePu,
+}: GeoBlockEditorProps) {
+  const sid = block.stateId === '' ? null : Number(block.stateId)
+  const lgasQuery = useGeoLgas(sid)
+  const lgasForState = lgasQuery.data?.lgas ?? []
+  const stateOptions = lockedStateId !== null ? states.filter((s) => s.id === lockedStateId) : states
+
+  return (
+    <div className="rounded-xl border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)]/30 p-4">
+      <div className="mb-3 flex flex-wrap items-end gap-2">
+        <label className="block min-w-[200px] flex-1 text-[13px]">
+          <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">State</span>
+          <select
+            value={block.stateId === '' ? '' : String(block.stateId)}
+            onChange={(e) => {
+              const v = e.target.value
+              onStateChange(v ? Number(v) : '')
+            }}
+            disabled={lockedStateId !== null}
+            className="mt-1 w-full rounded-lg border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)] px-3 py-2 text-[var(--portal-fg)] disabled:opacity-80"
+          >
+            <option value="">Select state…</option>
+            {stateOptions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({s.code})
+              </option>
+            ))}
+          </select>
+        </label>
+        {canRemove ? (
+          <button
+            type="button"
+            className="rounded-lg border border-[color:var(--portal-border)] px-3 py-2 text-[12px] text-[var(--portal-muted)] hover:bg-[var(--portal-table-row-hover)]"
+            onClick={onRemoveBlock}
+          >
+            Remove state
+          </button>
+        ) : null}
+      </div>
+
+      <div className="ml-0 space-y-4 border-l-2 border-[color:var(--portal-border)] pl-4 md:ml-2">
+        {block.lgas.map((lg, li) => (
+          <GeoLgaEditor
+            key={lg.id}
+            lg={lg}
+            lgaIdx={li}
+            sid={sid}
+            lgasForState={lgasForState}
+            lgasLoading={lgasQuery.isLoading}
+            canRemove={block.lgas.length > 1}
+            isRerunElection={isRerunElection}
+            onAddLga={onAddLga}
+            onLgaChange={(v) => onLgaChange(li, v)}
+            onRemoveLga={() => onRemoveLga(li)}
+            onToggleWard={(wardId, checked) => onToggleWard(li, wardId, checked)}
+            onTogglePu={(wardId, puId, checked) => onTogglePu(li, wardId, puId, checked)}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+type GeoLgaEditorProps = {
+  lg: GeoLgaRow
+  lgaIdx: number
+  sid: number | null
+  lgasForState: GeoLga[]
+  lgasLoading: boolean
+  canRemove: boolean
+  isRerunElection: boolean
+  onAddLga: () => void
+  onLgaChange: (lgaId: number | '') => void
+  onRemoveLga: () => void
+  onToggleWard: (wardId: number, checked: boolean) => void
+  onTogglePu: (wardId: number, puId: number, checked: boolean) => void
+}
+
+function GeoLgaEditor({
+  lg,
+  sid,
+  lgasForState,
+  lgasLoading,
+  canRemove,
+  isRerunElection,
+  onAddLga,
+  onLgaChange,
+  onRemoveLga,
+  onToggleWard,
+  onTogglePu,
+}: GeoLgaEditorProps) {
+  const lgaId = lg.lgaId === '' ? null : Number(lg.lgaId)
+  const wardsQuery = useGeoWards(lgaId)
+  const wardsForLga = wardsQuery.data?.wards ?? []
+
+  return (
+    <div className="space-y-2 rounded-lg border border-[color:var(--portal-border)]/80 p-3">
+      <div className="flex flex-wrap items-end gap-2">
+        <button
+          type="button"
+          className="mb-1 shrink-0 rounded-md border border-[#00c46a]/40 px-2 py-1 font-(--font-mono) text-[11px] font-bold text-[#00c46a] hover:bg-[#00c46a]/10"
+          onClick={onAddLga}
+          title="Add another LGA under this state"
+        >
+          + LGA
+        </button>
+        <label className="block min-w-[180px] flex-1 text-[13px]">
+          <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">
+            Local government area
+          </span>
+          <select
+            value={lg.lgaId === '' ? '' : String(lg.lgaId)}
+            onChange={(e) => {
+              const v = e.target.value
+              onLgaChange(v ? Number(v) : '')
+            }}
+            disabled={sid === null}
+            className="mt-1 w-full rounded-lg border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)] px-3 py-2 text-[var(--portal-fg)] disabled:opacity-50"
+          >
+            <option value="">
+              {sid === null ? 'Select state first…' : lgasLoading ? 'Loading LGAs…' : 'Select LGA…'}
+            </option>
+            {lgasForState.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name} ({l.code})
+              </option>
+            ))}
+          </select>
+          {sid !== null && !lgasLoading && lgasForState.length > 0 ? (
+            <p className="mt-1 font-(--font-mono) text-[10px] text-[var(--portal-dim)]">
+              {lgasForState.length} LGA{lgasForState.length === 1 ? '' : 's'} available for this state in the
+              database (full national INEC list requires importing complete geography data).
+            </p>
+          ) : null}
+        </label>
+        {canRemove ? (
+          <button
+            type="button"
+            className="mb-1 rounded-lg border border-[color:var(--portal-border)] px-2 py-1 text-[11px] text-[var(--portal-muted)]"
+            onClick={onRemoveLga}
+          >
+            Remove LGA row
+          </button>
+        ) : null}
+      </div>
+
+      {lg.lgaId !== '' ? (
+        <div className="mt-3 space-y-2">
+          <div className="font-(--font-mono) text-[10px] font-semibold uppercase text-[var(--portal-dim)]">
+            Wards (tick to show polling units)
+          </div>
+          {wardsQuery.isLoading ? (
+            <p className="text-[12px] text-[var(--portal-muted)]">Loading wards…</p>
+          ) : wardsForLga.length === 0 ? (
+            <p className="text-[12px] text-[var(--portal-muted)]">No wards in catalog for this LGA.</p>
+          ) : (
+            <ul className="space-y-2">
+              {wardsForLga.map((w) => (
+                <GeoWardChecklist
+                  key={w.id}
+                  ward={w}
+                  open={lg.wardOpen[String(w.id)] ?? false}
+                  picked={lg.puPick[String(w.id)] ?? {}}
+                  disabled={isRerunElection}
+                  onToggleWard={(checked) => onToggleWard(w.id, checked)}
+                  onTogglePu={(puId, checked) => onTogglePu(w.id, puId, checked)}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+type GeoWardChecklistProps = {
+  ward: GeoWard
+  open: boolean
+  picked: Record<string, boolean>
+  disabled: boolean
+  onToggleWard: (checked: boolean) => void
+  onTogglePu: (puId: number, checked: boolean) => void
+}
+
+function GeoWardChecklist({ ward, open, picked, disabled, onToggleWard, onTogglePu }: GeoWardChecklistProps) {
+  const pusQuery = useGeoPus(ward.id, open)
+  const pusInWard = pusQuery.data?.pollingUnits ?? []
+
+  return (
+    <li className="overflow-hidden rounded-lg border border-[color:var(--portal-border)]/70 bg-[var(--portal-input-bg)]/50">
+      <label className="flex cursor-pointer items-start gap-3 px-3 py-2.5">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={open}
+          disabled={disabled}
+          onChange={(e) => onToggleWard(e.target.checked)}
+        />
+        <span className="text-[13px] leading-snug text-[var(--portal-fg)]">
+          <span className="font-(--font-mono) text-[11px] text-[#00c46a]">{ward.code}</span> — {ward.name}
+        </span>
+      </label>
+      {open ? (
+        <div className="border-t border-[color:var(--portal-border)]/60 bg-[var(--portal-input-bg)]/80 px-3 py-2 pl-10">
+          <div className="mb-2 font-(--font-mono) text-[10px] font-semibold uppercase text-[var(--portal-dim)]">
+            Polling units
+          </div>
+          {pusQuery.isLoading ? (
+            <p className="text-[12px] text-[var(--portal-muted)]">Loading polling units…</p>
+          ) : pusInWard.length === 0 ? (
+            <p className="text-[12px] text-[var(--portal-muted)]">No polling units for this ward.</p>
+          ) : (
+            <ul className="max-h-44 space-y-1.5 overflow-y-auto pr-1">
+              {pusInWard.map((p) => (
+                <li key={p.id}>
+                  <label className="flex cursor-pointer items-center gap-2 text-[12px] text-[var(--portal-muted)]">
+                    <input
+                      type="checkbox"
+                      checked={picked[String(p.id)] ?? false}
+                      disabled={disabled}
+                      onChange={(e) => onTogglePu(p.id, e.target.checked)}
+                    />
+                    <span>
+                      <span className="font-(--font-mono) text-[11px] text-[var(--portal-fg)]">{p.code}</span> — {p.name}
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : null}
+    </li>
   )
 }

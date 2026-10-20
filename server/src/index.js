@@ -2134,38 +2134,42 @@ app.get('/api/admin/elections/:slug/setup', authMiddleware, requireAdmin, async 
       [electionId],
     )
 
+    // Only included scope rows are returned — the full 200k-PU catalog made
+    // this payload ~25MB and froze the election setup wizard. Scope writes
+    // always include ancestor rows, so included PUs resolve their
+    // ward/lga/state chain from this payload alone.
     const states = await pool.query(
-      `SELECT gs.id, gs.code, gs.name,
-              COALESCE(esi.included, false) AS included
+      `SELECT gs.id, gs.code, gs.name, true AS included
        FROM geo_states gs
-       LEFT JOIN election_scope_items esi ON esi.election_id = $1 AND esi.level = 'state' AND esi.ref_id = gs.id
+       INNER JOIN election_scope_items esi ON esi.election_id = $1 AND esi.level = 'state' AND esi.ref_id = gs.id
+       WHERE esi.included
        ORDER BY gs.sort_order ASC, gs.name ASC`,
       [electionId],
     )
 
     const lgas = await pool.query(
-      `SELECT gl.id, gl.state_id AS "stateId", gl.code, gl.name,
-              COALESCE(esi.included, false) AS included
+      `SELECT gl.id, gl.state_id AS "stateId", gl.code, gl.name, true AS included
        FROM geo_lgas gl
-       LEFT JOIN election_scope_items esi ON esi.election_id = $1 AND esi.level = 'lga' AND esi.ref_id = gl.id
+       INNER JOIN election_scope_items esi ON esi.election_id = $1 AND esi.level = 'lga' AND esi.ref_id = gl.id
+       WHERE esi.included
        ORDER BY gl.state_id ASC, gl.name ASC`,
       [electionId],
     )
 
     const wards = await pool.query(
-      `SELECT gw.id, gw.lga_id AS "lgaId", gw.code, gw.name,
-              COALESCE(esi.included, false) AS included
+      `SELECT gw.id, gw.lga_id AS "lgaId", gw.code, gw.name, true AS included
        FROM geo_wards gw
-       LEFT JOIN election_scope_items esi ON esi.election_id = $1 AND esi.level = 'ward' AND esi.ref_id = gw.id
+       INNER JOIN election_scope_items esi ON esi.election_id = $1 AND esi.level = 'ward' AND esi.ref_id = gw.id
+       WHERE esi.included
        ORDER BY gw.lga_id ASC, gw.name ASC`,
       [electionId],
     )
 
     const pus = await pool.query(
-      `SELECT gp.id, gp.ward_id AS "wardId", gp.code, gp.name, gp.lat, gp.lng,
-              COALESCE(esi.included, false) AS included
+      `SELECT gp.id, gp.ward_id AS "wardId", gp.code, gp.name, gp.lat, gp.lng, true AS included
        FROM geo_polling_units gp
-       LEFT JOIN election_scope_items esi ON esi.election_id = $1 AND esi.level = 'pu' AND esi.ref_id = gp.id
+       INNER JOIN election_scope_items esi ON esi.election_id = $1 AND esi.level = 'pu' AND esi.ref_id = gp.id
+       WHERE esi.included
        ORDER BY gp.ward_id ASC, gp.code ASC`,
       [electionId],
     )
