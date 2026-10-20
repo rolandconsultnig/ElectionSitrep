@@ -14,6 +14,21 @@ import { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
+const FIELD_MODULES = [
+  { route: '/safety', icon: '🆘', label: 'Safety · SOS', hint: 'Check-in · duress PIN', tone: 'danger' },
+  { route: '/sitrep', icon: '📝', label: 'Submit SitRep', hint: 'M11 · GPS-verified', tone: 'default' },
+  { route: '/incident', icon: '⚠️', label: 'Report incident', hint: 'M14 · FLASH alerts', tone: 'default' },
+  { route: '/violence', icon: '🚨', label: 'Violence URGENT', hint: 'M15 · one-tap', tone: 'danger' },
+  { route: '/timeline', icon: '⏱', label: 'Timeline', hint: 'P2-01 · milestones', tone: 'default' },
+  { route: '/ec8a', icon: '📜', label: 'EC8A evidence', hint: 'P2-02 · SHA-256 tally', tone: 'default' },
+  { route: '/materials', icon: '📦', label: 'Materials log', hint: 'P2-03 · custody', tone: 'default' },
+  { route: '/shifts', icon: '🔄', label: 'Shift handover', hint: 'P2-04 · relief', tone: 'default' },
+  { route: '/logistics', icon: '⛽', label: 'Logistics', hint: 'P2-05 · requests', tone: 'default' },
+  { route: '/turnout', icon: '📊', label: 'Voter turnout', hint: 'M13 · pulse', tone: 'default' },
+  { route: '/reference', icon: '⚑', label: 'Parties ref.', hint: 'M16 · INEC register', tone: 'default' },
+  { route: '/history', icon: '🕐', label: 'History', hint: 'M17 · sync queue', tone: 'default' },
+] as const
+
 export default function HomeScreen() {
   const { token, user, ready, signOut } = useAuth()
   const [pendingCount, setPendingCount] = useState(0)
@@ -260,6 +275,25 @@ export default function HomeScreen() {
           ))
         )}
 
+        <Text style={styles.section}>Field modules</Text>
+        <View style={styles.moduleGrid}>
+          {FIELD_MODULES.map((m) => (
+            <Pressable
+              key={m.route}
+              onPress={() => router.push(m.route as never)}
+              style={({ pressed }) => [
+                styles.moduleCell,
+                m.tone === 'danger' && styles.moduleCellDanger,
+                pressed && { opacity: 0.85 },
+              ]}
+            >
+              <Text style={styles.moduleIcon}>{m.icon}</Text>
+              <Text style={[styles.moduleLabel, m.tone === 'danger' && styles.moduleLabelDanger]}>{m.label}</Text>
+              <Text style={[styles.moduleHint, m.tone === 'danger' && styles.moduleLabelDanger]}>{m.hint}</Text>
+            </Pressable>
+          ))}
+        </View>
+
         <Text style={styles.section}>National pulse (submissions)</Text>
         <View style={styles.card}>
           <Text style={styles.muted}>
@@ -334,6 +368,22 @@ const styles = StyleSheet.create({
   btnSecondary: { alignItems: 'center', paddingVertical: 10 },
   btnSecondaryText: { color: colors.primary, fontWeight: '600' },
   bannerError: { color: colors.danger, marginTop: space.xs, fontSize: 13, lineHeight: 18 },
+  moduleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginBottom: space.md },
+  moduleCell: {
+    width: '31.5%',
+    flexGrow: 1,
+    backgroundColor: colors.surface,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: space.md,
+    minHeight: 92,
+  },
+  moduleCellDanger: { borderColor: colors.danger, backgroundColor: '#fdecea' },
+  moduleIcon: { fontSize: 20 },
+  moduleLabel: { fontSize: 13, fontWeight: '700', color: colors.text, marginTop: space.xs },
+  moduleHint: { fontSize: 11, color: colors.muted, marginTop: 2 },
+  moduleLabelDanger: { color: colors.danger },
   retryButton: {
     marginTop: space.sm,
     alignSelf: 'flex-start',

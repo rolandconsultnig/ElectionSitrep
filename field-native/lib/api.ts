@@ -125,3 +125,307 @@ export function syncFieldBatch(
     },
   )
 }
+
+/* ------------------------------ incident types ------------------------------ */
+
+export type IncidentType = { code: string; label: string; defaultSeverity: string }
+
+export function incidentTypesRequest(token: string) {
+  return apiFetch<{ types: IncidentType[] }>('/api/incident-types', { token })
+}
+
+export type MyIncident = {
+  id: number
+  typeCode: string
+  typeLabel: string
+  severity: string
+  isFlash: boolean
+  title: string
+  status: string
+  createdAt: string | null
+  location: { puCode: string | null; puName: string | null; stateName: string | null; lgaName: string | null }
+}
+
+export function myIncidentsRequest(token: string) {
+  return apiFetch<{ incidents: MyIncident[] }>('/api/incidents/mine', { token })
+}
+
+/* --------------------------------- parties --------------------------------- */
+
+export type PartyRef = {
+  id: number
+  inecRegisterCode: string
+  name: string
+  abbreviation: string
+  status: string
+  logoDataUrl: string | null
+}
+
+export function partiesRequest(token: string) {
+  return apiFetch<{ parties: PartyRef[] }>('/api/parties', { token })
+}
+
+/* ------------------------------ operations: timeline ------------------------------ */
+
+export type PuMilestone = {
+  id: number
+  milestone: string
+  timestamp: string
+  notes: string | null
+  officer_name: string | null
+}
+
+export function puTimelineRequest(token: string, puId: number | string, electionSlug?: string) {
+  const q = electionSlug ? `?electionSlug=${encodeURIComponent(electionSlug)}` : ''
+  return apiFetch<{ milestones: PuMilestone[] }>(`/api/operations/timeline/pu/${puId}${q}`, { token })
+}
+
+export function logMilestoneRequest(
+  token: string,
+  body: { electionSlug?: string; pollingUnitId: number | string; milestone: string; notes?: string },
+) {
+  return apiFetch<{ ok: boolean }>('/api/operations/timeline/milestone', {
+    method: 'POST',
+    token,
+    body: JSON.stringify(body),
+  })
+}
+
+/* -------------------------------- operations: EC8A -------------------------------- */
+
+export function submitEc8aRequest(
+  token: string,
+  body: {
+    electionSlug?: string
+    pollingUnitId: number | string
+    registeredVoters: number
+    accreditedVoters: number
+    ballotPapersIssued: number
+    ballotPapersUsed: number
+    ballotPapersSpoiled: number
+    ballotPapersRejected: number
+    validVotes: number
+    totalVotesCast: number
+    partyVotes: Record<string, number>
+    photoUrl?: string
+    photoHashSha256?: string
+    photoSource?: string
+    lat?: number | null
+    lng?: number | null
+  },
+) {
+  return apiFetch<{ ok?: boolean; evidence?: unknown }>('/api/operations/results/ec8a', {
+    method: 'POST',
+    token,
+    body: JSON.stringify(body),
+  })
+}
+
+/* ------------------------------ operations: materials ------------------------------ */
+
+export type MaterialItem = {
+  id: number
+  material_type: string
+  serial_or_barcode: string
+  status: string
+  carrier_name: string | null
+  tamper_seal_intact: boolean | null
+  last_scanned_at: string | null
+  pu_id: number | null
+  pu_code: string | null
+  pu_name: string | null
+  ward_name: string | null
+  lga_name: string | null
+  notes: string | null
+}
+
+export function materialsRequest(token: string, electionSlug?: string) {
+  const q = electionSlug ? `?electionSlug=${encodeURIComponent(electionSlug)}` : ''
+  return apiFetch<{ materials: MaterialItem[] }>(`/api/operations/materials${q}`, { token })
+}
+
+export function registerMaterialRequest(
+  token: string,
+  body: {
+    electionSlug?: string
+    materialType: string
+    serialOrBarcode: string
+    pollingUnitId?: number | string | null
+    status?: string
+    carrierName?: string
+    carrierPhone?: string
+    tamperSealIntact?: boolean
+    notes?: string
+  },
+) {
+  return apiFetch<{ ok?: boolean; material?: unknown }>('/api/operations/materials', {
+    method: 'POST',
+    token,
+    body: JSON.stringify(body),
+  })
+}
+
+export function scanMaterialRequest(
+  token: string,
+  body: {
+    serialOrBarcode?: string
+    materialId?: number
+    status?: string
+    tamperSealIntact?: boolean
+    lat?: number | null
+    lng?: number | null
+    notes?: string
+  },
+) {
+  return apiFetch<{ ok?: boolean }>('/api/operations/materials/scan', {
+    method: 'POST',
+    token,
+    body: JSON.stringify(body),
+  })
+}
+
+/* -------------------------------- operations: shifts -------------------------------- */
+
+export type ShiftHandover = {
+  id: number
+  shift_name: string
+  running_situation_log: string
+  materials_status: string | null
+  crowd_assessment: string | null
+  handover_signed_at: string
+  incoming_acknowledged_at: string | null
+  incoming_officer_name: string | null
+  outgoing_name: string | null
+  incoming_name: string | null
+  pu_code: string | null
+  notes: string | null
+}
+
+export function shiftsRequest(token: string, puId?: number | string) {
+  const q = puId ? `?puId=${puId}` : ''
+  return apiFetch<{ shifts: ShiftHandover[] }>(`/api/operations/shifts${q}`, { token })
+}
+
+export function handoverShiftRequest(
+  token: string,
+  body: {
+    electionSlug?: string
+    pollingUnitId?: number | string | null
+    shiftName: string
+    incomingOfficerName?: string
+    runningSituationLog: string
+    materialsStatus?: string
+    crowdAssessment?: string
+    notes?: string
+  },
+) {
+  return apiFetch<{ ok: boolean }>('/api/operations/shifts/handover', {
+    method: 'POST',
+    token,
+    body: JSON.stringify(body),
+  })
+}
+
+export function acknowledgeShiftRequest(token: string, id: number) {
+  return apiFetch<{ ok: boolean }>(`/api/operations/shifts/${id}/acknowledge`, {
+    method: 'POST',
+    token,
+    body: JSON.stringify({}),
+  })
+}
+
+/* ------------------------------ operations: logistics ------------------------------ */
+
+export type LogisticsRequest = {
+  id: number
+  category: string
+  priority: string
+  quantity_description: string
+  status: string
+  created_at: string
+  pu_code: string | null
+  ward_name: string | null
+  lga_name: string | null
+}
+
+export function logisticsListRequest(token: string) {
+  return apiFetch<{ requests: LogisticsRequest[] }>('/api/operations/logistics', { token })
+}
+
+export function createLogisticsRequest(
+  token: string,
+  body: {
+    electionSlug?: string
+    category: string
+    priority: string
+    quantityDescription: string
+    pollingUnitId?: number | string | null
+    lat?: number | null
+    lng?: number | null
+  },
+) {
+  return apiFetch<{ ok: boolean }>('/api/operations/logistics', {
+    method: 'POST',
+    token,
+    body: JSON.stringify(body),
+  })
+}
+
+/* ------------------------------------ safety ------------------------------------ */
+
+export type SafetyStatus = {
+  intervalMinutes: number
+  lastOkAt: string | null
+  nextDueAt: string | null
+  missed: boolean
+}
+
+export function safetyStatusRequest(token: string) {
+  return apiFetch<SafetyStatus>('/api/safety/checkin', { token })
+}
+
+export function safetyCheckinRequest(
+  token: string,
+  body: { lat?: number | null; lng?: number | null; batteryPct?: number | null; network?: string },
+) {
+  return apiFetch<SafetyStatus>('/api/safety/checkin', {
+    method: 'POST',
+    token,
+    body: JSON.stringify(body),
+  })
+}
+
+export function mySosRequest(token: string) {
+  return apiFetch<{ activeId: number | null }>('/api/sos/mine', { token })
+}
+
+export function raiseSosRequest(
+  token: string,
+  body: { kind: 'panic'; lat?: number | null; lng?: number | null; accuracy?: number | null; note?: string },
+) {
+  return apiFetch<{ id: number }>('/api/sos', { method: 'POST', token, body: JSON.stringify(body) })
+}
+
+export function sosLocationRequest(
+  token: string,
+  id: number,
+  body: { lat: number; lng: number; accuracy?: number | null },
+) {
+  return apiFetch<{ ok: boolean; active: boolean }>(`/api/sos/${id}/location`, {
+    method: 'POST',
+    token,
+    body: JSON.stringify(body),
+  })
+}
+
+export function duressPinStatusRequest(token: string) {
+  return apiFetch<{ enabled: boolean }>('/api/me/duress-pin', { token })
+}
+
+export function setDuressPinRequest(token: string, pin: string) {
+  return apiFetch<{ ok: boolean; enabled: boolean }>('/api/me/duress-pin', {
+    method: 'PUT',
+    token,
+    body: JSON.stringify({ pin }),
+  })
+}

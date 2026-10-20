@@ -5,8 +5,9 @@ import { Bar } from 'react-chartjs-2'
 import { chartColors, chartTooltipTheme } from '../../charts/register'
 import { apiJson } from '../../lib/api'
 import { enqueueOffline, flushQueueIfOnline, getQueueDepth, listQueue } from '../../lib/offlineQueue'
+import { VoiceRecorder } from '../../components/VoiceRecorder'
 import type { FieldPortalContext } from './field-portal-types'
-import { currentPosition, fetchIncidentTypes, SEVERITY_STYLE, type Severity } from '../../lib/incidents'
+import { currentPosition, fetchIncidentTypes, SEVERITY_STYLE, type Incident, type Severity } from '../../lib/incidents'
 
 const card = 'sr-card'
 
@@ -360,7 +361,7 @@ export function FieldSitRep() {
   const [observedIncident, setObservedIncident] = useState('None')
   const [narrative, setNarrative] = useState('')
   const [photoDataUrl, setPhotoDataUrl] = useState('')
-  
+  const [audioDataUrl, setAudioDataUrl] = useState('')
   const ctxQ = useFieldContext()
   const pu = puPayloadFromContext(ctxQ.data)
 
@@ -411,14 +412,26 @@ export function FieldSitRep() {
         accredited: accredited === '' ? null : Number(accredited),
         narrative: narrative.trim() || undefined,
         photoDataUrl: photoDataUrl || undefined,
+        audioDataUrl: audioDataUrl || undefined,
         gpsVerified,
         distanceMeters,
         ...pu,
       },
     })
+    // Attempt immediate delivery when online — don't leave the report stranded in the local queue
+    let delivered = 0
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      delivered = await flushQueueIfOnline()
+    }
     setBusy(false)
     setPhotoDataUrl('')
-    alert('SitRep queued locally. Retry sync when online to deliver it to the backend.')
+    setAudioDataUrl('')
+    setNarrative('')
+    alert(
+      delivered > 0
+        ? 'SitRep delivered to command — visible on HQ dashboards now.'
+        : 'SitRep queued locally. Retry sync when online to deliver it to the backend.',
+    )
   }
 
   return (
@@ -507,6 +520,12 @@ export function FieldSitRep() {
             <img src={photoDataUrl} alt="SitRep Evidence" className="h-32 w-auto rounded-md object-cover" />
           </div>
         )}
+        <div className="mt-4">
+          <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-muted)]">
+            Voice SitRep (optional — spoken report for Command, max 2 min)
+          </span>
+          <VoiceRecorder value={audioDataUrl || null} onChange={(v) => setAudioDataUrl(v ?? '')} />
+        </div>
         <button type="button" disabled={busy} onClick={onSubmit} className="sr-btn-primary mt-6 disabled:opacity-50">
           Submit SitRep
         </button>
@@ -902,8 +921,17 @@ export function FieldViolence() {
       createdAt: new Date().toISOString(),
       payload: { level: 'URGENT', ...pu },
     })
+    // URGENT reports must attempt immediate delivery, not wait for a manual sync
+    let delivered = 0
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      delivered = await flushQueueIfOnline()
+    }
     setBusy(false)
-    alert('Violence report queued locally — confirm voice escalation per SOP.')
+    alert(
+      delivered > 0
+        ? 'URGENT violence report delivered — CP / HQ dashboards alerted. Confirm voice escalation per SOP.'
+        : 'Violence report queued locally (no network) — confirm voice escalation per SOP and retry sync when online.',
+    )
   }
 
   return (
@@ -971,15 +999,68 @@ export function FieldHistory() {
   // depth is a recompute signal: when the offline queue depth changes, re-read the localStorage-backed queue
   const items = useMemo(() => { void depth; return [...listQueue()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)) }, [depth])
 
+  // Delivered history: incidents that actually reached the server from this officer
+  const deliveredQ = useQuery({
+    queryKey: ['field-history-delivered'],
+    queryFn: () => apiJson<{ incidents: Incident[] }>('/api/incidents/mine'),
+    refetchInterval: 60_000,
+  })
+  const delivered = deliveredQ.data?.incidents ?? []
+
   return (
     <div className="space-y-6">
       <header>
         <h1 className="font-(--font-syne) text-2xl font-bold text-[var(--portal-fg)]">Submission history</h1>
         <p className="mt-1 text-sm text-[var(--portal-muted)]">
-          This device&apos;s offline queue · sync status · backend history export pending implementation (§M17)
+          This device&apos;s offline queue plus your delivered incident reports confirmed by the server (§M17)
         </p>
       </header>
+
       <div className={card}>
+        <h2 className="mb-3 font-(--font-syne) text-sm font-semibold text-[var(--portal-fg)]">Delivered to server</h2>
+        {deliveredQ.isLoading && <p className="text-sm text-[var(--portal-muted)]">Checking server for your delivered reports…</p>}
+        {deliveredQ.isError && (
+          <p className="text-sm text-[#EF4444]">{(deliveredQ.error as Error)?.message || 'Could not reach the server history.'}</p>
+        )}
+        {!deliveredQ.isLoading && !deliveredQ.isError && delivered.length === 0 && (
+          <p className="text-sm text-[var(--portal-muted)]">No delivered incident reports on the server yet.</p>
+        )}
+        {delivered.length > 0 && (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left font-(--font-mono) text-[10px] uppercase text-[var(--portal-dim)]">
+                <th className="pb-2">Time (UTC)</th>
+                <th className="pb-2">Type</th>
+                <th className="pb-2">Severity</th>
+                <th className="pb-2">Status</th>
+              </tr>
+            </thead>
+            <tbody className="text-[var(--portal-muted)]">
+              {delivered.map((inc) => (
+                <tr key={inc.id} className="border-t border-[color:var(--portal-border)]">
+                  <td className="py-2 font-(--font-mono) text-[12px]">{inc.createdAt.slice(11, 19)}</td>
+                  <td className="py-2 text-[var(--portal-fg)]">
+                    {inc.isFlash ? '⚡ ' : ''}{inc.typeLabel}
+                  </td>
+                  <td className="py-2 uppercase">{inc.severity}</td>
+                  <td className="py-2">
+                    {inc.status === 'resolved' ? (
+                      <span className="text-[#d9b64a]">Resolved</span>
+                    ) : inc.status === 'acknowledged' ? (
+                      <span className="text-[#3B82F6]">Acknowledged by command</span>
+                    ) : (
+                      <span className="text-[#F59E0B]">Open</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className={card}>
+        <h2 className="mb-3 font-(--font-syne) text-sm font-semibold text-[var(--portal-fg)]">This device&apos;s queue</h2>
         {items.length === 0 ? (
           <p className="text-sm text-[var(--portal-muted)]">No queued submissions on this device yet.</p>
         ) : (

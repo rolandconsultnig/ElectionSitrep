@@ -53,6 +53,10 @@ const ALLOWED_ORIGINS = [
   'https://129.121.73.137',
   'http://129.121.73.137:5535',
   'https://129.121.73.137:5535',
+  'http://66.45.231.142',
+  'https://66.45.231.142',
+  'http://66.45.231.142:5535',
+  'https://66.45.231.142:5535',
   'http://66.45.231.142:6633',
   'https://66.45.231.142:6633',
   'https://66.45.231.142:6634',
@@ -1698,13 +1702,23 @@ app.post('/api/field/sync', authMiddleware, requireAnyPortal('field'), async (re
         }
         delete payload.photoDataUrl
       }
+      let audioBuf = null
+      let audioMime = null
+      if (payload && payload.audioDataUrl) {
+        const parsed = parseDataUrl(payload.audioDataUrl)
+        if (parsed) {
+          audioBuf = parsed.buffer
+          audioMime = parsed.mime
+        }
+        delete payload.audioDataUrl
+      }
 
       const ins = await pool.query(
-        `INSERT INTO field_capture_outbox (client_id, user_id, kind, payload, device_created_at, photo_data, photo_mime)
-         VALUES ($1, $2::uuid, $3, $4::jsonb, $5, $6, $7)
+        `INSERT INTO field_capture_outbox (client_id, user_id, kind, payload, device_created_at, photo_data, photo_mime, audio_data, audio_mime)
+         VALUES ($1, $2::uuid, $3, $4::jsonb, $5, $6, $7, $8, $9)
          ON CONFLICT (user_id, client_id) DO NOTHING
          RETURNING id`,
-        [clientId, userId, kind, JSON.stringify(payload), devAt, photoBuf, photoMime],
+        [clientId, userId, kind, JSON.stringify(payload), devAt, photoBuf, photoMime, audioBuf, audioMime],
       )
       results.push({ clientId, ok: true, duplicate: ins.rows.length === 0 })
     } catch (e) {
@@ -1713,7 +1727,12 @@ app.post('/api/field/sync', authMiddleware, requireAnyPortal('field'), async (re
       results.push({
         clientId,
         ok: false,
-        error: code === '42P01' ? 'Run migration_018_field_capture_outbox.sql' : 'capture insert failed',
+        error:
+          code === '42P01'
+            ? 'Run migration_018_field_capture_outbox.sql'
+            : code === '42703'
+              ? 'Run migration_029_field_sitrep_audio.sql'
+              : 'capture insert failed',
       })
     }
   }
@@ -2715,7 +2734,8 @@ const SITREP_FEED_SQL = `
            au.username AS author_username, coalesce(op.full_name, au.username) AS author_name,
            au.portal AS author_portal,
            cs.state_id, gs.name AS state_name, cs.lga_id, gl.name AS lga_name,
-           cs.pu_id, pu.code AS pu_code
+           cs.pu_id, pu.code AS pu_code,
+           false AS has_audio
     FROM command_sitreps cs
     JOIN app_users au ON au.id = cs.author_user_id
     LEFT JOIN officer_profiles op ON op.user_id = cs.author_user_id
@@ -2737,7 +2757,8 @@ const SITREP_FEED_SQL = `
            u2.username AS author_username, coalesce(op2.full_name, u2.username) AS author_name,
            'field' AS author_portal,
            gs2.id AS state_id, gs2.name AS state_name, gl2.id AS lga_id, gl2.name AS lga_name,
-           op2.assigned_polling_unit_id AS pu_id, pu2.code AS pu_code
+           op2.assigned_polling_unit_id AS pu_id, pu2.code AS pu_code,
+           (f.audio_data IS NOT NULL) AS has_audio
     FROM field_capture_outbox f
     JOIN app_users u2 ON u2.id = f.user_id
     LEFT JOIN officer_profiles op2 ON op2.user_id = f.user_id
@@ -2794,6 +2815,7 @@ app.get('/api/sitreps', authMiddleware, requireAnyPortal('management', 'igp', 'a
         state: r.state_name,
         lga: r.lga_name,
         puCode: r.pu_code,
+        hasAudio: Boolean(r.has_audio),
       })),
     })
   } catch (e) {
@@ -2801,6 +2823,25 @@ app.get('/api/sitreps', authMiddleware, requireAnyPortal('management', 'igp', 'a
     const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : ''
     if (code === '42P01') return res.status(503).json({ error: 'Run npm run migrate in server/ (migration_020)' })
     return res.status(500).json({ error: 'Failed to load sitreps' })
+  }
+})
+
+/** GET /api/sitreps/field/:id/audio — stream a voice SitRep note attached to a field capture (command portals) */
+app.get('/api/sitreps/field/:id/audio', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
+  try {
+    const id = parseInt(String(req.params.id).replace(/^fc-/i, ''), 10)
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid field capture id' })
+    const { rows } = await pool.query(`SELECT audio_data, audio_mime FROM field_capture_outbox WHERE id = $1`, [id])
+    const a = rows[0]
+    if (!a?.audio_data) return res.status(404).json({ error: 'No audio note on this report' })
+    res.setHeader('Content-Type', a.audio_mime || 'audio/webm')
+    res.setHeader('Cache-Control', 'private, max-age=60')
+    return res.send(a.audio_data)
+  } catch (e) {
+    console.error(e)
+    const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : ''
+    if (code === '42703') return res.status(503).json({ error: 'Run migration_029_field_sitrep_audio.sql' })
+    return res.status(500).json({ error: 'Failed to load audio note' })
   }
 })
 

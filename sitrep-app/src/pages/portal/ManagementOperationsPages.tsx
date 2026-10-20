@@ -12,7 +12,7 @@ import { QrfDispatchBoardView } from '../../components/operations/QrfDispatchBoa
 function useStates() {
   return useQuery({
     queryKey: ['geo-states-list'],
-    queryFn: () => apiJson<{ states: { id: number; name: string; code: string }[] }>('/api/geo/states'),
+    queryFn: () => apiJson<{ states: { id: number; name: string; code: string }[] }>('/api/geography/states'),
   })
 }
 

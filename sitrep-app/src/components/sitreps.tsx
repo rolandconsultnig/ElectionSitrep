@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
-import { apiJson } from '../lib/api'
+import { useEffect, useState } from 'react'
+import { apiFetch, apiJson } from '../lib/api'
 
 /* -------------------------------------------------------------------------- */
 /* Types matching the API (`GET /api/sitreps`, `/api/sitreps/summary`)        */
@@ -27,6 +27,7 @@ export type SitRepItem = {
   state: string | null
   lga: string | null
   puCode: string | null
+  hasAudio?: boolean
 }
 
 export type SitRepFeedResponse = {
@@ -155,6 +156,47 @@ export function formatSitRepDate(iso: string): string {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Voice note player (field captures with audio, `fc-*` feed ids)              */
+/* -------------------------------------------------------------------------- */
+
+function FieldAudioPlayer({ captureId, palette }: { captureId: string; palette: SitRepPalette }) {
+  const [src, setSrc] = useState<string | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let objectUrl: string | null = null
+    let cancelled = false
+    setError('')
+    apiFetch(`/api/sitreps/field/${encodeURIComponent(captureId)}/audio`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`Audio unavailable (${res.status})`)
+        const blob = await res.blob()
+        if (cancelled) return
+        objectUrl = URL.createObjectURL(blob)
+        setSrc(objectUrl)
+      })
+      .catch((e) => !cancelled && setError(e instanceof Error ? e.message : 'Audio unavailable'))
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [captureId])
+
+  if (error) {
+    return <p className={`mt-2 font-(--font-mono) text-[10px] uppercase tracking-wider text-rose-400`}>🎙 {error}</p>
+  }
+  if (!src) {
+    return <p className={`mt-2 font-(--font-mono) text-[10px] uppercase tracking-wider ${palette.dim}`}>🎙 Loading voice note…</p>
+  }
+  return (
+    <div className="mt-2">
+      <p className={`mb-1 font-(--font-mono) text-[9px] uppercase tracking-widest ${palette.dim}`}>🎙 Voice SitRep</p>
+      <audio controls src={src} className="h-8 w-full max-w-md" />
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
 /* Feed list                                                                   */
 /* -------------------------------------------------------------------------- */
 
@@ -210,6 +252,9 @@ export function SitRepFeedList({
             </div>
             <h4 className={`mt-1.5 text-sm font-semibold leading-snug ${palette.text}`}>{item.title}</h4>
             {item.body ? <p className={`mt-1 text-xs leading-relaxed ${palette.muted}`}>{item.body}</p> : null}
+            {item.hasAudio && item.id.startsWith('fc-') ? (
+              <FieldAudioPlayer captureId={item.id} palette={palette} />
+            ) : null}
             <div className={`mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-(--font-mono) text-[10px] uppercase tracking-wider ${palette.dim}`}>
               <span>
                 {[item.puCode, item.lga, item.state].filter(Boolean).join(' · ') || 'National'}

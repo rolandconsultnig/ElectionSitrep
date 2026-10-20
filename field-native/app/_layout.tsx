@@ -36,6 +36,18 @@ function NavStack() {
         <Stack.Screen name="network-settings" options={{ title: 'Network settings', headerShown: true }} />
         <Stack.Screen name="messages" options={{ title: 'Messages from Command', headerShown: true }} />
         <Stack.Screen name="tally/[slug]" options={{ title: 'PU tally', headerShown: true }} />
+        <Stack.Screen name="safety" options={{ title: 'Safety · SOS & check-in', headerShown: true }} />
+        <Stack.Screen name="sitrep" options={{ title: 'Submit SitRep', headerShown: true }} />
+        <Stack.Screen name="incident" options={{ title: 'Report incident', headerShown: true }} />
+        <Stack.Screen name="violence" options={{ title: 'Violence & disturbance', headerShown: true }} />
+        <Stack.Screen name="timeline" options={{ title: 'Operational timeline', headerShown: true }} />
+        <Stack.Screen name="ec8a" options={{ title: 'EC8A evidence & tally', headerShown: true }} />
+        <Stack.Screen name="materials" options={{ title: 'Sensitive materials log', headerShown: true }} />
+        <Stack.Screen name="shifts" options={{ title: 'Relief & shift handover', headerShown: true }} />
+        <Stack.Screen name="logistics" options={{ title: 'Logistics requests', headerShown: true }} />
+        <Stack.Screen name="turnout" options={{ title: 'Voter turnout', headerShown: true }} />
+        <Stack.Screen name="reference" options={{ title: 'Parties & candidates', headerShown: true }} />
+        <Stack.Screen name="history" options={{ title: 'Submission history', headerShown: true }} />
       </Stack>
       {!ready && (
         <View

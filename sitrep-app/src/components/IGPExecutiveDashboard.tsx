@@ -1,7 +1,9 @@
 import { useEffect, useState, useMemo, type ReactNode } from 'react'
 import { Bar, Doughnut } from 'react-chartjs-2'
+import { useQuery } from '@tanstack/react-query'
 import { generateDashboardPDF } from '../lib/pdfGenerator'
 import { chartColors } from '../charts/register'
+import { apiJson } from '../lib/api'
 
 export type IGPExecutiveDashboardProps = {
   // Existing real backend data
@@ -26,69 +28,56 @@ export type IGPExecutiveDashboardProps = {
 }
 
 // ----------------------------------------------------------------------
-// Mock Data Generators for the new premium requirements
+// Live data types + geographic lookups
 // ----------------------------------------------------------------------
 
-const SEVERITIES = ['low', 'medium', 'critical'] as const
+type ApiIncident = {
+  id: number
+  typeCode: string
+  typeLabel: string
+  severity: 'critical' | 'high' | 'medium' | 'low'
+  isFlash: boolean
+  title: string
+  description: string
+  location: { stateName: string | null; lgaName: string | null }
+  status: string
+  createdAt: string
+}
 
-const CRISIS_CATEGORIES = [
-  'Ballot Snatching',
-  'Voter Intimidation',
-  'Bimodal Voter Auth System (BVAS) Failure',
-  'Logistics Delay',
-  'Police Absence',
-  'Armed Thuggery',
-  'Vote Buying',
-  'Curfew Violation'
-]
+type ApiSitrep = {
+  id: string
+  kind: string
+  category: string
+  title: string
+  severity: string
+  createdAt: string
+  author: string
+  state: string | null
+  lga: string | null
+}
 
 import { NIGERIAN_REGIONS } from '../lib/nigerianRegions'
 
-/**
- * Deterministic pseudo-random value derived from a string seed.
- * Pure (safe to call during render) and stable across re-renders.
- */
-const seededValue = (seed: string, min: number, range: number): number => {
-  let h = 2166136261
-  for (let i = 0; i < seed.length; i++) {
-    h = Math.imul(h ^ seed.charCodeAt(i), 16777619) >>> 0
-  }
-  return min + (h % range)
-}
+/** Reverse lookup: state name → geopolitical zone (built once from NIGERIAN_REGIONS). */
+const STATE_TO_ZONE: Record<string, string> = Object.entries(NIGERIAN_REGIONS).reduce(
+  (acc, [zone, states]) => {
+    for (const state of Object.keys(states)) acc[state] = zone
+    return acc
+  },
+  {} as Record<string, string>,
+)
 
-const getRandomLocation = () => {
-  const zones = Object.keys(NIGERIAN_REGIONS)
-  const zone = zones[Math.floor(Math.random() * zones.length)]
-  const states = Object.keys(NIGERIAN_REGIONS[zone])
-  const state = states[Math.floor(Math.random() * states.length)]
-  const lgas = NIGERIAN_REGIONS[zone][state]
-  const lga = lgas[Math.floor(Math.random() * lgas.length)]
-  return { zone, state, lga }
-}
+const DOUGHNUT_PALETTE = [
+  '#ef4444', '#f97316', '#f59e0b', '#eab308',
+  '#3b82f6', '#8b5cf6', '#d946ef', '#f43f5e',
+]
 
-const generateMockIncidents = () => {
-  return Array.from({ length: 45 }).map((_, i) => {
-    const severity = SEVERITIES[Math.floor(Math.random() * SEVERITIES.length)]
-    const loc = getRandomLocation()
-    return {
-      id: `inc-${i}`,
-      time: new Date(Date.now() - Math.floor(Math.random() * 7200000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      ...loc,
-      category: CRISIS_CATEGORIES[Math.floor(Math.random() * CRISIS_CATEGORIES.length)],
-      severity,
-      description: `Reported issue requires immediate Situation Room assessment.`
-    }
-  }).sort((a, b) => b.time.localeCompare(a.time))
-}
-
-const generateMockSitReps = () => {
-  return Array.from({ length: 25 }).map((_, i) => ({
-    id: `sr-${i}`,
-    timestamp: new Date(Date.now() - Math.floor(Math.random() * 3600000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    phase: ['Pre', 'D-Day', 'Post'][Math.floor(Math.random() * 3)],
-    ...getRandomLocation(),
-    officer: `Insp. ${['Okoro', 'Bello', 'Ade', 'Eze', 'Danladi'][Math.floor(Math.random() * 5)]}`,
-  }))
+/** Severity weight used for the per-state threat index (capped at 100). */
+const SEVERITY_WEIGHT: Record<ApiIncident['severity'], number> = {
+  critical: 25,
+  high: 15,
+  medium: 8,
+  low: 3,
 }
 
 // ----------------------------------------------------------------------
@@ -158,28 +147,50 @@ export function IGPExecutiveDashboard({ kpis, geography, readiness, isLoading, i
 
   // Reset cascades — handled in the select onChange handlers below
 
-  // Use useMemo for mock data so it doesn't regenerate every render
-  const allIncidents = useMemo(() => generateMockIncidents(), [])
-  const allSitreps = useMemo(() => generateMockSitReps(), [])
+  // Live data: incidents + field sitreps from the command APIs
+  const incidentsQuery = useQuery({
+    queryKey: ['igp-exec-incidents'],
+    queryFn: () => apiJson<{ incidents: ApiIncident[] }>('/api/incidents?limit=500'),
+    refetchInterval: 30_000,
+  })
+  const sitrepsQuery = useQuery({
+    queryKey: ['igp-exec-sitreps'],
+    queryFn: () => apiJson<{ sitreps: ApiSitrep[] }>('/api/sitreps?limit=25'),
+    refetchInterval: 30_000,
+  })
+  const allIncidents = useMemo(() => incidentsQuery.data?.incidents ?? [], [incidentsQuery.data])
+  const allSitreps = useMemo(() => sitrepsQuery.data?.sitreps ?? [], [sitrepsQuery.data])
 
   // Filter Data based on Geographic Probes
   const incidents = useMemo(() => {
-    return allIncidents.filter(i => {
-      if (selectedZone !== 'All' && i.zone !== selectedZone) return false
-      if (selectedState !== 'All' && i.state !== selectedState) return false
-      if (selectedLga !== 'All' && i.lga !== selectedLga) return false
+    return allIncidents.filter((i) => {
+      const state = i.location.stateName ?? ''
+      if (selectedZone !== 'All' && STATE_TO_ZONE[state] !== selectedZone) return false
+      if (selectedState !== 'All' && state !== selectedState) return false
+      if (selectedLga !== 'All' && (i.location.lgaName ?? '') !== selectedLga) return false
       return true
     })
   }, [allIncidents, selectedZone, selectedState, selectedLga])
 
   const sitreps = useMemo(() => {
-    return allSitreps.filter(s => {
-      if (selectedZone !== 'All' && s.zone !== selectedZone) return false
-      if (selectedState !== 'All' && s.state !== selectedState) return false
-      if (selectedLga !== 'All' && s.lga !== selectedLga) return false
+    return allSitreps.filter((s) => {
+      const state = s.state ?? ''
+      if (selectedZone !== 'All' && STATE_TO_ZONE[state] !== selectedZone) return false
+      if (selectedState !== 'All' && state !== selectedState) return false
+      if (selectedLga !== 'All' && (s.lga ?? '') !== selectedLga) return false
       return true
     })
   }, [allSitreps, selectedZone, selectedState, selectedLga])
+
+  // LGA options: static catalog merged with LGAs actually seen in live data for the selected state
+  const lgaOptions = useMemo(() => {
+    if (selectedZone === 'All' || selectedState === 'All') return [] as string[]
+    const options = new Set<string>(NIGERIAN_REGIONS[selectedZone]?.[selectedState] ?? [])
+    for (const i of allIncidents) {
+      if (i.location.stateName === selectedState && i.location.lgaName) options.add(i.location.lgaName)
+    }
+    return Array.from(options).sort((a, b) => a.localeCompare(b))
+  }, [selectedZone, selectedState, allIncidents])
   
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
 
@@ -194,7 +205,7 @@ export function IGPExecutiveDashboard({ kpis, geography, readiness, isLoading, i
 
   const fmt = (n: number) => new Intl.NumberFormat('en-NG').format(n)
   const openReadiness = readiness.items.length - readiness.items.filter((item) => item.status === 'done').length
-  const criticalIncidents = incidents.filter((i) => i.severity === 'critical').length
+  const criticalIncidents = incidents.filter((i) => i.severity === 'critical' || i.severity === 'high').length
   const mediumIncidents = incidents.filter((i) => i.severity === 'medium').length
   const incidentPosture = criticalIncidents > 6 ? 'Elevated' : mediumIncidents > 8 ? 'Heightened' : 'Stable'
   const regionLabel = selectedLga !== 'All' ? selectedLga : selectedState !== 'All' ? selectedState : selectedZone !== 'All' ? selectedZone : 'National'
@@ -206,34 +217,53 @@ export function IGPExecutiveDashboard({ kpis, geography, readiness, isLoading, i
     return Object.values(NIGERIAN_REGIONS).flatMap((z) => Object.keys(z))
   }, [selectedZone, selectedState])
 
-  // Chart Data: Threat Level by State
-  const threatLevelData = useMemo(() => ({
-    labels: chartStates,
-    datasets: [{
-      label: 'Volatility Index',
-      data: chartStates.map((s) => seededValue(`volatility:${s}`, 20, 70)),
-      backgroundColor: (ctx: { raw: unknown }) => {
-        const val = Number(ctx.raw)
-        if (val > 75) return '#ef4444' // red
-        if (val > 40) return '#f59e0b' // amber
-        return '#d9b64a' // green
-      },
-      borderRadius: 4,
-    }],
-  }), [chartStates])
+  // Chart Data: Threat Level by State — severity-weighted index from live incidents
+  const threatLevelData = useMemo(() => {
+    const zoneFiltered = allIncidents.filter((i) => {
+      const state = i.location.stateName ?? ''
+      return selectedZone === 'All' || STATE_TO_ZONE[state] === selectedZone
+    })
+    const scoreByState = new Map<string, number>()
+    for (const i of zoneFiltered) {
+      const state = i.location.stateName
+      if (!state) continue
+      scoreByState.set(state, (scoreByState.get(state) ?? 0) + (SEVERITY_WEIGHT[i.severity] ?? 0))
+    }
+    return {
+      labels: chartStates,
+      datasets: [{
+        label: 'Volatility Index',
+        data: chartStates.map((s) => Math.min(100, scoreByState.get(s) ?? 0)),
+        backgroundColor: (ctx: { raw: unknown }) => {
+          const val = Number(ctx.raw)
+          if (val > 75) return '#ef4444' // red
+          if (val > 40) return '#f59e0b' // amber
+          return '#d9b64a' // green
+        },
+        borderRadius: 4,
+      }],
+    }
+  }, [allIncidents, chartStates, selectedZone])
+
+  // Live incident-type aggregation (drives Crisis Categories chart + Active Crisis Watch tiles)
+  const topCategories = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const i of incidents) counts.set(i.typeLabel, (counts.get(i.typeLabel) ?? 0) + 1)
+    return [...counts.entries()].sort((a, b) => b[1] - a[1])
+  }, [incidents])
 
   // Chart Data: Crisis Type Breakdown
-  const crisisTypeData = useMemo(() => ({
-    labels: CRISIS_CATEGORIES,
-    datasets: [{
-      data: CRISIS_CATEGORIES.map((c) => seededValue(`crisis:${c}`, 0, 50)),
-      backgroundColor: [
-        '#ef4444', '#f97316', '#f59e0b', '#eab308', 
-        '#3b82f6', '#8b5cf6', '#d946ef', '#f43f5e'
-      ],
-      borderWidth: 0,
-    }]
-  }), [])
+  const crisisTypeData = useMemo(() => {
+    const top = topCategories.slice(0, 8)
+    return {
+      labels: top.map(([label]) => label),
+      datasets: [{
+        data: top.map(([, n]) => n),
+        backgroundColor: DOUGHNUT_PALETTE.slice(0, Math.max(top.length, 1)),
+        borderWidth: 0,
+      }],
+    }
+  }, [topCategories])
 
   const readinessDonut = useMemo(() => ({
     labels: ['Readiness index', 'Open items'],
@@ -308,7 +338,7 @@ export function IGPExecutiveDashboard({ kpis, geography, readiness, isLoading, i
             className="w-full sm:w-auto rounded-lg border border-white/10 bg-[#040b08] px-4 py-2 text-sm text-white focus:border-[#00c46a] focus:outline-none disabled:opacity-50"
           >
             <option value="All">All LGAs / Cities</option>
-            {selectedZone !== 'All' && selectedState !== 'All' && NIGERIAN_REGIONS[selectedZone]?.[selectedState]?.map(lga => (
+            {lgaOptions.map(lga => (
               <option key={lga} value={lga}>{lga}</option>
             ))}
           </select>
@@ -452,10 +482,14 @@ export function IGPExecutiveDashboard({ kpis, geography, readiness, isLoading, i
             <div className="rounded-2xl border border-white/5 bg-[#0a1510]/60 p-5 backdrop-blur-sm">
               <h2 className="mb-3 font-(--font-syne) text-sm font-bold text-white">Active Crisis Watch</h2>
               <div className="grid grid-cols-2 gap-3">
-                {CRISIS_CATEGORIES.slice(0, 4).map((c, i) => (
-                  <div key={i} className="rounded-lg border border-white/5 bg-white/5 p-3">
-                    <div className="font-(--font-mono) text-[10px] uppercase text-slate-400 truncate">{c}</div>
-                    <div className="mt-1 font-(--font-syne) text-xl font-bold text-white">{seededValue(`kpi:${c}`, 5, 30)}</div>
+                {topCategories.length === 0 ? (
+                  <div className="col-span-2 rounded-lg border border-white/5 bg-white/5 p-3 text-xs text-slate-400">
+                    No active incidents in this scope.
+                  </div>
+                ) : topCategories.slice(0, 4).map(([label, count]) => (
+                  <div key={label} className="rounded-lg border border-white/5 bg-white/5 p-3">
+                    <div className="font-(--font-mono) text-[10px] uppercase text-slate-400 truncate">{label}</div>
+                    <div className="mt-1 font-(--font-syne) text-xl font-bold text-white">{count}</div>
                   </div>
                 ))}
               </div>
@@ -470,20 +504,28 @@ export function IGPExecutiveDashboard({ kpis, geography, readiness, isLoading, i
                  <thead>
                    <tr className="border-b border-white/10 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-(--font-mono)">
                      <th className="pb-3 pr-4">Time</th>
-                     <th className="pb-3 pr-4">Phase</th>
+                     <th className="pb-3 pr-4">Type</th>
                      <th className="pb-3 pr-4">Location</th>
                      <th className="pb-3">Reporting Officer</th>
                    </tr>
                  </thead>
                  <tbody className="divide-y divide-white/5">
-                   {sitreps.map((sr) => (
-                     <tr key={sr.id} className="transition-colors hover:bg-white/5">
-                       <td className="py-3 pr-4 font-(--font-mono) text-xs text-white">{sr.timestamp}</td>
-                       <td className="py-3 pr-4">
-                         <span className="rounded bg-blue-500/20 px-2 py-0.5 text-[10px] font-bold text-blue-400">{sr.phase}</span>
+                   {sitreps.length === 0 ? (
+                     <tr>
+                       <td colSpan={4} className="py-6 text-center text-xs text-slate-500">
+                         No field SitReps received in this scope yet.
                        </td>
-                       <td className="py-3 pr-4 text-slate-300">{sr.state} State</td>
-                       <td className="py-3 text-slate-400">{sr.officer}</td>
+                     </tr>
+                   ) : sitreps.map((sr) => (
+                     <tr key={sr.id} className="transition-colors hover:bg-white/5">
+                       <td className="py-3 pr-4 font-(--font-mono) text-xs text-white">
+                         {new Date(sr.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                       </td>
+                       <td className="py-3 pr-4">
+                         <span className="rounded bg-blue-500/20 px-2 py-0.5 text-[10px] font-bold text-blue-400">{sr.kind.toUpperCase()}</span>
+                       </td>
+                       <td className="py-3 pr-4 text-slate-300">{sr.state ? `${sr.state} State` : '—'}{sr.lga ? ` — ${sr.lga}` : ''}</td>
+                       <td className="py-3 text-slate-400">{sr.author}</td>
                      </tr>
                    ))}
                  </tbody>
@@ -503,29 +545,45 @@ export function IGPExecutiveDashboard({ kpis, geography, readiness, isLoading, i
           </div>
           
           <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar max-h-[calc(100vh-280px)]">
-            {incidents.map((inc) => (
-              <div 
-                key={inc.id} 
+            {incidents.length === 0 ? (
+              <div className="rounded-xl border border-white/5 bg-white/5 p-4 text-xs text-slate-400">
+                No incidents reported in this scope. The feed updates automatically as field reports arrive.
+              </div>
+            ) : incidents.map((inc) => {
+              const bucket = inc.severity === 'critical' || inc.severity === 'high'
+                ? 'critical'
+                : inc.severity === 'medium'
+                  ? 'medium'
+                  : 'low'
+              return (
+              <div
+                key={inc.id}
                 className={`relative rounded-xl border p-4 transition-all hover:translate-x-1 ${
-                  inc.severity === 'critical' ? 'border-red-500/30 bg-red-500/10' :
-                  inc.severity === 'medium' ? 'border-amber-500/30 bg-amber-500/10' :
+                  bucket === 'critical' ? 'border-red-500/30 bg-red-500/10' :
+                  bucket === 'medium' ? 'border-amber-500/30 bg-amber-500/10' :
                   'border-emerald-500/30 bg-emerald-500/10'
                 }`}
               >
                 <div className="mb-2 flex items-center justify-between">
                   <span className={`rounded-full px-2 py-0.5 font-(--font-mono) text-[9px] font-bold uppercase tracking-wider ${
-                    inc.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
-                    inc.severity === 'medium' ? 'bg-amber-500/20 text-amber-400' :
+                    bucket === 'critical' ? 'bg-red-500/20 text-red-400' :
+                    bucket === 'medium' ? 'bg-amber-500/20 text-amber-400' :
                     'bg-emerald-500/20 text-emerald-400'
                   }`}>
-                    {inc.severity}
+                    {inc.severity}{inc.isFlash ? ' · flash' : ''}
                   </span>
-                  <span className="font-(--font-mono) text-[10px] text-slate-400">{inc.time}</span>
+                  <span className="font-(--font-mono) text-[10px] text-slate-400">
+                    {new Date(inc.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
                 </div>
-                <h3 className="font-(--font-syne) text-sm font-bold text-white">{inc.category}</h3>
-                <p className="mt-1 text-xs text-slate-300">{inc.state} State — {inc.description}</p>
+                <h3 className="font-(--font-syne) text-sm font-bold text-white">{inc.typeLabel}</h3>
+                <p className="mt-1 text-xs text-slate-300">
+                  {inc.location.stateName ? `${inc.location.stateName} State` : 'Location pending'}
+                  {inc.location.lgaName ? ` — ${inc.location.lgaName}` : ''} — {inc.title || inc.description}
+                </p>
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </div>

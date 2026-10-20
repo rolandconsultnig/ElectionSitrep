@@ -68,7 +68,7 @@ export function ProfilePage() {
         <h2 className="font-(--font-display) text-lg font-bold text-[var(--portal-fg)]">Self-training</h2>
         <p className="text-sm leading-relaxed text-[var(--portal-muted)]">
           In production, ICT issues credentials by rank and role; each batch maps to portal access. Your{' '}
-          <strong className="text-[var(--sr-heading)]">username pattern</strong> still selects the portal in this demo until OIDC
+          <strong className="text-[var(--sr-heading)]">username pattern</strong> selects your portal until OIDC
           claims replace prefix routing.
         </p>
         <ol className="space-y-4">

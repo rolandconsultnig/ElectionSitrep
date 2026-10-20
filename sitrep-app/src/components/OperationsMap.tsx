@@ -209,7 +209,7 @@ export function OperationsMap({
       <aside className="rounded-xl border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)] p-4">
         <h3 className="font-(--font-syne) text-sm font-semibold text-[var(--portal-fg)]">Inactive field officers</h3>
         <p className="mt-1 text-[11px] leading-relaxed text-[var(--portal-dim)]">
-          Officers provisioned for the Field portal who are not yet active (no completed onboarding in this demo).
+          Officers provisioned for the Field portal who are not yet active (onboarding not yet completed).
         </p>
         <ul className="mt-4 max-h-[min(50vh,420px)] space-y-3 overflow-y-auto">
           {inactiveFieldOps.length === 0 ? (

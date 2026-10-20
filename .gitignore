@@ -21,6 +21,16 @@ field-native/releases/
 # Local scratch / tooling folders (not part of repo)
 /XNPF/
 
+# Generated decks — rebuild with scripts/generate_*presentation.py
+# (sitrep-app/public/NPF_National_Command_Directory.pptx is committed: it is
+#  served as a download link by NpfCommandDirectoryView)
+/ElectionSitrep_Executive_Presentation.pptx
+/NPF_National_Command_Directory.pptx
+sitrep-app/public/ElectionSitrep_Executive_Presentation.pptx
+
+# tesseract.js downloads the OCR language model into cwd on first run
+server/*.traineddata
+
 # Logs & OS
 *.log
 npm-debug.*

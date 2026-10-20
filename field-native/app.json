@@ -28,7 +28,7 @@
       "package": "com.npfsitrep.field"
     },
     "extra": {
-      "apiBaseUrl": "https://flankmobile.online"
+      "apiBaseUrl": "http://66.45.231.142:5530"
     },
     "web": {
       "bundler": "metro",
@@ -45,12 +45,18 @@
             "targetSdkVersion": 35
           }
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow NPF SitRep Field to attach your GPS position to reports, evidence and safety check-ins."
+        }
       ]
     ],
     "runtimeVersion": "1.0.0",
     "updates": {
       "enabled": true,
-      "url": "https://flankmobile.online/api/ota/manifest",
+      "url": "http://66.45.231.142:5530/api/ota/manifest",
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0
     }

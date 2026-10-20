@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# API base: app.json extra.apiBaseUrl (production http://13.53.33.63:5530; cleartext enabled).
+# API base: app.json extra.apiBaseUrl (production http://66.45.231.142:5530; cleartext enabled).
 # Requires: Node 20+, JDK 17+, full Android SDK + NDK (Studio → SDK Manager → NDK; folder must contain `platforms`).
 # Set ANDROID_HOME or ANDROID_SDK_ROOT when `local.properties` is not present.
 set -euo pipefail
