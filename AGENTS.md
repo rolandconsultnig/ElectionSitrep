@@ -58,6 +58,26 @@ an empty database by creating a throwaway database, migrating it, and dropping
 it. It never touches the target database. A scratch database is used rather than
 a wrapping transaction because some migrations contain their own `BEGIN`/`COMMIT`.
 
+## Election results data
+
+Order matters — run these in sequence per environment:
+
+```sh
+node scripts/configure-ekiti-osun-elections.mjs   # creates the two closed elections
+node scripts/load-official-results.mjs            # INEC-declared state totals (migration_028)
+node scripts/load-official-lga-results.mjs        # declared LGA figures (migration_030)
+node scripts/fetch-irev-results.mjs               # rescrapes IReV data -> scripts/data/*.json
+node scripts/load-irev-pu-results.mjs [--dry-run] # PU tallies, source='irev' (migration_031)
+```
+
+Three provenance layers are kept distinct: `election_official_party_results` /
+`official_totals` / LGA tables are INEC-declared figures; `election_pu_party_votes`
+carries a `source` column (`field` = NPF upload, `irev` = third-party EC8A
+transcription — field wins on conflict); `election_pu_result_meta` holds the
+EC8A scan URL, INEC code and anomaly flag per imported PU. The IReV loader only
+writes votes for self-consistent PUs (party sum must not exceed accredited) and
+never fabricates missing data.
+
 ## Conventions
 
 - Portal pages live in `sitrep-app/src/pages/portal/`; shared views go in
