@@ -1,5 +1,6 @@
-import { Bar, Doughnut, Radar } from 'react-chartjs-2'
+import { Bar } from 'react-chartjs-2'
 import { chartColors, chartTooltipTheme } from '../../charts/register'
+import { ElectionResultsView } from '../../components/ElectionResultsView'
 import { NigeriaMap } from '../../components/NigeriaMap'
 
 const card = 'sr-card'
@@ -133,68 +134,11 @@ export function MgmtSitRepFeed() {
 }
 
 export function MgmtResults() {
-  const doughnut = {
-    labels: ['APC', 'LP', 'PDP', 'NNPP', 'Others'],
-    datasets: [
-      {
-        data: [38, 33, 24, 5, 0],
-        backgroundColor: [chartColors.red, chartColors.blue, chartColors.amber, chartColors.purple, chartColors.border],
-        borderColor: '#0a1510',
-        borderWidth: 3,
-      },
-    ],
-  }
-
-  const radar = {
-    labels: ['SW', 'NW', 'SE', 'SS', 'NC', 'NE'],
-    datasets: [
-      {
-        label: 'APC',
-        data: [48, 61, 12, 22, 44, 55],
-        borderColor: chartColors.red,
-        backgroundColor: 'rgba(239,68,68,.12)',
-      },
-      {
-        label: 'LP',
-        data: [28, 8, 72, 58, 18, 14],
-        borderColor: chartColors.blue,
-        backgroundColor: 'rgba(59,130,246,.12)',
-      },
-    ],
-  }
-
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="font-(--font-syne) text-2xl font-bold text-[var(--portal-fg)]">Live results tracker</h1>
-        <p className="mt-1 text-sm text-[var(--portal-muted)]">Aggregated roll-up · EC8 hierarchy oversight (§M21)</p>
-      </header>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className={card}>
-          <Doughnut
-            data={doughnut}
-            options={{
-              plugins: { legend: { position: 'bottom', labels: { color: chartColors.muted } }, tooltip: chartTooltipTheme() },
-            }}
-          />
-        </div>
-        <div className={card}>
-          <Radar
-            data={radar}
-            options={{
-              scales: {
-                r: {
-                  grid: { color: chartColors.border },
-                  pointLabels: { color: chartColors.muted },
-                  ticks: { display: false },
-                },
-              },
-              plugins: { legend: { labels: { color: chartColors.muted } }, tooltip: chartTooltipTheme() },
-            }}
-          />
-        </div>
-      </div>
-    </div>
+    <ElectionResultsView
+      heading="Live results tracker"
+      subheading="INEC official declaration where available, plus jurisdiction-scoped EC8 roll-up (§M21)"
+    />
   )
 }
 

@@ -18,6 +18,23 @@ export type ExecutiveDashboardSummary = {
   }
 }
 
+/** INEC-declared figures stored in elections.official_totals (migration_028). */
+export type OfficialElectionTotals = {
+  registeredVoters?: number
+  accreditedVoters?: number
+  validVotes?: number
+  rejectedVotes?: number
+  votesCast?: number
+  pollingUnits?: number
+  lgas?: number
+  declaredWinnerParty?: string
+  declaredWinnerCandidate?: string
+  declaredAt?: string
+  returningOfficer?: string
+  source?: string
+  omittedParties?: Record<string, number>
+}
+
 export type ElectionResultsPayload = {
   election: {
     slug: string
@@ -25,6 +42,17 @@ export type ElectionResultsPayload = {
     status: string
     electionDate: string | null
   }
+  /** null until migration_028 is applied and official results are loaded */
+  official: {
+    totals: OfficialElectionTotals | null
+    byParty: {
+      partyId: string
+      abbreviation: string
+      name: string
+      votes: number
+      voteShare: number
+    }[]
+  } | null
   nationalByParty: {
     partyId: string
     abbreviation: string

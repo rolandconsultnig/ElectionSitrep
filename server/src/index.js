@@ -1297,6 +1297,45 @@ async function loadFieldPortalContext(userId) {
   }
 }
 
+/**
+ * INEC-declared results for a concluded election (migration_028).
+ *
+ * Returns null when migration_028 has not been applied yet so that live PU
+ * aggregates keep rendering on environments that predate official_totals,
+ * rather than failing the whole results payload.
+ */
+async function loadOfficialResults(electionId) {
+  try {
+    const totals = await pool.query(`SELECT official_totals FROM elections WHERE id = $1`, [electionId])
+    const parties = await pool.query(
+      `SELECT p.id, p.abbreviation, p.name, r.votes
+       FROM election_official_party_results r
+       INNER JOIN political_parties p ON p.id = r.party_id
+       WHERE r.election_id = $1
+       ORDER BY r.votes DESC`,
+      [electionId],
+    )
+    const declared = totals.rows[0]?.official_totals ?? null
+    if (!declared && !parties.rows.length) return null
+    const validVotes = Number(declared?.validVotes ?? 0)
+    return {
+      totals: declared,
+      byParty: parties.rows.map((r) => ({
+        partyId: r.id,
+        abbreviation: r.abbreviation,
+        name: r.name,
+        votes: Number(r.votes),
+        voteShare: validVotes > 0 ? Math.round((Number(r.votes) / validVotes) * 1000) / 10 : 0,
+      })),
+    }
+  } catch (e) {
+    const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : ''
+    // 42P01 missing table / 42703 missing column — migration_028 not applied
+    if (code === '42P01' || code === '42703') return null
+    throw e
+  }
+}
+
 async function loadElectionResultsPayload(slug) {
   const el = await pool.query(
     `SELECT id, slug, name, status, election_date FROM elections WHERE slug = $1`,
@@ -1384,6 +1423,7 @@ async function loadElectionResultsPayload(slug) {
   }
 
   const lastUpload = meta.rows[0]?.last_upload
+  const official = await loadOfficialResults(electionId)
   return {
     election: {
       slug: election.slug,
@@ -1391,6 +1431,7 @@ async function loadElectionResultsPayload(slug) {
       status: election.status,
       electionDate,
     },
+    official,
     nationalByParty: national.rows.map((r) => ({
       partyId: r.id,
       abbreviation: r.abbreviation,
