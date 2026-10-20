@@ -35,6 +35,20 @@ export type OfficialElectionTotals = {
   omittedParties?: Record<string, number>
 }
 
+/** INEC-declared per-LGA breakdown (migration_030). */
+export type OfficialLgaRow = {
+  name: string
+  registeredVoters: number | null
+  accreditedVoters: number | null
+  validVotes: number | null
+  rejectedVotes: number | null
+  votesCast: number | null
+  incidents: string | null
+  parties: { abbreviation: string; name: string; votes: number }[]
+  /** valid votes not attributable to publicly declared per-LGA party figures */
+  otherVotes: number | null
+}
+
 export type ElectionResultsPayload = {
   election: {
     slug: string
@@ -45,6 +59,7 @@ export type ElectionResultsPayload = {
   /** null until migration_028 is applied and official results are loaded */
   official: {
     totals: OfficialElectionTotals | null
+    lgas?: OfficialLgaRow[]
     byParty: {
       partyId: string
       abbreviation: string

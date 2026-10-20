@@ -3,7 +3,11 @@ import { useQuery } from '@tanstack/react-query'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import { chartColors, chartTooltipTheme } from '../charts/register'
 import { apiJson } from '../lib/api'
-import type { ElectionResultsPayload, OfficialElectionTotals } from '../pages/portal/igp-portal-types'
+import type {
+  ElectionResultsPayload,
+  OfficialElectionTotals,
+  OfficialLgaRow,
+} from '../pages/portal/igp-portal-types'
 
 const card = 'sr-card'
 
@@ -68,13 +72,110 @@ function Figure({ label, value, tone }: { label: string; value: string; tone?: s
  * Kept visually distinct from the live PU aggregate so the two are never
  * mistaken for each other — NPF monitors results, INEC declares them.
  */
+/**
+ * INEC-declared LGA-by-LGA results (migration_030). One column per party that
+ * had per-LGA figures publicly declared; the "Others" column is the derived
+ * residual (valid votes minus declared party sum), not a loaded figure.
+ */
+function OfficialLgaBreakdown({ lgas }: { lgas: OfficialLgaRow[] }) {
+  const partyCols = useMemo(() => {
+    const totalsByAbbr = new Map<string, number>()
+    for (const l of lgas) {
+      for (const p of l.parties) totalsByAbbr.set(p.abbreviation, (totalsByAbbr.get(p.abbreviation) ?? 0) + p.votes)
+    }
+    return [...totalsByAbbr.entries()].sort((a, b) => b[1] - a[1]).map(([abbr]) => abbr)
+  }, [lgas])
+
+  const hasOthers = lgas.some((l) => l.otherVotes != null && l.otherVotes > 0)
+  const incidentRows = lgas.filter((l) => l.incidents)
+
+  return (
+    <div className="mt-6">
+      <div className="mb-2 font-(--font-mono) text-[10px] uppercase text-[var(--portal-dim)]">
+        Declared results by LGA
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-[color:var(--portal-border)] text-[var(--portal-dim)]">
+              <th className="pb-2 pr-4 font-(--font-mono) text-[10px] uppercase">LGA</th>
+              <th className="pb-2 pr-4 text-right font-(--font-mono) text-[10px] uppercase">Accredited</th>
+              <th className="pb-2 pr-4 text-right font-(--font-mono) text-[10px] uppercase">Valid</th>
+              {partyCols.map((abbr) => (
+                <th key={abbr} className="pb-2 pr-4 text-right font-(--font-mono) text-[10px] uppercase">
+                  {abbr}
+                </th>
+              ))}
+              {hasOthers ? (
+                <th className="pb-2 text-right font-(--font-mono) text-[10px] uppercase">Others*</th>
+              ) : null}
+            </tr>
+          </thead>
+          <tbody>
+            {lgas.map((l) => {
+              const top = l.parties.reduce((m, p) => Math.max(m, p.votes), 0)
+              return (
+                <tr
+                  key={l.name}
+                  className="border-b border-[color:var(--portal-border)]/80 text-[var(--portal-muted)]"
+                >
+                  <td className="py-2 pr-4 text-[var(--portal-fg)]">{l.name}</td>
+                  <td className="py-2 pr-4 text-right">{l.accreditedVoters == null ? '—' : fmt(l.accreditedVoters)}</td>
+                  <td className="py-2 pr-4 text-right">{l.validVotes == null ? '—' : fmt(l.validVotes)}</td>
+                  {partyCols.map((abbr) => {
+                    const p = l.parties.find((x) => x.abbreviation === abbr)
+                    const winner = p != null && p.votes === top && top > 0
+                    return (
+                      <td
+                        key={abbr}
+                        className={`py-2 pr-4 text-right ${winner ? 'font-semibold text-[#d9b64a]' : ''}`}
+                      >
+                        {p == null ? '—' : fmt(p.votes)}
+                      </td>
+                    )
+                  })}
+                  {hasOthers ? (
+                    <td className="py-2 text-right">{l.otherVotes == null ? '—' : fmt(l.otherVotes)}</td>
+                  ) : null}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-2 space-y-1 text-xs text-[var(--portal-muted)]">
+        <p className="text-[var(--portal-dim)]">
+          Party columns show the declared LGA winner in gold. Blank cells were not published in the LGA
+          declaration.{hasOthers ? ' *Others = valid votes minus declared party figures (minor parties).' : ''}
+        </p>
+        {incidentRows.length ? (
+          <div className="pt-2">
+            <div className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-dim)]">
+              Collation incidents announced
+            </div>
+            <ul className="mt-1 list-disc space-y-1 pl-5">
+              {incidentRows.map((l) => (
+                <li key={l.name}>
+                  <span className="text-[var(--portal-fg)]">{l.name}:</span> {l.incidents}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 function OfficialDeclaration({
   totals,
   byParty,
+  lgas,
   collatedVotes,
 }: {
   totals: OfficialElectionTotals | null
   byParty: OfficialPartyRow[]
+  lgas: OfficialLgaRow[]
   collatedVotes: number
 }) {
   const bar = useMemo(() => {
@@ -184,6 +285,8 @@ function OfficialDeclaration({
           </table>
         </div>
       ) : null}
+
+      {lgas.length ? <OfficialLgaBreakdown lgas={lgas} /> : null}
 
       <div className="mt-4 space-y-1 text-xs text-[var(--portal-muted)]">
         {coverage != null ? (
@@ -315,6 +418,7 @@ export function ElectionResultsView({ heading, subheading }: { heading: string; 
         <OfficialDeclaration
           totals={official.totals}
           byParty={official.byParty}
+          lgas={official.lgas ?? []}
           collatedVotes={meta?.totalVotes ?? 0}
         />
       ) : null}

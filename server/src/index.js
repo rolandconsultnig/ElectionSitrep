@@ -1330,9 +1330,34 @@ async function loadOfficialResults(electionId) {
        ORDER BY r.votes DESC`,
       [electionId],
     )
+    const lgaTotals = await pool.query(
+      `SELECT t.lga_id, l.name, t.registered_voters, t.accredited_voters,
+              t.valid_votes, t.rejected_votes, t.votes_cast, t.incidents
+       FROM election_lga_result_totals t
+       INNER JOIN geo_lgas l ON l.id = t.lga_id
+       WHERE t.election_id = $1
+       ORDER BY l.name`,
+      [electionId],
+    )
+    const lgaParties = await pool.query(
+      `SELECT r.lga_id, p.abbreviation, p.name, r.votes
+       FROM election_lga_party_results r
+       INNER JOIN political_parties p ON p.id = r.party_id
+       WHERE r.election_id = $1`,
+      [electionId],
+    )
     const declared = totals.rows[0]?.official_totals ?? null
-    if (!declared && !parties.rows.length) return null
+    if (!declared && !parties.rows.length && !lgaTotals.rows.length) return null
     const validVotes = Number(declared?.validVotes ?? 0)
+    const lgaPartyMap = new Map()
+    for (const r of lgaParties.rows) {
+      if (!lgaPartyMap.has(r.lga_id)) lgaPartyMap.set(r.lga_id, [])
+      lgaPartyMap.get(r.lga_id).push({
+        abbreviation: r.abbreviation,
+        name: r.name,
+        votes: Number(r.votes),
+      })
+    }
     return {
       totals: declared,
       byParty: parties.rows.map((r) => ({
@@ -1342,6 +1367,23 @@ async function loadOfficialResults(electionId) {
         votes: Number(r.votes),
         voteShare: validVotes > 0 ? Math.round((Number(r.votes) / validVotes) * 1000) / 10 : 0,
       })),
+      lgas: lgaTotals.rows.map((r) => {
+        const lgaPartiesRows = (lgaPartyMap.get(r.lga_id) ?? []).sort((a, b) => b.votes - a.votes)
+        const declaredSum = lgaPartiesRows.reduce((a, p) => a + p.votes, 0)
+        const valid = r.valid_votes == null ? null : Number(r.valid_votes)
+        return {
+          name: r.name,
+          registeredVoters: r.registered_voters == null ? null : Number(r.registered_voters),
+          accreditedVoters: r.accredited_voters == null ? null : Number(r.accredited_voters),
+          validVotes: valid,
+          rejectedVotes: r.rejected_votes == null ? null : Number(r.rejected_votes),
+          votesCast: r.votes_cast == null ? null : Number(r.votes_cast),
+          incidents: r.incidents,
+          parties: lgaPartiesRows,
+          // votes of parties whose per-LGA figures were never publicly declared
+          otherVotes: valid != null && valid > declaredSum ? valid - declaredSum : null,
+        }
+      }),
     }
   } catch (e) {
     const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : ''
