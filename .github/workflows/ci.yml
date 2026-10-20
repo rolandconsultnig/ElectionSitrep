@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # >= 22.18 required: the liveness suites import .ts directly and rely
+          # on Node's native type stripping.
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      # API tests (ec8aOcr, chatAuthorization, analytics, commandOfficerMap)
+      # need the server's runtime deps because the modules under test import express.
+      - run: npm ci
+        working-directory: server
+      - run: npm test
+        working-directory: server
+
+      # The liveness state machines are dependency-free, so they run without an install.
+      - run: npm test
+        working-directory: sitrep-app
+      - run: npm test
+        working-directory: field-native
+
+  migrations:
+    name: Migration dry run
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+        working-directory: server
+      # Applies schema.sql plus every migration_*.sql to a throwaway database,
+      # then drops it — proves the chain still applies cleanly from empty.
+      - run: npm run migrate:dry-run
+        working-directory: server
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+
+  web-build:
+    name: Web typecheck and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: sitrep-app/package-lock.json
+      - run: npm ci
+        working-directory: sitrep-app
+      # `npm run lint` is deliberately not wired up yet: it currently reports
+      # 44 pre-existing errors, so it would fail every run. Add it once that
+      # backlog is cleared.
+      # `build` runs `tsc -b` before vite build, so this covers typechecking.
+      - run: npm run build
+        working-directory: sitrep-app

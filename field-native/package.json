@@ -8,6 +8,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
+    "test": "node --test lib/**/*.test.ts",
     "assets": "node scripts/generate-png-assets.cjs",
     "prebuild:android": "expo prebuild --platform android --clean",
     "android:apk": "expo prebuild --platform android && node scripts/run-release-build.cjs",

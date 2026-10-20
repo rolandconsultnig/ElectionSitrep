@@ -5,7 +5,9 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch-path=src src/index.js",
+    "test": "node --test src/*.test.js",
     "migrate": "node scripts/migrate.js",
+    "migrate:dry-run": "node scripts/migrate.js --dry-run",
     "build-migration-011": "node scripts/build-migration-011-lgas.mjs",
     "build-migration-012": "node scripts/build-migration-012-wards.mjs",
     "build-migration-013": "node scripts/build-migration-013-polling-units.mjs",
