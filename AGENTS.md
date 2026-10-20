@@ -31,16 +31,32 @@ therefore not wired into CI. Keep new files lint-clean.
 ## Database
 
 `npm run migrate --prefix server` applies `schema.sql` (only if `app_users` is
-missing) then every `migration_*.sql` in lexical order, against `DATABASE_URL`
-from the repo-root `.env.local`.
+missing) then every *pending* `migration_*.sql` in lexical order, against
+`DATABASE_URL` from the repo-root `.env.local`. Applied files are recorded in the
+`schema_migrations` ledger and never replayed.
+
+**The ledger is a safety mechanism, not bookkeeping.** `migration_012` and
+`migration_013` contain an unconditional `DELETE FROM geo_polling_units;`, and
+`election_pu_party_votes.polling_unit_id` is `ON DELETE CASCADE` — so replaying
+the chain on a populated database deletes the PU catalog and every uploaded vote
+tally. `migration_007` likewise deletes elections. Never bypass the ledger.
+
+On a database that predates the ledger, `migrate` refuses to run and tells you to
+baseline first:
+
+```sh
+node scripts/migrate.js --list                 # applied vs pending
+node scripts/migrate.js --baseline-through=migration_027_officer_position_source.sql
+```
+
+`--baseline-through` records that file and everything before it as applied
+*without executing it* — name the last migration already applied on that
+database, then run `migrate` to apply the rest.
 
 `npm run migrate:dry-run --prefix server` proves the whole chain still applies to
 an empty database by creating a throwaway database, migrating it, and dropping
 it. It never touches the target database. A scratch database is used rather than
 a wrapping transaction because some migrations contain their own `BEGIN`/`COMMIT`.
-
-Migrations are not tracked in a ledger table — they rely on being idempotent
-(`IF NOT EXISTS` etc.), so re-running the whole chain is expected to be safe.
 
 ## Conventions
 
