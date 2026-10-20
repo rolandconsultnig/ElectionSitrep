@@ -84,5 +84,7 @@ export type ElectionResultsPayload = {
     reportingPollingUnits: number
     totalVotes: number
     lastUploadedAt: string | null
+    /** tallies split by provenance — NPF field uploads vs IReV transcription */
+    sources?: { fieldPollingUnits: number; irevPollingUnits: number }
   }
 }

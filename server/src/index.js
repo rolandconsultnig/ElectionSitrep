@@ -1416,6 +1416,8 @@ async function loadElectionResultsPayload(slug) {
 
   const meta = await pool.query(
     `SELECT COUNT(DISTINCT polling_unit_id)::int AS pu_count,
+            COUNT(DISTINCT polling_unit_id) FILTER (WHERE source = 'field')::int AS field_pu_count,
+            COUNT(DISTINCT polling_unit_id) FILTER (WHERE source = 'irev')::int AS irev_pu_count,
             COALESCE(SUM(votes)::bigint, 0) AS vote_sum,
             MAX(updated_at) AS last_upload
      FROM election_pu_party_votes WHERE election_id = $1`,
@@ -1501,6 +1503,10 @@ async function loadElectionResultsPayload(slug) {
       reportingPollingUnits: meta.rows[0]?.pu_count ?? 0,
       totalVotes,
       lastUploadedAt: lastUpload?.toISOString?.() ?? null,
+      sources: {
+        fieldPollingUnits: meta.rows[0]?.field_pu_count ?? 0,
+        irevPollingUnits: meta.rows[0]?.irev_pu_count ?? 0,
+      },
     },
   }
 }

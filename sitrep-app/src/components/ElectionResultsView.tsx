@@ -212,7 +212,8 @@ function OfficialDeclaration({
             INEC official declaration
           </div>
           <p className="mt-1 text-xs text-[var(--portal-muted)]">
-            Declared figures of record. NPF collation below is monitoring data and does not supersede this.
+            Declared figures of record. PU collation below combines NPF field uploads and
+            IReV-transcribed tallies and does not supersede this.
           </p>
         </div>
         {totals?.declaredWinnerCandidate ? (
@@ -291,7 +292,7 @@ function OfficialDeclaration({
       <div className="mt-4 space-y-1 text-xs text-[var(--portal-muted)]">
         {coverage != null ? (
           <p>
-            NPF field collation currently accounts for {fmt(collatedVotes)} votes — {coverage}% of the official
+            PU tally collation currently accounts for {fmt(collatedVotes)} votes — {coverage}% of the official
             valid total.
           </p>
         ) : null}
@@ -424,17 +425,28 @@ export function ElectionResultsView({ heading, subheading }: { heading: string; 
       ) : null}
 
       {meta && election ? (
-        <div className={`${card} flex flex-wrap gap-4 text-sm text-[var(--portal-muted)]`}>
-          <Figure label="Reporting PUs" value={fmt(meta.reportingPollingUnits)} />
-          <Figure label="Total votes recorded" value={fmt(meta.totalVotes)} tone="#d9b64a" />
-          <div>
-            <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-dim)]">Last upload</span>
-            <div className="mt-0.5 text-[var(--portal-fg)]">
-              {meta.lastUploadedAt
-                ? new Date(meta.lastUploadedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
-                : '—'}
+        <div className={`${card} text-sm text-[var(--portal-muted)]`}>
+          <div className="flex flex-wrap gap-4">
+            <Figure label="Reporting PUs" value={fmt(meta.reportingPollingUnits)} />
+            <Figure label="Total votes recorded" value={fmt(meta.totalVotes)} tone="#d9b64a" />
+            <div>
+              <span className="font-(--font-mono) text-[10px] uppercase text-[var(--portal-dim)]">Last upload</span>
+              <div className="mt-0.5 text-[var(--portal-fg)]">
+                {meta.lastUploadedAt
+                  ? new Date(meta.lastUploadedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+                  : '—'}
+              </div>
             </div>
           </div>
+          {meta.sources && (meta.sources.irevPollingUnits > 0 || meta.sources.fieldPollingUnits > 0) ? (
+            <p className="mt-3 text-xs text-[var(--portal-dim)]">
+              Sources: {fmt(meta.sources.fieldPollingUnits)} PUs uploaded by NPF field officers
+              {meta.sources.irevPollingUnits > 0
+                ? ` + ${fmt(meta.sources.irevPollingUnits)} PUs transcribed from public INEC IReV EC8A scans (unofficial third-party transcription — flagged/inconsistent PUs excluded)`
+                : ''}
+              .
+            </p>
+          ) : null}
         </div>
       ) : null}
 
@@ -447,7 +459,7 @@ export function ElectionResultsView({ heading, subheading }: { heading: string; 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className={card}>
           <div className="mb-3 font-(--font-syne) text-sm font-semibold text-[var(--portal-fg)]">
-            NPF collation — votes by party
+            PU collation — votes by party
           </div>
           {resQ.isLoading && <p className="py-12 text-center text-sm text-[var(--portal-muted)]">Loading…</p>}
           {!resQ.isLoading && nationalBar && meta && meta.totalVotes > 0 ? (
@@ -472,7 +484,7 @@ export function ElectionResultsView({ heading, subheading }: { heading: string; 
         </div>
         <div className={card}>
           <div className="mb-3 font-(--font-syne) text-sm font-semibold text-[var(--portal-fg)]">
-            NPF collation — share (all PUs)
+            PU collation — share (all PUs)
           </div>
           {resQ.isLoading && <p className="py-12 text-center text-sm text-[var(--portal-muted)]">Loading…</p>}
           {!resQ.isLoading && nationalDoughnut && meta && meta.totalVotes > 0 ? (
