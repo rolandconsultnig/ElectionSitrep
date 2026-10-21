@@ -10,6 +10,7 @@ import { PORTALS, postLoginPath } from '../lib/navigation'
 
 const SECTION_LINKS = [
   { id: 'portals', label: 'Portals' },
+  { id: 'app', label: 'Get the app' },
   { id: 'command', label: 'Command directory' },
   { id: 'capabilities', label: 'Capabilities' },
   { id: 'igp-message', label: "IGP's message" },
@@ -504,6 +505,50 @@ export function LandingPage() {
             </div>
           </div>
         </Reveal>
+
+        {/* Mobile app download */}
+        <section id="app" className="mt-16 scroll-mt-28 md:mt-20">
+          <Reveal>
+            <div className="relative overflow-hidden rounded-3xl border border-[#00c46a]/25 bg-gradient-to-br from-[color:var(--sr-card-grad-a)] to-[color:var(--sr-card-grad-b)] p-6 shadow-[var(--sr-card-shadow)] sm:p-8 md:p-10">
+              <div
+                className="pointer-events-none absolute -right-16 -top-16 size-64 rounded-full bg-[#00c46a]/15 blur-3xl"
+                aria-hidden
+              />
+              <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:gap-10">
+                <div className="flex items-center gap-4 md:flex-col md:items-start">
+                  <span className="inline-flex size-14 shrink-0 items-center justify-center rounded-2xl border border-[#00c46a]/40 bg-[#00c46a]/10 text-2xl">
+                    📱
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-[#00c46a]/30 bg-[#00c46a]/10 px-3 py-1 font-(--font-mono) text-[9px] font-semibold uppercase tracking-widest text-[#00c46a] md:mt-4">
+                    Android · APK
+                  </span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-(--font-display) text-xl font-bold text-[var(--sr-heading)] md:text-2xl">
+                    NPF SitRep Field — the mobile app for officers at the polling unit
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--portal-muted)]">
+                    Offline-first SitReps, EC8A photo capture, live SOS with GPS, audio reports, and check-ins —
+                    synced to Command the moment you have signal. Sign in with your issued field credentials.
+                  </p>
+                  <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <a
+                      href="/downloads/npf-sitrep-field-release.apk"
+                      download
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#00c46a] to-[#00a35a] px-6 py-3.5 font-(--font-mono) text-[11px] font-bold uppercase tracking-wider text-[#04251f] shadow-[0_4px_24px_rgba(0,196,106,0.4)] transition hover:brightness-110 active:scale-[0.98]"
+                    >
+                      <span aria-hidden className="text-sm">⬇</span>
+                      Download for Android
+                    </a>
+                    <p className="font-(--font-mono) text-[10px] uppercase tracking-wider text-[var(--portal-dim)]">
+                      ~158 MB · Android 10+ · Allow "install unknown apps"
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Reveal>
+        </section>
 
         {/* Portal access */}
         <section id="portals" className="mt-20 scroll-mt-28 md:mt-28">
