@@ -91,6 +91,8 @@ export function onboardingRequest(
   token: string,
   body: {
     fullName: string
+    firstName?: string
+    lastName?: string
     serviceNumber: string
     phone: string
     pictureDataUrl: string

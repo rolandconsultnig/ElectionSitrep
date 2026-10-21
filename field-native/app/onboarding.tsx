@@ -33,7 +33,8 @@ export default function OnboardingScreen() {
   const machineRef = useRef(createMobileLivenessState())
   const [perm, requestPerm] = useCameraPermissions()
 
-  const [fullName, setFullName] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [serviceNumber, setServiceNumber] = useState('')
   const [phone, setPhone] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -69,7 +70,9 @@ export default function OnboardingScreen() {
   useEffect(() => {
     const p = user?.profile
     if (!p) return
-    setFullName(p.name ?? '')
+    const parts = String(p.name ?? '').trim().split(/\s+/).filter(Boolean)
+    setFirstName(parts[0] ?? '')
+    setLastName(parts.slice(1).join(' '))
     setServiceNumber(p.serviceNumber ?? '')
     setPhone(p.phone ?? '')
     if (!user.onboardingComplete) {
@@ -158,8 +161,8 @@ export default function OnboardingScreen() {
       setError('User information is unavailable.')
       return
     }
-    if (!fullName.trim() || !serviceNumber.trim() || !phone.trim()) {
-      setError('Name, service number, and phone are required.')
+    if (!firstName.trim() || !lastName.trim() || !serviceNumber.trim() || !phone.trim()) {
+      setError('First name, last name, service number, and phone are required.')
       return
     }
     const picOk =
@@ -194,7 +197,9 @@ export default function OnboardingScreen() {
     setBusy(true)
     try {
       await onboardingRequest(authToken, {
-        fullName: fullName.trim(),
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        fullName: `${firstName.trim()} ${lastName.trim()}`.trim(),
         serviceNumber: serviceNumber.trim(),
         phone: phone.trim(),
         pictureDataUrl: jpegDataUrl as string,
@@ -291,8 +296,11 @@ export default function OnboardingScreen() {
         <Text style={styles.body}>Details must match your service records. Photo is stored as JPEG.</Text>
 
         <View style={styles.card}>
-          <Text style={styles.label}>Full name</Text>
-          <TextInput value={fullName} onChangeText={setFullName} style={styles.input} />
+          <Text style={styles.label}>First name</Text>
+          <TextInput value={firstName} onChangeText={setFirstName} style={styles.input} autoCapitalize="words" />
+
+          <Text style={[styles.label, { marginTop: space.md }]}>Last name</Text>
+          <TextInput value={lastName} onChangeText={setLastName} style={styles.input} autoCapitalize="words" />
 
           <Text style={[styles.label, { marginTop: space.md }]}>Service number</Text>
           <TextInput value={serviceNumber} onChangeText={setServiceNumber} style={styles.input} />

@@ -865,9 +865,15 @@ app.put('/api/me/onboarding', authMiddleware, async (req, res) => {
   try {
     const body = req.body || {}
 
-    const firstName = String(body.firstName || '').trim()
-    const lastName = String(body.lastName || '').trim()
-    const fullName = `${firstName} ${lastName}`.trim()
+    // Newer clients send firstName/lastName; older field builds sent a single
+    // fullName — derive the split so those builds keep working.
+    const rawFirst = String(body.firstName || '').trim()
+    const rawLast = String(body.lastName || '').trim()
+    const fullNameRaw = String(body.fullName || '').trim()
+    const nameParts = fullNameRaw.split(/\s+/).filter(Boolean)
+    const firstName = rawFirst || nameParts[0] || ''
+    const lastName = rawLast || nameParts.slice(1).join(' ')
+    const fullName = rawFirst || rawLast ? `${rawFirst} ${rawLast}`.trim() : fullNameRaw
     const serviceNumber = String(body.serviceNumber || '').trim()
     const phone = String(body.phone || '').trim()
     const pictureDataUrl = String(body.pictureDataUrl || '')
