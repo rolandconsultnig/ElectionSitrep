@@ -9,7 +9,9 @@ import {
   advanceMobileLiveness,
   createMobileLivenessState,
   type MobileFrame,
+  type MobileLivenessState,
 } from '../lib/livenessMachine'
+import * as Speech from 'expo-speech'
 import { Redirect } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import {
@@ -42,6 +44,27 @@ export default function OnboardingScreen() {
   const [showCamera, setShowCamera] = useState(false)
   const [verifying, setVerifying] = useState(false)
   const [verificationInstruction, setVerificationInstruction] = useState('Centre your face, then start verification.')
+  const [faceStatus, setFaceStatus] = useState<'none' | 'one' | 'many'>('none')
+  const [steps, setSteps] = useState<{ label: string; done: boolean }[]>([])
+  const lastSpokenRef = useRef('')
+
+  function speak(text: string) {
+    if (text === lastSpokenRef.current) return
+    lastSpokenRef.current = text
+    Speech.stop()
+    Speech.speak(text, { rate: 1.05 })
+  }
+
+  function buildSteps(s: MobileLivenessState) {
+    const first = s.order === 'blink-first' ? 'Blink once' : 'Turn your head'
+    const second = s.order === 'blink-first' ? 'Turn your head' : 'Blink once'
+    return [
+      { label: 'Face centred', done: s.phase !== 'align' },
+      { label: first, done: s.challengeIndex >= 1 },
+      { label: second, done: s.challengeIndex >= 2 },
+      { label: 'Hold still', done: s.phase === 'captured' },
+    ]
+  }
 
   useEffect(() => {
     const p = user?.profile
@@ -58,6 +81,7 @@ export default function OnboardingScreen() {
 
   useEffect(() => () => {
     cancelVerificationRef.current = true
+    Speech.stop()
   }, [])
 
   if (!ready || !token) return null
@@ -73,7 +97,10 @@ export default function OnboardingScreen() {
     setVerifying(true)
     cancelVerificationRef.current = false
     machineRef.current = createMobileLivenessState()
+    setSteps(buildSteps(machineRef.current))
+    lastSpokenRef.current = ''
     setVerificationInstruction('Look straight at the camera and hold still.')
+    speak('Look straight at the camera and hold still.')
     try {
       while (!cancelVerificationRef.current) {
         const photo = await cameraRef.current?.takePictureAsync({
@@ -97,9 +124,13 @@ export default function OnboardingScreen() {
         }
         if (cancelVerificationRef.current) break
         const frame: MobileFrame = { ...sample, t: Date.now() }
+        setFaceStatus(frame.faceCount === 1 ? 'one' : frame.faceCount > 1 ? 'many' : 'none')
         const transition = advanceMobileLiveness(machineRef.current, frame)
         machineRef.current = transition.state
-        setVerificationInstruction(transition.resetMessage ?? transition.instruction)
+        setSteps(buildSteps(transition.state))
+        const message = transition.resetMessage ?? transition.instruction
+        setVerificationInstruction(message)
+        speak(message)
         if (!transition.captureNow) continue
 
         const manip = await ImageManipulator.manipulateAsync(photo.uri, [], {
@@ -109,6 +140,7 @@ export default function OnboardingScreen() {
         })
         if (!manip.base64) throw new Error('Could not encode photo.')
         if (cancelVerificationRef.current) break
+        speak('Identity verified.')
         setJpegDataUrl(`data:image/jpeg;base64,${manip.base64}`)
         setShowCamera(false)
         break
@@ -198,6 +230,30 @@ export default function OnboardingScreen() {
       <View style={{ flex: 1, backgroundColor: '#000' }}>
         <CameraView ref={cameraRef} style={{ flex: 1 }} facing="front" animateShutter={false} />
         <View style={styles.camHint}>
+          {verifying ? (
+            <View
+              style={[
+                styles.faceChip,
+                faceStatus === 'one' ? styles.faceChipOk : styles.faceChipBad,
+              ]}
+            >
+              <Text style={styles.faceChipText}>
+                {faceStatus === 'one' ? 'Face detected' : faceStatus === 'many' ? 'Multiple faces' : 'No face'}
+              </Text>
+            </View>
+          ) : null}
+          {verifying && steps.length ? (
+            <View style={styles.stepsRow}>
+              {steps.map((s) => (
+                <View key={s.label} style={[styles.stepChip, s.done && styles.stepChipDone]}>
+                  <Text style={[styles.stepChipText, s.done && styles.stepChipTextDone]}>
+                    {s.done ? '✓ ' : ''}
+                    {s.label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
           <Text style={styles.camHintText}>
             {verificationInstruction}
           </Text>
@@ -207,6 +263,7 @@ export default function OnboardingScreen() {
           <Pressable
             onPress={() => {
               cancelVerificationRef.current = true
+              Speech.stop()
               setVerifying(false)
               setShowCamera(false)
             }}
@@ -344,6 +401,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: space.lg,
   },
-  camHintText: { color: '#fff', fontSize: 15, textAlign: 'center', fontWeight: '600' },
+  camHintText: { color: '#fff', fontSize: 17, textAlign: 'center', fontWeight: '700', marginTop: space.sm },
   camErr: { color: '#ff9b9b', fontSize: 14, textAlign: 'center', marginTop: space.sm },
+  faceChip: {
+    paddingHorizontal: space.md,
+    paddingVertical: 4,
+    borderRadius: 999,
+    marginBottom: space.sm,
+  },
+  faceChipOk: { backgroundColor: 'rgba(22,163,74,0.85)' },
+  faceChipBad: { backgroundColor: 'rgba(220,38,38,0.85)' },
+  faceChipText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  stepsRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6 },
+  stepChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  stepChipDone: { backgroundColor: 'rgba(22,163,74,0.85)' },
+  stepChipText: { color: '#ddd', fontSize: 12, fontWeight: '600' },
+  stepChipTextDone: { color: '#fff' },
 })

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Server cert pin: production nginx serves a self-signed cert with IP SAN
+     66.45.231.142 (see android-config/election_sitrep.crt). Without this,
+     Android rejects the TLS handshake. Cleartext stays permitted so the
+     in-app Network settings screen can still target LAN/dev servers. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">66.45.231.142</domain>
+        <trust-anchors>
+            <certificates src="@raw/election_sitrep" />
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>

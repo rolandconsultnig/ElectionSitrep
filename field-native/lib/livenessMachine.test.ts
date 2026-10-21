@@ -52,11 +52,12 @@ test('two faces reset the session', () => {
   assert.equal(transition.state.phase, 'align')
 })
 
-test('three consecutive no-face frames reset the session', () => {
+test('six consecutive no-face frames reset the session', () => {
   let state = start(createMobileLivenessState({ order: 'blink-first' }))
-  state = step(state, { t: 100, faceCount: 0, rotationY: null, minEyeOpen: null }).state
-  state = step(state, { t: 200, faceCount: 0, rotationY: null, minEyeOpen: null }).state
-  const transition = step(state, { t: 300, faceCount: 0, rotationY: null, minEyeOpen: null })
+  let transition = step(state, { t: 0, faceCount: 0, rotationY: null, minEyeOpen: null })
+  for (let t = 100; t < 600; t += 100) {
+    transition = step(transition.state, { t, faceCount: 0, rotationY: null, minEyeOpen: null })
+  }
   assert.match(transition.resetMessage ?? '', /No face detected/)
 })
 

@@ -81,7 +81,9 @@ export function advanceMobileLiveness(state: MobileLivenessState, frame: MobileF
   if (frame.faceCount > 1) return reset(state, frame.t, 'More than one face — start again')
   if (frame.faceCount === 0) {
     const noFaceFrames = state.noFaceFrames + 1
-    if (noFaceFrames >= 3) return reset(state, frame.t, 'No face detected — start again')
+    // Frames arrive every few hundred ms; brief drop-outs are normal while
+    // the user moves their head, so only give up on a sustained absence.
+    if (noFaceFrames >= 6) return reset(state, frame.t, 'No face detected — start again')
     const next = {
       ...state,
       startedAt: state.startedAt ?? frame.t,

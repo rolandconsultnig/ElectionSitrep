@@ -28,7 +28,7 @@
       "package": "com.npfsitrep.field"
     },
     "extra": {
-      "apiBaseUrl": "http://66.45.231.142:5530"
+      "apiBaseUrl": "https://66.45.231.142:6634"
     },
     "web": {
       "bundler": "metro",
@@ -42,7 +42,8 @@
           "android": {
             "minSdkVersion": 29,
             "compileSdkVersion": 35,
-            "targetSdkVersion": 35
+            "targetSdkVersion": 35,
+            "kotlinVersion": "2.1.20"
           }
         }
       ],
@@ -56,7 +57,7 @@
     "runtimeVersion": "1.0.0",
     "updates": {
       "enabled": true,
-      "url": "http://66.45.231.142:5530/api/ota/manifest",
+      "url": "https://66.45.231.142:6634/api/ota/manifest",
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0
     }

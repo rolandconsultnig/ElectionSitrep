@@ -13,6 +13,27 @@ if (!fs.existsSync(gradlew)) {
   process.exit(1)
 }
 
+// Re-apply pinned-cert network config after prebuild --clean wipes android/.
+// Source of truth: android-config/ (cert + xml) — see network_security_config.xml comment.
+const cfgDir = path.join(root, 'android-config')
+const certSrc = path.join(cfgDir, 'election_sitrep.crt')
+const xmlSrc = path.join(cfgDir, 'network_security_config.xml')
+if (fs.existsSync(certSrc) && fs.existsSync(xmlSrc)) {
+  const rawDir = path.join(androidDir, 'app/src/main/res/raw')
+  const xmlDir = path.join(androidDir, 'app/src/main/res/xml')
+  fs.mkdirSync(rawDir, { recursive: true })
+  fs.mkdirSync(xmlDir, { recursive: true })
+  fs.copyFileSync(certSrc, path.join(rawDir, 'election_sitrep.crt'))
+  fs.copyFileSync(xmlSrc, path.join(xmlDir, 'network_security_config.xml'))
+  const manifest = path.join(androidDir, 'app/src/main/AndroidManifest.xml')
+  let xml = fs.readFileSync(manifest, 'utf8')
+  if (!xml.includes('android:networkSecurityConfig')) {
+    xml = xml.replace('<application ', '<application android:networkSecurityConfig="@xml/network_security_config" ')
+    fs.writeFileSync(manifest, xml)
+  }
+  console.log('[run-release-build] Applied network security config (pinned server cert)')
+}
+
 process.env.NODE_ENV = process.env.NODE_ENV || 'production'
 
 const child = isWin

@@ -1,5 +1,4 @@
 import FaceDetection, { type FaceDetectionOptions } from '@react-native-ml-kit/face-detection'
-import { Image } from 'react-native'
 
 export type FrameSample = {
   uri: string
@@ -15,16 +14,6 @@ const DETECTION_OPTS: FaceDetectionOptions = {
   minFaceSize: 0.15,
 }
 
-function getImageWidth(uri: string): Promise<number | null> {
-  return new Promise((resolve) => {
-    Image.getSize(
-      uri,
-      (width) => resolve(width),
-      () => resolve(null),
-    )
-  })
-}
-
 export async function sampleFrame(uri: string): Promise<FrameSample> {
   const faces = (await FaceDetection.detect(uri, DETECTION_OPTS)) ?? []
   if (faces.length !== 1) {
@@ -34,8 +23,8 @@ export async function sampleFrame(uri: string): Promise<FrameSample> {
   const eyes = [face.leftEyeOpenProbability, face.rightEyeOpenProbability].filter(
     (value): value is number => typeof value === 'number',
   )
-  const imageWidth = await getImageWidth(uri)
   const frameWidth = (face as unknown as { frame?: { width?: number } }).frame?.width
+  const imageWidth = (face as unknown as { frame?: { imageWidth?: number; width?: number } }).frame?.imageWidth
   return {
     uri,
     faceCount: 1,
