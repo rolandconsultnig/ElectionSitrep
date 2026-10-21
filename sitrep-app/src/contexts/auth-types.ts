@@ -5,7 +5,7 @@ export type OfficerProfile = {
   lastName: string
   serviceNumber: string
   phone: string
-  pictureDataUrl: string
+  pictureDataUrl: string | null
   livenessVerified: boolean
   livenessCheckedAt?: string
 }

@@ -322,6 +322,14 @@ export function LandingPage() {
                 </div>
               </div>
             </nav>
+            <a
+              href="/downloads/npf-sitrep-field-release.apk"
+              download
+              className="sr-link-nav inline-flex items-center gap-1.5 rounded-full border border-[color:var(--portal-border)] bg-[color:var(--sr-btn-ghost-bg)] px-4 py-2 font-(--font-mono) text-[10px] font-bold uppercase tracking-wider transition hover:text-[#00c46a]"
+              title="Download the NPF SitRep field app for Android"
+            >
+              <span aria-hidden>⬇</span> Field app
+            </a>
             {!user ? (
               <Link
                 to="/login"

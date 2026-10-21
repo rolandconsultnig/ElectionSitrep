@@ -37,6 +37,7 @@ export function FieldSafetyPage() {
   const pinQ = useQuery({ queryKey: ['duress-pin'], queryFn: () => apiJson<{ enabled: boolean }>('/api/me/duress-pin') })
   const [msg, setMsg] = useState<string | null>(null)
   const [pin, setPin] = useState('')
+  const [sending, setSending] = useState(false)
   const [holding, setHolding] = useState(0)
   const holdTimer = useRef<number | null>(null)
   const activeSosId = sosQ.data?.activeId ?? null
@@ -65,10 +66,27 @@ export function FieldSafetyPage() {
   }
 
   async function sendSos() {
-    const pos = await currentPosition()
-    await postJson('/api/sos', { kind: 'panic', lat: pos?.lat, lng: pos?.lng, accuracy: pos?.accuracy })
-    setMsg('SOS sent silently. Command can see your live location.')
-    void qc.invalidateQueries({ queryKey: ['sos-mine'] })
+    setSending(true)
+    setMsg('Sending SOS…')
+    try {
+      // Raise the alert first — waiting on GPS (up to 8s timeout) must never
+      // delay an SOS. Location is streamed afterwards once it resolves.
+      const { id } = await postJson<{ id: number }>('/api/sos', { kind: 'panic' })
+      setMsg('SOS sent silently. Command can see your live location.')
+      void qc.invalidateQueries({ queryKey: ['sos-mine'] })
+      const pos = await currentPosition()
+      if (pos) {
+        await postJson(`/api/sos/${id}/location`, {
+          lat: pos.lat,
+          lng: pos.lng,
+          accuracy: pos.accuracy,
+        }).catch(() => undefined)
+      }
+    } catch (e) {
+      setMsg((e as Error).message)
+    } finally {
+      setSending(false)
+    }
   }
 
   function startHold() {
@@ -116,13 +134,15 @@ export function FieldSafetyPage() {
         ) : (
           <button
             type="button"
+            disabled={sending}
             onPointerDown={startHold}
             onPointerUp={stopHold}
             onPointerLeave={stopHold}
-            className="relative mt-4 size-36 overflow-hidden rounded-full bg-red-700 text-xl font-extrabold text-white shadow-xl shadow-red-900/50 select-none"
+            onContextMenu={(e) => e.preventDefault()}
+            className="relative mt-4 size-36 touch-none overflow-hidden rounded-full bg-red-700 text-xl font-extrabold text-white shadow-xl shadow-red-900/50 select-none disabled:opacity-70"
           >
             <span className="absolute inset-x-0 bottom-0 bg-red-400/60" style={{ height: `${holding}%` }} />
-            <span className="relative">SOS</span>
+            <span className="relative">{sending ? '…' : 'SOS'}</span>
           </button>
         )}
       </div>

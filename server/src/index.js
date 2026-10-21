@@ -891,15 +891,16 @@ app.put('/api/me/onboarding', authMiddleware, async (req, res) => {
         received: { firstName: body.firstName, lastName: body.lastName, serviceNumber: body.serviceNumber, phone: body.phone }
       })
     }
-    const parsed = parseDataUrl(pictureDataUrl)
-    if (!parsed?.buffer?.length) {
-      return res.status(400).json({ error: 'Valid profile picture (data URL) required' })
+    // Profile picture is optional — liveness verification is still required
+    // on first onboarding, but no photo need be stored.
+    const parsed = pictureDataUrl ? parseDataUrl(pictureDataUrl) : null
+    if (pictureDataUrl && !parsed?.buffer?.length) {
+      return res.status(400).json({ error: 'Profile picture must be a valid JPEG or PNG data URL' })
     }
-    const picMime = String(parsed.mime || '')
-      .toLowerCase()
-      .split(';')[0]
-      .trim()
-    if (picMime !== 'image/jpeg' && picMime !== 'image/png') {
+    const picMime = parsed
+      ? String(parsed.mime || '').toLowerCase().split(';')[0].trim()
+      : null
+    if (parsed && picMime !== 'image/jpeg' && picMime !== 'image/png') {
       return res.status(400).json({
         error: 'Profile picture must be JPEG or PNG (WEBP is not accepted)',
       })
@@ -921,7 +922,7 @@ app.put('/api/me/onboarding', authMiddleware, async (req, res) => {
       await client.query('ROLLBACK')
       return res.status(400).json({ error: 'Live face verification is required' })
     }
-    if (!obDone && picMime !== 'image/jpeg' && picMime !== 'image/png') {
+    if (!obDone && parsed && picMime !== 'image/jpeg' && picMime !== 'image/png') {
       await client.query('ROLLBACK')
       return res.status(400).json({ error: 'Initial onboarding photo must be JPEG or PNG' })
     }
@@ -960,8 +961,8 @@ app.put('/api/me/onboarding', authMiddleware, async (req, res) => {
           fullName,
           serviceNumber,
           phone,
-          parsed.buffer,
-          parsed.mime,
+          parsed?.buffer ?? null,
+          parsed?.mime ?? null,
           livenessVerified,
           livenessCheckedAt,
         ],

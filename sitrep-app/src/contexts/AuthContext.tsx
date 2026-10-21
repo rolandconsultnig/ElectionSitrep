@@ -133,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         lastName: profile.lastName,
         serviceNumber: profile.serviceNumber,
         phone: profile.phone,
-        pictureDataUrl: profile.pictureDataUrl,
+        pictureDataUrl: profile.pictureDataUrl ?? null,
         livenessVerified: profile.livenessVerified,
         livenessCheckedAt: profile.livenessCheckedAt ?? new Date().toISOString(),
         newPassword,

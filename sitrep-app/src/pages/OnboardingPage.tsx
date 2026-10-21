@@ -15,7 +15,6 @@ export function OnboardingPage() {
   const [lastName, setLastName] = useState('')
   const [serviceNumber, setServiceNumber] = useState('')
   const [phone, setPhone] = useState('')
-  const [pictureDataUrl, setPictureDataUrl] = useState<string | null>(null)
   const [livenessVerified, setLivenessVerified] = useState(false)
   const [livenessReset, setLivenessReset] = useState(0)
   const [newPassword, setNewPassword] = useState('')
@@ -23,8 +22,7 @@ export function OnboardingPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const handleLivenessVerified = useCallback((dataUrl: string) => {
-    setPictureDataUrl(dataUrl)
+  const handleLivenessVerified = useCallback(() => {
     setLivenessVerified(true)
   }, [])
 
@@ -65,7 +63,7 @@ export function OnboardingPage() {
       setFormError('Enter your phone number.')
       return
     }
-    if (!livenessVerified || !pictureDataUrl) {
+    if (!livenessVerified) {
       setFormError('Complete the live camera verification before continuing.')
       return
     }
@@ -83,7 +81,8 @@ export function OnboardingPage() {
       lastName: lastName.trim(),
       serviceNumber: serviceNumber.trim(),
       phone: phone.trim(),
-      pictureDataUrl,
+      // Liveness proves the officer is human; the captured frame is not stored.
+      pictureDataUrl: null,
       livenessVerified: true,
       livenessCheckedAt: new Date().toISOString(),
     }
@@ -185,10 +184,10 @@ export function OnboardingPage() {
           </div>
 
           <div>
-            <p className="sr-label">Live photograph</p>
+            <p className="sr-label">Live verification</p>
             <p className="mb-3 text-xs text-[var(--portal-muted)]">
-              Follow the prompts to align your face, blink twice, and turn your head. Your photo is captured automatically
-              after you look straight ahead — use good lighting and avoid covering your face.
+              Follow the prompts to align your face, blink twice, and turn your head — use good lighting and avoid
+              covering your face. This confirms you are a real officer; no photo is stored.
             </p>
             <LivenessCapture key={livenessReset} resetKey={livenessReset} onVerified={handleLivenessVerified} />
             {livenessVerified ? (
@@ -197,11 +196,10 @@ export function OnboardingPage() {
                 className="sr-btn-ghost mt-3 text-xs"
                 onClick={() => {
                   setLivenessVerified(false)
-                  setPictureDataUrl(null)
                   setLivenessReset((k) => k + 1)
                 }}
               >
-                Retake photo
+                Retry verification
               </button>
             ) : null}
           </div>
