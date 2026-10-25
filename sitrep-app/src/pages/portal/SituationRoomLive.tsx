@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import L from 'leaflet'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { apiJson } from '../../lib/api'
 import { SosAlertBanner, type WallSos } from '../../components/SosAlertBanner'
@@ -29,6 +29,36 @@ type WallPhoto = {
 }
 
 type LiveWall = { officers: FieldOfficer[]; photos: WallPhoto[]; sos: WallSos[] }
+
+type OfficerReport = {
+  id: string
+  kind: string
+  severity: string
+  title: string
+  body: string
+  createdAt: string
+  lat: number | null
+  lng: number | null
+  hasPhoto: boolean
+  photoGeo: { lat: number; lng: number; accuracy: number | null; capturedAt: string | null } | null
+}
+
+type OfficerDetail = {
+  officer: {
+    userId: string
+    displayName: string
+    serviceNumber: string | null
+    puCode: string | null
+    puName: string | null
+    live: boolean
+    lat: number | null
+    lng: number | null
+    lastLocationAt: string | null
+    batteryPct: number | null
+    network: string | null
+  }
+  reports: OfficerReport[]
+}
 
 const C = {
   cyan: '#06b6d4',
@@ -59,6 +89,10 @@ function officerIcon(o: FieldOfficer, sos = false) {
   const name = o.displayName.split(' ').slice(0, 2).join(' ')
   return L.divIcon({
     className: 'sr3-officer-icon',
+    // Real iconSize/anchor — with [0,0] Leaflet gives the marker no clickable box.
+    iconSize: [110, 42],
+    iconAnchor: [55, 21],
+    popupAnchor: [0, -18],
     html: `
       <div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);">
         <span style="position:relative;display:flex;height:14px;width:14px;">
@@ -69,9 +103,6 @@ function officerIcon(o: FieldOfficer, sos = false) {
           ${sos ? '🆘 ' : ''}${name.replace(/</g, '&lt;')}
         </span>
       </div>`,
-    iconSize: [0, 0],
-    iconAnchor: [0, 0],
-    popupAnchor: [0, -18],
   })
 }
 
@@ -81,6 +112,111 @@ function FlyTo({ target }: { target: { lat: number; lng: number } | null }) {
     if (target) map.flyTo([target.lat, target.lng], 13, { duration: 1.2 })
   }, [map, target])
   return null
+}
+
+const SEV_COLORS: Record<string, string> = {
+  critical: '#f43f5e',
+  high: '#fb923c',
+  medium: '#f59e0b',
+  low: '#64748b',
+}
+
+function OfficerModal({ userId, onClose }: { userId: string; onClose: () => void }) {
+  const q = useQuery({
+    queryKey: ['sr3-officer', userId],
+    queryFn: () => apiJson<OfficerDetail>(`/api/public/situation-room/officer/${userId}`),
+    refetchInterval: 10_000,
+  })
+  const o = q.data?.officer
+  const reports = q.data?.reports ?? []
+
+  return (
+    <div
+      className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-cyan-500/30 bg-[#04110c] shadow-2xl shadow-cyan-500/10"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between border-b border-cyan-500/20 px-5 py-4">
+          <div>
+            <h3 className="text-lg font-bold text-slate-100">{o?.displayName ?? 'Loading…'}</h3>
+            {o && (
+              <div className="mt-1 space-y-0.5 font-(--font-mono) text-[11px] text-slate-400">
+                <div>
+                  <span className={o.live ? 'text-emerald-400' : 'text-slate-500'}>●</span>{' '}
+                  {o.live ? 'LIVE' : 'offline'}
+                  {o.serviceNumber ? ` · S/N ${o.serviceNumber}` : ''}
+                  {o.puCode || o.puName ? ` · ${o.puCode ?? o.puName}` : ' · unassigned'}
+                </div>
+                {o.lat != null && o.lng != null && (
+                  <div className="text-cyan-300">📍 {o.lat.toFixed(5)}, {o.lng.toFixed(5)} · {ago(o.lastLocationAt)}</div>
+                )}
+                <div className="text-slate-500">
+                  {o.batteryPct != null ? `🔋 ${o.batteryPct}%` : ''}{o.network ? ` · ${o.network}` : ''}
+                </div>
+              </div>
+            )}
+          </div>
+          <button type="button" onClick={onClose} className="rounded border border-slate-600 px-2.5 py-1 text-xs text-slate-400 hover:bg-slate-800">
+            Close ✕
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
+          <h4 className="mb-2 font-(--font-mono) text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-300">
+            Reports by this officer ({reports.length})
+          </h4>
+          {q.isLoading && <p className="py-4 text-xs text-slate-500">Loading reports…</p>}
+          {q.isError && <p className="py-4 text-xs text-red-400">Could not load reports.</p>}
+          {!q.isLoading && reports.length === 0 && (
+            <p className="py-4 text-xs text-slate-500">No reports filed by this officer yet.</p>
+          )}
+          <div className="space-y-2 pb-3">
+            {reports.map((r) => (
+              <div key={r.id} className="rounded-lg border border-slate-700/60 bg-slate-900/50 p-3">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="rounded px-1.5 py-0.5 font-(--font-mono) text-[9px] font-bold uppercase"
+                    style={{ background: `${SEV_COLORS[r.severity] ?? '#64748b'}22`, color: SEV_COLORS[r.severity] ?? '#94a3b8', border: `1px solid ${SEV_COLORS[r.severity] ?? '#64748b'}55` }}
+                  >
+                    {r.severity}
+                  </span>
+                  <span className="font-(--font-mono) text-[9px] uppercase tracking-widest text-slate-500">{r.kind}</span>
+                  <span className="ml-auto font-(--font-mono) text-[9px] text-slate-500">
+                    {new Date(r.createdAt).toLocaleString()}
+                  </span>
+                </div>
+                <div className="mt-1 text-sm font-semibold text-slate-200">{r.title}</div>
+                {r.body ? <p className="mt-0.5 line-clamp-2 text-xs text-slate-400">{r.body}</p> : null}
+                <div className="mt-1.5 space-y-0.5 font-(--font-mono) text-[10px]">
+                  {r.lat != null && r.lng != null && (
+                    <div className="text-slate-400">⌖ {r.lat.toFixed(5)}, {r.lng.toFixed(5)}</div>
+                  )}
+                  {r.photoGeo && (
+                    <div className="text-emerald-400">
+                      📍 photo: {r.photoGeo.lat.toFixed(5)}, {r.photoGeo.lng.toFixed(5)}
+                      {r.photoGeo.accuracy != null ? ` ±${Math.round(r.photoGeo.accuracy)}m` : ''}
+                    </div>
+                  )}
+                  {r.hasPhoto && r.id.startsWith('fc-') && (
+                    <img
+                      src={`/api/public/sitreps/field/${r.id.replace(/^fc-/, '')}/photo`}
+                      alt="Field evidence"
+                      className="mt-1 max-h-36 rounded border border-slate-700"
+                      loading="lazy"
+                    />
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function FeedPhotoThumb({ item }: { item: WallPhoto }) {
@@ -98,6 +234,7 @@ function FeedPhotoThumb({ item }: { item: WallPhoto }) {
 export function SituationRoomLive() {
   const [time, setTime] = useState(new Date())
   const [focus, setFocus] = useState<{ lat: number; lng: number } | null>(null)
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const mapKeyRef = useRef(0)
 
   const wallQuery = useQuery({
@@ -123,8 +260,12 @@ export function SituationRoomLive() {
       <style>{`@keyframes sr3ping{0%{transform:scale(.6);opacity:.5}80%,100%{transform:scale(2.2);opacity:0}}`}</style>
       <SosAlertBanner
         alerts={sosAlerts}
-        onSelect={(a) => a.lastFix && setFocus({ lat: a.lastFix.lat, lng: a.lastFix.lng })}
+        onSelect={(a) => {
+          if (a.lastFix) setFocus({ lat: a.lastFix.lat, lng: a.lastFix.lng })
+          setSelectedUserId(a.userId)
+        }}
       />
+      {selectedUserId && <OfficerModal userId={selectedUserId} onClose={() => setSelectedUserId(null)} />}
       {/* Header */}
       <header className="flex items-center justify-between border-b border-cyan-500/20 bg-[#04110c]/90 px-6 py-3">
         <div className="flex items-center gap-4">
@@ -175,17 +316,12 @@ export function SituationRoomLive() {
             />
             <FlyTo target={focus} />
             {officers.map((o) => (
-              <Marker key={o.userId} position={[o.lat, o.lng]} icon={officerIcon(o, sosUserIds.has(o.userId))}>
-                <Popup>
-                  <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 11, lineHeight: 1.5 }}>
-                    <strong>{o.displayName}</strong> · {o.live ? 'LIVE' : 'offline'}<br />
-                    📍 {o.lat.toFixed(5)}, {o.lng.toFixed(5)}<br />
-                    Fix: {o.locationSource === 'gps' ? 'device GPS' : o.locationSource === 'assigned_pu' ? 'assigned PU' : 'estimate'} · {ago(o.lastLocationAt)}<br />
-                    {o.puCode || o.puName ? `Post: ${o.puCode ?? o.puName}` : 'Post: unassigned'}
-                    {o.batteryPct != null ? `<br />Battery: ${o.batteryPct}%` : ''}
-                  </div>
-                </Popup>
-              </Marker>
+              <Marker
+                key={o.userId}
+                position={[o.lat, o.lng]}
+                icon={officerIcon(o, sosUserIds.has(o.userId))}
+                eventHandlers={{ click: () => setSelectedUserId(o.userId) }}
+              />
             ))}
           </MapContainer>
           {wallQuery.isError && (
@@ -218,7 +354,10 @@ export function SituationRoomLive() {
               <button
                 key={o.userId}
                 type="button"
-                onClick={() => setFocus({ lat: o.lat, lng: o.lng })}
+                onClick={() => {
+                  setFocus({ lat: o.lat, lng: o.lng })
+                  setSelectedUserId(o.userId)
+                }}
                 className={`block w-full border-b px-4 py-3 text-left transition hover:bg-cyan-500/5 ${
                   sosUserIds.has(o.userId) ? 'border-red-500/60 bg-red-950/40' : 'border-slate-800/60'
                 }`}

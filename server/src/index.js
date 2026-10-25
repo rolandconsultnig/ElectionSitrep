@@ -2962,6 +2962,116 @@ app.get('/api/public/sitreps/field/:id/photo', async (req, res) => {
   }
 })
 
+/** GET /api/public/situation-room/officer/:userId — wall detail: officer position + their latest reports */
+app.get('/api/public/situation-room/officer/:userId', async (req, res) => {
+  try {
+    const userId = String(req.params.userId)
+    if (!/^[0-9a-fA-F-]{36}$/.test(userId)) return res.status(400).json({ error: 'Invalid user id' })
+    const { rows: u } = await pool.query(
+      `SELECT u.id, coalesce(op.full_name, u.username) AS display_name, op.service_number,
+              pu.code AS pu_code, pu.name AS pu_name, pu.lat AS pu_lat, pu.lng AS pu_lng
+       FROM app_users u
+       LEFT JOIN officer_profiles op ON op.user_id = u.id
+       LEFT JOIN geo_polling_units pu ON pu.id = op.assigned_polling_unit_id
+       WHERE u.id = $1 AND u.portal = 'field'`,
+      [userId],
+    )
+    if (!u.length) return res.status(404).json({ error: 'Officer not found' })
+
+    let safety = null
+    try {
+      const { rows } = await pool.query(
+        `SELECT last_lat, last_lng, telemetry_at, position_source, battery_pct, network
+         FROM officer_safety WHERE user_id = $1`,
+        [userId],
+      )
+      safety = rows[0] ?? null
+    } catch (e) {
+      const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : ''
+      if (code !== '42P01' && code !== '42703') throw e
+    }
+
+    // Unified per-officer reports: structured incidents + field captures.
+    const reportsSql = (withGeoCols) => `SELECT * FROM (
+         SELECT 'inc-' || i.id AS id, 'incident' AS kind, i.severity, i.title,
+                coalesce(i.description, '') AS body, i.created_at,
+                i.lat, i.lng, (i.photo_data IS NOT NULL) AS has_photo,
+                ${withGeoCols
+                  ? 'i.photo_lat, i.photo_lng, i.photo_accuracy, i.photo_captured_at'
+                  : 'NULL::float AS photo_lat, NULL::float AS photo_lng, NULL::float AS photo_accuracy, NULL::timestamptz AS photo_captured_at'}
+         FROM incidents i
+         WHERE i.reporter_user_id = $1
+         UNION ALL
+         SELECT 'fc-' || f.id AS id, f.kind,
+                coalesce(f.payload->>'severity', 'low') AS severity,
+                CASE f.kind
+                  WHEN 'sitrep' THEN 'Field SitRep — ' || coalesce(f.payload->>'securityStatus', 'routine')
+                  WHEN 'incident' THEN coalesce(f.payload->>'category', 'Incident')
+                  ELSE 'Violence alert'
+                END AS title,
+                coalesce(f.payload->>'narrative', f.payload->>'detail', '') AS body,
+                f.device_created_at AS created_at,
+                CASE WHEN f.payload->>'lat' ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (f.payload->>'lat')::float END AS lat,
+                CASE WHEN f.payload->>'lng' ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (f.payload->>'lng')::float END AS lng,
+                (f.photo_data IS NOT NULL) AS has_photo,
+                CASE WHEN f.payload->>'photoLat' ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (f.payload->>'photoLat')::float END AS photo_lat,
+                CASE WHEN f.payload->>'photoLng' ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (f.payload->>'photoLng')::float END AS photo_lng,
+                CASE WHEN f.payload->>'photoAccuracy' ~ '^[0-9]+(\\.[0-9]+)?$' THEN (f.payload->>'photoAccuracy')::float END AS photo_accuracy,
+                f.payload->>'photoCapturedAt' AS photo_captured_at
+         FROM field_capture_outbox f
+         WHERE f.user_id = $1
+       ) r
+       ORDER BY created_at DESC
+       LIMIT 25`
+    let reports
+    try {
+      const { rows } = await pool.query(reportsSql(true), [userId])
+      reports = rows
+    } catch (e) {
+      if (!(e && String(e.code) === '42703')) throw e
+      const { rows } = await pool.query(reportsSql(false), [userId])
+      reports = rows
+    }
+
+    const o = u[0]
+    res.setHeader('Cache-Control', 'no-store')
+    return res.json({
+      officer: {
+        userId: o.id,
+        displayName: o.display_name,
+        serviceNumber: o.service_number ?? null,
+        puCode: o.pu_code ?? null,
+        puName: o.pu_name ?? null,
+        live: Boolean(safety?.telemetry_at && Date.now() - new Date(safety.telemetry_at).getTime() < 5 * 60 * 1000),
+        lat: safety?.last_lat != null ? Number(safety.last_lat) : (o.pu_lat != null ? Number(o.pu_lat) : null),
+        lng: safety?.last_lng != null ? Number(safety.last_lng) : (o.pu_lng != null ? Number(o.pu_lng) : null),
+        lastLocationAt: safety?.telemetry_at ?? null,
+        batteryPct: safety?.battery_pct ?? null,
+        network: safety?.network ?? null,
+      },
+      reports: reports.map((r) => ({
+        id: r.id,
+        kind: r.kind,
+        severity: r.severity,
+        title: r.title,
+        body: r.body,
+        createdAt: r.created_at,
+        lat: r.lat,
+        lng: r.lng,
+        hasPhoto: Boolean(r.has_photo),
+        photoGeo: r.photo_lat != null && r.photo_lng != null
+          ? { lat: r.photo_lat, lng: r.photo_lng, accuracy: r.photo_accuracy ?? null, capturedAt: r.photo_captured_at ?? null }
+          : null,
+      })),
+    })
+  } catch (e) {
+    console.error(e)
+    const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : ''
+    if (code === '42P01') return res.status(503).json({ error: 'Database migrations pending' })
+    return res.status(500).json({ error: 'Failed to load officer detail' })
+  }
+})
+
 /* -------------------------------------------------------------------------- */
 /* Jurisdiction-scoped SitRep command API (migration_020)                      */
 /* HQ/national sees all reports; a state command sees only its state; an area  */
