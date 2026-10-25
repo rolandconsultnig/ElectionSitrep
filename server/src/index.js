@@ -2865,6 +2865,82 @@ app.get('/api/igp/field-operations-map', authMiddleware, requireAnyPortal('igp',
 })
 
 /* -------------------------------------------------------------------------- */
+/* Situation Room 3 — unauthenticated wall feed. The wall display runs on      */
+/* command-centre screens without a portal login, so this endpoint returns a   */
+/* deliberately minimal payload: officer display names + live positions and    */
+/* the latest geotagged photo references. No usernames, no report bodies.      */
+/* -------------------------------------------------------------------------- */
+app.get('/api/public/situation-room/live', async (req, res) => {
+  try {
+    const data = await loadFieldOperationsMapPayload(pool)
+    const officers = [...data.active, ...data.inactive].map((o) => ({
+      userId: o.userId,
+      displayName: o.displayName,
+      lat: o.lat,
+      lng: o.lng,
+      live: o.live,
+      locationSource: o.locationSource,
+      lastLocationAt: o.lastLocationAt,
+      batteryPct: o.batteryPct,
+      puCode: o.assignedPu?.code ?? null,
+      puName: o.assignedPu?.name ?? null,
+    }))
+    const { rows: photos } = await pool.query(
+      `SELECT f.id, f.kind, f.device_created_at AS created_at,
+              coalesce(op.full_name, u.username) AS author,
+              pu.code AS pu_code,
+              CASE WHEN f.payload->>'photoLat' ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (f.payload->>'photoLat')::float END AS photo_lat,
+              CASE WHEN f.payload->>'photoLng' ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (f.payload->>'photoLng')::float END AS photo_lng,
+              CASE WHEN f.payload->>'photoAccuracy' ~ '^[0-9]+(\\.[0-9]+)?$' THEN (f.payload->>'photoAccuracy')::float END AS photo_accuracy,
+              f.payload->>'photoCapturedAt' AS photo_captured_at
+       FROM field_capture_outbox f
+       JOIN app_users u ON u.id = f.user_id
+       LEFT JOIN officer_profiles op ON op.user_id = f.user_id
+       LEFT JOIN geo_polling_units pu ON pu.id = op.assigned_polling_unit_id
+       WHERE f.photo_data IS NOT NULL
+       ORDER BY f.device_created_at DESC
+       LIMIT 12`,
+    )
+    res.setHeader('Cache-Control', 'no-store')
+    return res.json({
+      officers,
+      photos: photos.map((p) => ({
+        id: `fc-${p.id}`,
+        kind: p.kind,
+        createdAt: p.created_at,
+        author: p.author,
+        puCode: p.pu_code,
+        photoGeo: p.photo_lat != null && p.photo_lng != null
+          ? { lat: p.photo_lat, lng: p.photo_lng, accuracy: p.photo_accuracy ?? null, capturedAt: p.photo_captured_at ?? null }
+          : null,
+      })),
+    })
+  } catch (e) {
+    console.error(e)
+    const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : ''
+    if (code === '42P01') return res.status(503).json({ error: 'Database migrations pending' })
+    return res.status(500).json({ error: 'Failed to load live wall data' })
+  }
+})
+
+/** GET /api/public/sitreps/field/:id/photo — public photo stream for the wall (read-only, image bytes only) */
+app.get('/api/public/sitreps/field/:id/photo', async (req, res) => {
+  try {
+    const id = parseInt(String(req.params.id).replace(/^fc-/i, ''), 10)
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid field capture id' })
+    const { rows } = await pool.query(`SELECT photo_data, photo_mime FROM field_capture_outbox WHERE id = $1`, [id])
+    const p = rows[0]
+    if (!p?.photo_data) return res.status(404).json({ error: 'No photo on this report' })
+    res.setHeader('Content-Type', p.photo_mime || 'image/jpeg')
+    res.setHeader('Cache-Control', 'public, max-age=300')
+    return res.send(p.photo_data)
+  } catch (e) {
+    console.error(e)
+    return res.status(500).json({ error: 'Failed to load photo' })
+  }
+})
+
+/* -------------------------------------------------------------------------- */
 /* Jurisdiction-scoped SitRep command API (migration_020)                      */
 /* HQ/national sees all reports; a state command sees only its state; an area  */
 /* command sees only its LGA. Field-app offline captures (field_capture_       */

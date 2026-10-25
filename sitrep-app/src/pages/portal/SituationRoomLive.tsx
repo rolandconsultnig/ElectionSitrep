@@ -3,34 +3,31 @@ import { useQuery } from '@tanstack/react-query'
 import L from 'leaflet'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import { apiFetch, apiJson } from '../../lib/api'
+import { apiJson } from '../../lib/api'
 
 type FieldOfficer = {
   userId: string
-  username: string
   displayName: string
-  serviceNumber: string | null
   lat: number
   lng: number
   live: boolean
   locationSource: 'gps' | 'assigned_pu' | 'estimate'
   lastLocationAt: string | null
   batteryPct: number | null
-  network: string | null
-  assignedPu: { id: string; code: string | null; name: string | null; lat: number | null; lng: number | null } | null
+  puCode: string | null
+  puName: string | null
 }
 
-type FeedItem = {
+type WallPhoto = {
   id: string
   kind: string
-  severity: string
-  title: string
   createdAt: string
   author: string
   puCode: string | null
-  hasPhoto: boolean
   photoGeo: { lat: number; lng: number; accuracy: number | null; capturedAt: string | null } | null
 }
+
+type LiveWall = { officers: FieldOfficer[]; photos: WallPhoto[] }
 
 const C = {
   cyan: '#06b6d4',
@@ -57,7 +54,7 @@ function officerColor(o: FieldOfficer): string {
 
 function officerIcon(o: FieldOfficer) {
   const color = officerColor(o)
-  const name = (o.displayName || o.username).split(' ').slice(0, 2).join(' ')
+  const name = o.displayName.split(' ').slice(0, 2).join(' ')
   return L.divIcon({
     className: 'sr3-officer-icon',
     html: `
@@ -84,26 +81,15 @@ function FlyTo({ target }: { target: { lat: number; lng: number } | null }) {
   return null
 }
 
-function FeedPhotoThumb({ item }: { item: FeedItem }) {
-  const [url, setUrl] = useState<string | null>(null)
-  useEffect(() => {
-    let obj: string | null = null
-    let cancelled = false
-    const raw = item.id.replace(/^fc-/, '')
-    void apiFetch(`/api/sitreps/field/${raw}/photo`).then(async (r) => {
-      if (!r.ok || cancelled) return
-      obj = URL.createObjectURL(await r.blob())
-      setUrl(obj)
-    })
-    return () => {
-      cancelled = true
-      if (obj) URL.revokeObjectURL(obj)
-    }
-  }, [item.id])
-  return url ? (
-    <img src={url} alt={item.title} className="h-20 w-full rounded object-cover" />
-  ) : (
-    <div className="flex h-20 w-full items-center justify-center rounded bg-slate-800/60 text-[10px] text-slate-500">loading…</div>
+function FeedPhotoThumb({ item }: { item: WallPhoto }) {
+  const raw = item.id.replace(/^fc-/, '')
+  return (
+    <img
+      src={`/api/public/sitreps/field/${raw}/photo`}
+      alt={item.kind}
+      className="h-20 w-full rounded object-cover"
+      loading="lazy"
+    />
   )
 }
 
@@ -112,26 +98,10 @@ export function SituationRoomLive() {
   const [focus, setFocus] = useState<{ lat: number; lng: number } | null>(null)
   const mapKeyRef = useRef(0)
 
-  const officersQuery = useQuery({
-    queryKey: ['sr3-field-officers'],
+  const wallQuery = useQuery({
+    queryKey: ['sr3-live-wall'],
     refetchInterval: 10_000,
-    queryFn: async () => {
-      try {
-        return await apiJson<{ active: FieldOfficer[]; inactive: FieldOfficer[] }>('/api/admin/field-operations-map')
-      } catch {
-        return await apiJson<{ active: FieldOfficer[]; inactive: FieldOfficer[] }>('/api/igp/field-operations-map')
-      }
-    },
-  })
-
-  const photoFeedQuery = useQuery({
-    queryKey: ['sr3-photo-feed'],
-    refetchInterval: 20_000,
-    queryFn: async () => {
-      const d = await apiJson<{ sitreps: FeedItem[] }>('/api/sitreps?limit=100')
-      return (d.sitreps ?? []).filter((s) => s.hasPhoto).slice(0, 12)
-    },
-    retry: false,
+    queryFn: () => apiJson<LiveWall>('/api/public/situation-room/live'),
   })
 
   useEffect(() => {
@@ -139,10 +109,10 @@ export function SituationRoomLive() {
     return () => clearInterval(t)
   }, [])
 
-  const officers = useMemo(() => officersQuery.data?.active ?? [], [officersQuery.data])
+  const officers = useMemo(() => wallQuery.data?.officers ?? [], [wallQuery.data])
   const liveCount = officers.filter((o) => o.live).length
   const gpsCount = officers.filter((o) => o.locationSource === 'gps').length
-  const geotaggedPhotos = (photoFeedQuery.data ?? []).filter((f) => f.photoGeo)
+  const geotaggedPhotos = (wallQuery.data?.photos ?? []).filter((f) => f.photoGeo)
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden bg-[#030906] font-(--font-syne) text-slate-300">
@@ -200,21 +170,19 @@ export function SituationRoomLive() {
               <Marker key={o.userId} position={[o.lat, o.lng]} icon={officerIcon(o)}>
                 <Popup>
                   <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 11, lineHeight: 1.5 }}>
-                    <strong>{o.displayName}</strong>
-                    {o.serviceNumber ? ` (${o.serviceNumber})` : ''}<br />
-                    @{o.username} · {o.live ? 'LIVE' : 'offline'}<br />
+                    <strong>{o.displayName}</strong> · {o.live ? 'LIVE' : 'offline'}<br />
                     📍 {o.lat.toFixed(5)}, {o.lng.toFixed(5)}<br />
                     Fix: {o.locationSource === 'gps' ? 'device GPS' : o.locationSource === 'assigned_pu' ? 'assigned PU' : 'estimate'} · {ago(o.lastLocationAt)}<br />
-                    {o.assignedPu ? `Post: ${o.assignedPu.code ?? o.assignedPu.name ?? '—'}` : 'Post: unassigned'}
+                    {o.puCode || o.puName ? `Post: ${o.puCode ?? o.puName}` : 'Post: unassigned'}
                     {o.batteryPct != null ? `<br />Battery: ${o.batteryPct}%` : ''}
                   </div>
                 </Popup>
               </Marker>
             ))}
           </MapContainer>
-          {officersQuery.isError && (
+          {wallQuery.isError && (
             <div className="absolute inset-x-0 top-3 z-[1000] mx-auto w-fit rounded border border-red-500/40 bg-red-950/80 px-4 py-2 font-(--font-mono) text-xs text-red-300">
-              Sign in to a command portal to stream live officer positions
+              Live feed unavailable — retrying…
             </div>
           )}
           {/* Legend */}
@@ -235,7 +203,7 @@ export function SituationRoomLive() {
             </h2>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {officers.length === 0 && !officersQuery.isLoading && (
+            {officers.length === 0 && !wallQuery.isLoading && (
               <p className="p-4 text-xs text-slate-500">No deployed field officers.</p>
             )}
             {officers.map((o) => (
@@ -262,7 +230,7 @@ export function SituationRoomLive() {
                   📍 {o.lat.toFixed(5)}, {o.lng.toFixed(5)} · {ago(o.lastLocationAt)}
                 </div>
                 <div className="mt-0.5 flex justify-between font-(--font-mono) text-[10px] text-slate-600">
-                  <span>{o.serviceNumber ? `S/N ${o.serviceNumber} · ` : ''}{o.assignedPu?.code ?? o.assignedPu?.name ?? 'unassigned'}</span>
+                  <span>{o.puCode ?? o.puName ?? 'unassigned'}</span>
                   <span>{o.batteryPct != null ? `🔋${o.batteryPct}%` : ''}</span>
                 </div>
               </button>
@@ -279,7 +247,7 @@ export function SituationRoomLive() {
         <div className="flex gap-3 overflow-x-auto pb-1">
           {geotaggedPhotos.length === 0 && (
             <p className="py-2 font-(--font-mono) text-[10px] text-slate-600">
-              {photoFeedQuery.isError ? 'Sign in to a command portal to view field evidence' : 'No geotagged photos yet'}
+              {wallQuery.isError ? 'Live feed unavailable — retrying…' : 'No geotagged photos yet'}
             </p>
           )}
           {geotaggedPhotos.map((f) => (
@@ -291,7 +259,7 @@ export function SituationRoomLive() {
                   📍 {f.photoGeo!.lat.toFixed(4)}, {f.photoGeo!.lng.toFixed(4)}
                   {f.photoGeo!.accuracy != null ? ` ±${Math.round(f.photoGeo!.accuracy)}m` : ''}
                 </div>
-                <div className="truncate text-slate-500">{f.puCode ?? f.title}</div>
+                <div className="truncate text-slate-500">{f.puCode ?? f.kind}</div>
               </div>
             </div>
           ))}
