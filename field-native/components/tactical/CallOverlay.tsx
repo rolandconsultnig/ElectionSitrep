@@ -5,22 +5,22 @@ import * as Haptics from 'expo-haptics'
 import { useEffect, useRef, useState } from 'react'
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import {
-  mediaDevices,
-  RTCPeerConnection,
-  RTCIceCandidate,
-  RTCSessionDescription,
-  MediaStream,
-} from 'react-native-webrtc'
+import type { MediaStream, RTCPeerConnection } from 'react-native-webrtc'
 
-// RTCView's TS types are loose (HostComponent<unknown>); cast for props.
-const RTCView = (require('react-native-webrtc').RTCView as unknown as React.ComponentType<{
-  streamURL: string
-  style?: object
-  objectFit?: 'contain' | 'cover'
-  mirror?: boolean
-  zOrder?: number
-}>)
+// Lazy-require react-native-webrtc so a native-module load failure can never
+// block app startup (module init throws at import time would freeze the splash).
+// The module is first touched when a call UI becomes visible or media is needed.
+type WebrtcModule = typeof import('react-native-webrtc')
+let webrtcCache: WebrtcModule | null = null
+function webrtc(): WebrtcModule {
+  if (!webrtcCache) webrtcCache = require('react-native-webrtc')
+  return webrtcCache!
+}
+
+function RTCView(props: { streamURL: string; style?: object; objectFit?: 'contain' | 'cover'; mirror?: boolean; zOrder?: number }) {
+  const V = (webrtc().RTCView as unknown as React.ComponentType<typeof props>)
+  return <V {...props} />
+}
 
 const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
 
@@ -65,9 +65,9 @@ export function CallOverlay() {
     try {
       const s = signal as { sdp?: string; type?: string | null; candidate?: unknown }
       if (s.sdp && s.type) {
-        void pc.setRemoteDescription(new RTCSessionDescription({ type: s.type as never, sdp: s.sdp }))
+        void pc.setRemoteDescription(new (webrtc().RTCSessionDescription)({ type: s.type as never, sdp: s.sdp }))
       } else if (s.candidate) {
-        void pc.addIceCandidate(new RTCIceCandidate(s.candidate as RTCIceCandidateInit))
+        void pc.addIceCandidate(new (webrtc().RTCIceCandidate)(s.candidate as RTCIceCandidateInit))
       }
     } catch { /* ignore malformed signals */ }
   }
@@ -79,7 +79,7 @@ export function CallOverlay() {
 
   async function getMedia(type: CallMode): Promise<MediaStream> {
     const constraints = { video: type === 'video', audio: true }
-    const stream = await mediaDevices.getUserMedia(constraints)
+    const stream = await webrtc().mediaDevices.getUserMedia(constraints)
     setLocalStream(stream)
     return stream
   }
@@ -103,7 +103,7 @@ export function CallOverlay() {
       try {
         const stream = await getMedia(callType)
         if (cancelled) { stream.release(true); return }
-        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+        const pc = new (webrtc().RTCPeerConnection)({ iceServers: ICE_SERVERS })
         pcRef.current = pc
 
         // react-native-webrtc uses addStream (not addTrack)
@@ -128,7 +128,7 @@ export function CallOverlay() {
         if (incomingCall) {
           const offer = await pc.createOffer({}) as unknown as { sdp: string; type: string }
           if (cancelled) return
-          await pc.setLocalDescription(new RTCSessionDescription({ type: offer.type as never, sdp: offer.sdp }))
+          await pc.setLocalDescription(new (webrtc().RTCSessionDescription)({ type: offer.type as never, sdp: offer.sdp }))
           if (peerId) sendWebrtcSignal(peerId, { sdp: offer.sdp, type: offer.type })
         }
         // For outgoing calls, we wait for HQ's offer to arrive via webrtc_signal

@@ -47,6 +47,12 @@ function NavStack() {
   useEffect(() => {
     if (ready) SplashScreen.hideAsync().catch(() => {})
   }, [ready])
+  // Failsafe: never leave the splash up if startup stalls (offline, hung fetch,
+  // module issue). After 8s the app must be usable regardless.
+  useEffect(() => {
+    const t = setTimeout(() => SplashScreen.hideAsync().catch(() => {}), 8000)
+    return () => clearTimeout(t)
+  }, [])
 
   return (
     <SocketProvider token={token} userId={user?.id ?? null} username={user?.username ?? null}>

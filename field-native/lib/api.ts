@@ -42,7 +42,7 @@ export async function apiFetch<T>(
   const { token, ...rest } = opts
   let res: Response
   try {
-    res = await fetch(url, { ...rest, headers })
+    res = await fetch(url, { ...rest, headers, signal: AbortSignal.timeout(15000) })
   } catch (err) {
     const hint = `Cannot reach ${base}. In Network settings (*2435*009# on login): set the server's public IP and the API port (PM2/node, usually 5530 — not nginx 5535 unless the API listens there). AWS: inbound TCP rule on that port. Turn off HTTPS unless the API uses TLS.`
     throw new ApiError(hint, 0, err)
