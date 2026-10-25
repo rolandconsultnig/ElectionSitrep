@@ -3017,7 +3017,7 @@ app.get('/api/public/situation-room/officer/:userId', async (req, res) => {
                 CASE WHEN f.payload->>'photoLat' ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (f.payload->>'photoLat')::float END AS photo_lat,
                 CASE WHEN f.payload->>'photoLng' ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (f.payload->>'photoLng')::float END AS photo_lng,
                 CASE WHEN f.payload->>'photoAccuracy' ~ '^[0-9]+(\\.[0-9]+)?$' THEN (f.payload->>'photoAccuracy')::float END AS photo_accuracy,
-                f.payload->>'photoCapturedAt' AS photo_captured_at
+                CASE WHEN f.payload->>'photoCapturedAt' ~ '^[0-9]{4}-' THEN (f.payload->>'photoCapturedAt')::timestamptz END AS photo_captured_at
          FROM field_capture_outbox f
          WHERE f.user_id = $1
        ) r
