@@ -182,7 +182,7 @@ export function SituationRoomLive() {
 
       <div className="flex min-h-0 flex-1">
         {/* Map */}
-        <div className="relative flex-1">
+        <div className="relative flex-1" style={{ filter: 'brightness(0.88) contrast(1.02)' }}>
           <MapContainer
             key={mapKeyRef.current}
             center={[9.082, 8.675]}
@@ -192,8 +192,8 @@ export function SituationRoomLive() {
             preferCanvas
           >
             <TileLayer
-              attribution="&copy; OpenStreetMap &copy; CARTO"
-              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             <FlyTo target={focus} />
             {officers.map((o) => (
