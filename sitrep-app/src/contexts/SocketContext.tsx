@@ -20,6 +20,16 @@ type SosAlert = {
   notes: string
 }
 type FlashDirective = { id: string; title: string; priority: string; issuedBy: string; issuedAt: string }
+type GeofenceBreach = {
+  userId: string
+  username: string
+  pollingUnit: { id: string; name: string; code: string | null; lat: number | null; lng: number | null } | null
+  coords: { lat: number | null; lng: number | null } | null
+  distanceM: number
+  radiusM: number
+  timestamp: string
+  reportedBy?: string
+}
 
 interface SocketContextValue {
   socket: Socket | null
@@ -32,6 +42,8 @@ interface SocketContextValue {
   /** Number of HQ (management portal) users currently online; -1 = unknown */
   hqOnlineCount: number
   activeSosAlerts: SosAlert[]
+  /** Officers currently outside their assigned polling-unit geofence */
+  geofenceBreaches: Record<string, GeofenceBreach>
   commandDataRevision: number
   flashDirectives: FlashDirective[]
   sendPanicSos: (notes?: string) => void
@@ -52,6 +64,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [onlineOfficers, setOnlineOfficers] = useState<Record<string, { userId: string; username: string; socketId: string; coords?: { lat: number; lng: number } }>>({})
   const [hqOnlineCount, setHqOnlineCount] = useState(-1)
   const [activeSosAlerts, setActiveSosAlerts] = useState<SosAlert[]>([])
+  const [geofenceBreaches, setGeofenceBreaches] = useState<Record<string, GeofenceBreach>>({})
   const [flashDirectives, setFlashDirectives] = useState<FlashDirective[]>([])
   const lastCoords = useRef<{ lat: number; lng: number } | null>(null)
   
@@ -131,6 +144,27 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         delete next[data.userId]
         return next
       })
+      setGeofenceBreaches((prev) => {
+        if (!prev[data.userId]) return prev
+        const next = { ...prev }
+        delete next[data.userId]
+        return next
+      })
+    })
+
+    // Officer left the assigned polling-unit geofence (>100 m)
+    newSocket.on('field_officer_geofence_breach', (data: GeofenceBreach) => {
+      setGeofenceBreaches((prev) => ({ ...prev, [data.userId]: data }))
+      setCommandDataRevision((revision) => revision + 1)
+    })
+    newSocket.on('field_officer_geofence_return', (data: { userId: string }) => {
+      setGeofenceBreaches((prev) => {
+        if (!prev[data.userId]) return prev
+        const next = { ...prev }
+        delete next[data.userId]
+        return next
+      })
+      setCommandDataRevision((revision) => revision + 1)
     })
 
     newSocket.on('field_officer_location', (data: { userId: string; coords: { lat: number; lng: number } }) => {
@@ -215,6 +249,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       onlineOfficers,
       hqOnlineCount,
       activeSosAlerts,
+      geofenceBreaches,
       commandDataRevision,
       flashDirectives,
       sendPanicSos,

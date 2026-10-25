@@ -1,6 +1,10 @@
 import { getApiBaseUrl } from './config'
 import { isLocalSessionToken } from './local-session'
+import { fieldContextRequest } from './api'
+import { GeofenceMonitor, GEOFENCE_RADIUS_M, type GeofenceTarget } from './geofence'
+import { startGeofenceAlarm, stopGeofenceAlarm } from './geofence-alert'
 import * as Location from 'expo-location'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import NetInfo from '@react-native-community/netinfo'
 import { io, type Socket } from 'socket.io-client'
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
@@ -24,6 +28,16 @@ export type IncomingCallInfo = {
 
 export type CallState = 'idle' | 'outgoing' | 'incoming' | 'in-call'
 
+export type GeofenceStatus = {
+  puName: string
+  puCode?: string | null
+  breached: boolean
+  distanceM: number | null
+  breachedAt?: string
+}
+
+const GEOFENCE_PU_CACHE_KEY = 'geofence:assigned_pu'
+
 type SocketContextValue = {
   socket: Socket | null
   connected: boolean
@@ -40,6 +54,7 @@ type SocketContextValue = {
   endCall: () => void
   sendWebrtcSignal: (targetId: string, signal: unknown) => void
   clearIncomingCall: () => void
+  geofence: GeofenceStatus | null
 }
 
 const SocketContext = createContext<SocketContextValue | null>(null)
@@ -57,6 +72,7 @@ export function SocketProvider({ children, token, userId, username }: {
   const [incomingCall, setIncomingCall] = useState<IncomingCallInfo | null>(null)
   const [outgoingCall, setOutgoingCall] = useState<{ callId: string; callType: 'video' | 'audio' } | null>(null)
   const [callState, setCallState] = useState<CallState>('idle')
+  const [geofence, setGeofence] = useState<GeofenceStatus | null>(null)
   const callPeerIdRef = useRef<string | null>(null)
   const outgoingRef = useRef<typeof outgoingCall>(null)
 
@@ -125,6 +141,73 @@ export function SocketProvider({ children, token, userId, username }: {
 
     setSocket(newSocket)
 
+    // Resolve the officer's assigned polling unit for geofencing.
+    // Cached to AsyncStorage so the geofence still works fully offline.
+    let geofenceMonitor: GeofenceMonitor | null = null
+    let lastEmittedDistance = 0
+    const geofenceEventQueue: Array<Record<string, unknown>> = []
+    const flushGeofenceQueue = () => {
+      while (newSocket.connected && geofenceEventQueue.length) {
+        const ev = geofenceEventQueue.shift()!
+        newSocket.emit(ev.event as string, ev.payload)
+      }
+    }
+    const emitGeofence = (event: string, payload: Record<string, unknown>) => {
+      if (newSocket.connected) newSocket.emit(event, payload)
+      else geofenceEventQueue.push({ event, payload })
+    }
+    newSocket.on('connect', flushGeofenceQueue)
+
+    ;(async () => {
+      let pu: GeofenceTarget | null = null
+      try {
+        const ctx = await fieldContextRequest(token)
+        const a = ctx?.assignment?.pollingUnit
+        if (a && typeof a.lat === 'number' && typeof a.lng === 'number') {
+          pu = { id: String(a.id), name: a.name, code: a.code, lat: a.lat, lng: a.lng }
+          await AsyncStorage.setItem(GEOFENCE_PU_CACHE_KEY, JSON.stringify(pu)).catch(() => {})
+        }
+      } catch {
+        // Offline at boot — fall back to the last cached assignment
+        try {
+          const cached = await AsyncStorage.getItem(GEOFENCE_PU_CACHE_KEY)
+          if (cached) {
+            const p = JSON.parse(cached) as GeofenceTarget
+            if (typeof p?.lat === 'number' && typeof p?.lng === 'number') pu = p
+          }
+        } catch { /* no cache */ }
+      }
+      if (!pu) return // officer has no geocoded assignment — nothing to fence
+      const target = pu
+      setGeofence({ puName: target.name, puCode: target.code ?? null, breached: false, distanceM: null })
+
+      geofenceMonitor = new GeofenceMonitor(target, GEOFENCE_RADIUS_M, (event, distanceM) => {
+        const now = new Date().toISOString()
+        if (event === 'breach') {
+          setGeofence({ puName: target.name, puCode: target.code ?? null, breached: true, distanceM, breachedAt: now })
+          void startGeofenceAlarm(target.name, distanceM)
+          emitGeofence('geofence_breach', {
+            pollingUnitId: target.id,
+            pollingUnitName: target.name,
+            pollingUnitCode: target.code ?? null,
+            pollingUnitCoords: { lat: target.lat, lng: target.lng },
+            distanceM: Math.round(distanceM),
+            radiusM: GEOFENCE_RADIUS_M,
+            timestamp: now,
+          })
+        } else {
+          setGeofence({ puName: target.name, puCode: target.code ?? null, breached: false, distanceM })
+          void stopGeofenceAlarm()
+          emitGeofence('geofence_return', {
+            pollingUnitId: target.id,
+            pollingUnitName: target.name,
+            distanceM: Math.round(distanceM),
+            timestamp: now,
+          })
+        }
+      })
+    })()
+
     // Stream GPS to command center while app is foreground
     let locationSub: Location.LocationSubscription | null = null
     let lastEmit = 0
@@ -133,12 +216,25 @@ export function SocketProvider({ children, token, userId, username }: {
         const { status } = await Location.requestForegroundPermissionsAsync()
         if (status !== 'granted') return
         locationSub = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.High, timeInterval: 15000, distanceInterval: 20 },
+          { accuracy: Location.Accuracy.High, timeInterval: 15000, distanceInterval: 10 },
           (loc) => {
+            const { latitude, longitude, accuracy } = loc.coords
+            const res = geofenceMonitor?.ingestFix(latitude, longitude, accuracy ?? null)
+            if (res && geofenceMonitor && !res.breached) {
+              // keep distanceM fresh in context while inside the fence
+              if (Math.abs(res.distanceM - lastEmittedDistance) > 25) {
+                lastEmittedDistance = res.distanceM
+                setGeofence((g) => (g ? { ...g, distanceM: res.distanceM } : g))
+              }
+            }
             const now = Date.now()
             if (now - lastEmit < 10000) return
             lastEmit = now
-            newSocket.emit('gps_update', { lat: loc.coords.latitude, lng: loc.coords.longitude })
+            newSocket.emit('gps_update', {
+              lat: latitude,
+              lng: longitude,
+              accuracy: accuracy ?? undefined,
+            })
           },
         )
       } catch { /* permission denied — silent */ }
@@ -165,6 +261,9 @@ export function SocketProvider({ children, token, userId, username }: {
       locationSub?.remove()
       netSub()
       appSub.remove()
+      geofenceMonitor = null
+      setGeofence(null)
+      void stopGeofenceAlarm()
     }
   }, [token, isLocal, userId, username])
 
@@ -236,7 +335,8 @@ export function SocketProvider({ children, token, userId, username }: {
     endCall,
     sendWebrtcSignal,
     clearIncomingCall,
-  }), [socket, connected, hqOnlineCount, messages, sendMessage, incomingCall, outgoingCall, callState, startCall, cancelCall, answerCall, rejectCall, endCall, sendWebrtcSignal, clearIncomingCall])
+    geofence,
+  }), [socket, connected, hqOnlineCount, messages, sendMessage, incomingCall, outgoingCall, callState, startCall, cancelCall, answerCall, rejectCall, endCall, sendWebrtcSignal, clearIncomingCall, geofence])
 
   return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>
 }

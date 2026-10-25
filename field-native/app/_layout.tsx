@@ -2,7 +2,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary'
 import { CallOverlay } from '../components/tactical/CallOverlay'
 import { ApiBaseGate } from '../lib/api-base-gate'
 import { AuthProvider, useAuth } from '../lib/auth-context'
-import { SocketProvider } from '../lib/socket-context'
+import { SocketProvider, useSocket } from '../lib/socket-context'
 import { colors, tactical } from '../lib/theme'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Stack } from 'expo-router'
@@ -94,6 +94,7 @@ function NavStack() {
           <ActivityIndicator size="large" color={tactical.cyan} />
         </View>
       )}
+      <GeofenceBanner />
       {otaStatus ? (
         <View style={styles.otaBanner}>
           <ActivityIndicator size="small" color={tactical.cyan} />
@@ -104,6 +105,20 @@ function NavStack() {
       ) : null}
       <CallOverlay />
     </SocketProvider>
+  )
+}
+
+function GeofenceBanner() {
+  const { geofence } = useSocket()
+  if (!geofence?.breached) return null
+  const dist = geofence.distanceM != null ? ` (${Math.round(geofence.distanceM)}m away)` : ''
+  return (
+    <View style={styles.geofenceBanner}>
+      <Text style={styles.geofenceTitle}>OUT OF POST</Text>
+      <Text style={styles.geofenceText}>
+        You have left {geofence.puName}{dist}. Return to your assigned polling unit.
+      </Text>
+    </View>
   )
 }
 
@@ -143,4 +158,24 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
   },
   otaText: { fontSize: 13, fontWeight: '600', color: tactical.cyan, letterSpacing: 0.3 },
+  geofenceBanner: {
+    position: 'absolute',
+    top: 50,
+    left: 14,
+    right: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: 'rgba(120,16,16,0.97)',
+    borderWidth: 1,
+    borderColor: '#ff5c5c',
+    elevation: 14,
+    zIndex: 50,
+    shadowColor: '#000',
+    shadowOpacity: 0.6,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  geofenceTitle: { fontSize: 12, fontWeight: '800', color: '#ffd7d7', letterSpacing: 1.6 },
+  geofenceText: { fontSize: 13, fontWeight: '600', color: '#ffecec', marginTop: 4 },
 })

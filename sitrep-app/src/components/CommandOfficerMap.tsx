@@ -126,7 +126,7 @@ function OfficerDetails({ officer }: { officer: Officer }) {
 }
 
 export function CommandOfficerMap() {
-  const { socket, connected, messages, sendMessage, chatSendError, clearChatSendError, onlineOfficers, commandDataRevision } = useSocket()
+  const { socket, connected, messages, sendMessage, chatSendError, clearChatSendError, onlineOfficers, commandDataRevision, geofenceBreaches } = useSocket()
   const [selected, setSelected] = useState<Officer | null>(null)
   const [hoverCard, setHoverCard] = useState<HoverCard | null>(null)
   const [hoverCardHeight, setHoverCardHeight] = useState(0)
@@ -326,6 +326,30 @@ export function CommandOfficerMap() {
         <button type="button" onClick={() => { void mapQuery.refetch(); void incidentQuery.refetch() }} className="ml-auto rounded-lg border border-[color:var(--portal-border)] px-3 py-2">Refresh</button>
         <span className="text-[var(--portal-muted)]">Data as of {mapQuery.data?.dataAsOf ? new Date(mapQuery.data.dataAsOf).toLocaleTimeString() : '—'}</span>
       </div>
+      {Object.keys(geofenceBreaches).length ? (
+        <div role="alert" className="space-y-1 rounded-xl border border-red-500/50 bg-red-500/10 p-3">
+          <p className="text-xs font-bold uppercase tracking-widest text-red-300">⚠ Officers away from assigned post</p>
+          {Object.values(geofenceBreaches).map((b) => {
+            const officer = officers.find((o) => o.userId === b.userId)
+            return (
+              <button
+                key={b.userId}
+                type="button"
+                onClick={() => officer && selectOfficer(officer)}
+                className="flex w-full flex-wrap items-baseline gap-x-2 rounded-lg px-2 py-1 text-left text-xs hover:bg-red-500/10"
+              >
+                <span className="font-semibold text-red-200">{b.username}</span>
+                <span className="text-red-300">
+                  {b.distanceM}m from {b.pollingUnit?.name ?? 'assigned PU'}
+                  {b.pollingUnit?.code ? ` (${b.pollingUnit.code})` : ''}
+                </span>
+                <span className="text-[var(--portal-muted)]">{relativeTime(b.timestamp)}</span>
+                {officer ? <span className="ml-auto text-[var(--portal-muted)]">view →</span> : null}
+              </button>
+            )
+          })}
+        </div>
+      ) : null}
       {searchMatches.length ? (
         <div className="flex flex-wrap gap-1 rounded-lg border border-[color:var(--portal-border)] bg-[var(--portal-input-bg)] p-2">
           {searchMatches.map((officer) => (

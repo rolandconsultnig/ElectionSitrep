@@ -113,7 +113,7 @@ server {
     location /api/ {
         proxy_pass http://${API_UPSTREAM};
         proxy_http_version 1.1;
-        proxy_set_header Host \$host;
+        proxy_set_header Host \$http_host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
@@ -122,7 +122,7 @@ server {
     location /downloads/ {
         proxy_pass http://${API_UPSTREAM};
         proxy_http_version 1.1;
-        proxy_set_header Host \$host;
+        proxy_set_header Host \$http_host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
@@ -151,7 +151,7 @@ write_https_server() {
     echo "    location /api/ {"
     echo "        proxy_pass http://${API_UPSTREAM};"
     echo "        proxy_http_version 1.1;"
-    echo "        proxy_set_header Host \$host;"
+    echo "        proxy_set_header Host \$http_host;"
     echo "        proxy_set_header X-Real-IP \$remote_addr;"
     echo "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;"
     echo "        proxy_set_header X-Forwarded-Proto \$scheme;"
@@ -160,7 +160,7 @@ write_https_server() {
     echo "    location /downloads/ {"
     echo "        proxy_pass http://${API_UPSTREAM};"
     echo "        proxy_http_version 1.1;"
-    echo "        proxy_set_header Host \$host;"
+    echo "        proxy_set_header Host \$http_host;"
     echo "        proxy_set_header X-Real-IP \$remote_addr;"
     echo "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;"
     echo "        proxy_set_header X-Forwarded-Proto \$scheme;"

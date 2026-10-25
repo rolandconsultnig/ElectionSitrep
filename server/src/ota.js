@@ -33,7 +33,10 @@ export function createOtaRouter(otaDir) {
   function assetEntry(req, runtimeVersion, updateId, dir, relPath, ext, isLaunch) {
     const rel = String(relPath).replace(/\\/g, '/')
     const file = path.join(dir, rel)
-    const origin = `${req.headers['x-forwarded-proto'] || req.protocol}://${req.get('host')}`
+    // X-Forwarded-Host keeps the public host *and* port (nginx $http_host);
+    // req.get('host') drops :6634 because the config passes $host.
+    const host = req.headers['x-forwarded-host'] || req.get('host')
+    const origin = `${req.headers['x-forwarded-proto'] || req.protocol}://${host}`
     const q = new URLSearchParams({ runtime: runtimeVersion, update: updateId, path: rel })
     return {
       hash: hashFile(file, 'sha256', 'base64url'),

@@ -80,12 +80,118 @@ export function initWebSockets(httpServer, pool, JWT_SECRET) {
       }
     })
 
+    // --- Polling-unit geofence -------------------------------------------
+    // Authoritative server-side check: distance from the officer's assigned
+    // PU. Two consecutive fixes outside 100 m = breach; one inside = return.
+    // Client-reported breach/return events are also relayed so alerts raised
+    // while offline still reach the command centre on reconnect.
+    const GEOFENCE_RADIUS_M = 100
+    const GEOFENCE_STRIKES = 2
+    const GEOFENCE_MAX_ACCURACY_M = 60
+    const haversineM = (lat1, lng1, lat2, lng2) => {
+      const R = 6371000
+      const toRad = (d) => (d * Math.PI) / 180
+      const dLat = toRad(lat2 - lat1)
+      const dLng = toRad(lng2 - lng1)
+      const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
+      return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)))
+    }
+    const commandRooms = () => io.to('portal_management').to('portal_igp').to('portal_admin')
+
+    const emitGeofenceBreach = (state, lat, lng, distanceM, reportedBy) => {
+      state.breached = true
+      commandRooms().emit('field_officer_geofence_breach', {
+        userId: user.sub,
+        username: user.username,
+        pollingUnit: state.target,
+        coords: { lat, lng },
+        distanceM: Math.round(distanceM),
+        radiusM: GEOFENCE_RADIUS_M,
+        timestamp: new Date().toISOString(),
+        reportedBy,
+      })
+    }
+    const emitGeofenceReturn = (state, lat, lng, distanceM, reportedBy) => {
+      state.breached = false
+      commandRooms().emit('field_officer_geofence_return', {
+        userId: user.sub,
+        username: user.username,
+        pollingUnit: state.target,
+        coords: { lat, lng },
+        distanceM: Math.round(distanceM),
+        timestamp: new Date().toISOString(),
+        reportedBy,
+      })
+    }
+
+    socket.on('geofence_breach', (data = {}) => {
+      if (user.portal !== 'field') return
+      const state = socket.data.geofence ??= { outStrikes: 0, breached: false, target: null }
+      const t = data?.pollingUnitCoords
+      if (!state.target && t && Number.isFinite(t.lat) && Number.isFinite(t.lng)) {
+        state.target = {
+          id: String(data.pollingUnitId ?? ''),
+          name: typeof data.pollingUnitName === 'string' ? data.pollingUnitName : 'Assigned post',
+          code: typeof data.pollingUnitCode === 'string' ? data.pollingUnitCode : null,
+          lat: t.lat, lng: t.lng,
+        }
+      }
+      if (state.breached) return
+      const lat = state.target?.lat, lng = state.target?.lng
+      emitGeofenceBreach(state, lat ?? null, lng ?? null, Number(data.distanceM) || 0, 'client')
+    })
+    socket.on('geofence_return', (data = {}) => {
+      if (user.portal !== 'field') return
+      const state = socket.data.geofence ??= { outStrikes: 0, breached: false, target: null }
+      if (!state.breached) return
+      const t = state.target
+      emitGeofenceReturn(state, t?.lat ?? null, t?.lng ?? null, Number(data.distanceM) || 0, 'client')
+    })
+
     // GPS location update
     socket.on('gps_update', async (coords = {}) => {
       if (user.portal !== 'field' || !coords || typeof coords !== 'object') return
       const { lat, lng } = coords
       if (typeof lat !== 'number' || !Number.isFinite(lat) || lat < -90 || lat > 90 ||
           typeof lng !== 'number' || !Number.isFinite(lng) || lng < -180 || lng > 180) return
+
+      // Server-side geofence evaluation (authoritative for command alerts)
+      try {
+        const state = socket.data.geofence ??= { outStrikes: 0, breached: false, target: null, loaded: false }
+        if (!state.loaded) {
+          state.loaded = true
+          const { rows } = await pool.query(
+            `SELECT gpu.id, gpu.name, gpu.code, gpu.lat, gpu.lng
+             FROM officer_profiles op
+             JOIN geo_polling_units gpu ON gpu.id = op.assigned_polling_unit_id
+             WHERE op.user_id = $1`,
+            [user.sub],
+          )
+          const pu = rows[0]
+          if (pu && Number.isFinite(Number(pu.lat)) && Number.isFinite(Number(pu.lng))) {
+            state.target = { id: String(pu.id), name: pu.name, code: pu.code ?? null, lat: Number(pu.lat), lng: Number(pu.lng) }
+          }
+        }
+        if (state.target) {
+          const accuracy = Number(coords.accuracy)
+          const trusted = !Number.isFinite(accuracy) || accuracy <= GEOFENCE_MAX_ACCURACY_M
+          if (trusted) {
+            const distanceM = haversineM(lat, lng, state.target.lat, state.target.lng)
+            if (distanceM > GEOFENCE_RADIUS_M) {
+              state.outStrikes += 1
+              if (!state.breached && state.outStrikes >= GEOFENCE_STRIKES) {
+                emitGeofenceBreach(state, lat, lng, distanceM, 'server')
+              }
+            } else {
+              state.outStrikes = 0
+              if (state.breached) emitGeofenceReturn(state, lat, lng, distanceM, 'server')
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[ws] geofence check failed', error)
+      }
 
       const now = Date.now()
       if (now - (socket.data.lastGpsPersistAttempt ?? 0) >= 20_000) {

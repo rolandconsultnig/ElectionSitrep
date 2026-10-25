@@ -40,12 +40,25 @@ export async function apiFetch<T>(
   if (opts.token) headers.set('Authorization', `Bearer ${opts.token}`)
 
   const { token, ...rest } = opts
+  // AbortController + setTimeout — AbortSignal.timeout() is not implemented
+  // in Hermes/RN and throws, which read as "Cannot reach server" on device.
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 15000)
+  const callerSignal = rest.signal
+  const onCallerAbort = () => controller.abort()
+  if (callerSignal) {
+    if (callerSignal.aborted) controller.abort()
+    else callerSignal.addEventListener('abort', onCallerAbort)
+  }
   let res: Response
   try {
-    res = await fetch(url, { ...rest, headers, signal: AbortSignal.timeout(15000) })
+    res = await fetch(url, { ...rest, headers, signal: controller.signal })
   } catch (err) {
     const hint = `Cannot reach ${base}. In Network settings (*2435*009# on login): set the server's public IP and the API port (PM2/node, usually 5530 — not nginx 5535 unless the API listens there). AWS: inbound TCP rule on that port. Turn off HTTPS unless the API uses TLS.`
     throw new ApiError(hint, 0, err)
+  } finally {
+    clearTimeout(timer)
+    if (callerSignal) callerSignal.removeEventListener('abort', onCallerAbort)
   }
   const data = await parseJson(res)
   if (!res.ok) {
