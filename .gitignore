@@ -41,3 +41,4 @@ field-native/dist-ota/
 
 # Downloaded APKs served by /downloads route (do not commit — 159 MB binary)
 /downloads/
+.wb-req/
