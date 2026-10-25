@@ -4,6 +4,7 @@ import { NigeriaMap } from '../../components/NigeriaMap'
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiJson } from '../../lib/api'
+import { SosAlertBanner, useActiveSos } from '../../components/SosAlertBanner'
 
 // Million-dollar palette (Cinematic + Tactical)
 const techColors = {
@@ -42,6 +43,7 @@ export function SituationRoomDashboard() {
   const [selectedStates, setSelectedStates] = useState<string[]>([])
   const [showPollingUnits, setShowPollingUnits] = useState(false)
   const [showFieldOfficers, setShowFieldOfficers] = useState(false)
+  const sosAlerts = useActiveSos()
   
   const statesGeoQuery = useQuery({
     queryKey: ['geo-layers-states-public'],
@@ -124,6 +126,9 @@ export function SituationRoomDashboard() {
       <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-cyan-900/20 blur-[120px] pointer-events-none"></div>
       <div className="absolute bottom-[-20%] right-[-10%] w-[40%] h-[50%] rounded-full bg-blue-900/20 blur-[120px] pointer-events-none"></div>
 
+      <div className="relative z-10">
+        <SosAlertBanner alerts={sosAlerts} />
+      </div>
       <div className="relative z-10 p-4 sm:p-6 lg:p-8">
         {/* Header (Tactical HUD Style) */}
         <header className="mb-8 flex items-end justify-between border-b border-cyan-900/40 pb-4">

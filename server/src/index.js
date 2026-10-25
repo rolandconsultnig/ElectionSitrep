@@ -2901,9 +2901,31 @@ app.get('/api/public/situation-room/live', async (req, res) => {
        ORDER BY f.device_created_at DESC
        LIMIT 12`,
     )
+    // Active SOS alerts — the highest-priority thing on the wall
+    const { rows: sos } = await pool.query(
+      `SELECT s.id, s.user_id, s.kind, s.started_at,
+              coalesce(op.full_name, u.username) AS display_name,
+              (SELECT row_to_json(l) FROM (
+                 SELECT lat, lng, accuracy_m, recorded_at FROM sos_locations
+                 WHERE sos_id = s.id ORDER BY recorded_at DESC LIMIT 1
+               ) l) AS last_fix
+       FROM sos_alerts s
+       JOIN app_users u ON u.id = s.user_id
+       LEFT JOIN officer_profiles op ON op.user_id = s.user_id
+       WHERE s.status = 'active'
+       ORDER BY s.started_at DESC`,
+    )
     res.setHeader('Cache-Control', 'no-store')
     return res.json({
       officers,
+      sos: sos.map((a) => ({
+        id: Number(a.id),
+        userId: a.user_id,
+        kind: a.kind,
+        startedAt: a.started_at,
+        displayName: a.display_name,
+        lastFix: a.last_fix ?? null,
+      })),
       photos: photos.map((p) => ({
         id: `fc-${p.id}`,
         kind: p.kind,

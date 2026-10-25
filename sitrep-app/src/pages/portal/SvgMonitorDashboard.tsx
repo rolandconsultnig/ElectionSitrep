@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { SosAlertBanner, useActiveSos } from '../../components/SosAlertBanner'
 import { InteractiveSvgMap } from '../../components/InteractiveSvgMap'
 import type { StateIncident } from '../../components/InteractiveSvgMap'
 
@@ -68,7 +69,7 @@ export function SvgMonitorDashboard() {
   const [time, setTime] = useState(new Date())
   const [selectedState, setSelectedState] = useState<string | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
-  
+  const sosAlerts = useActiveSos()
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000)
     return () => clearInterval(timer)
@@ -96,6 +97,7 @@ export function SvgMonitorDashboard() {
 
   return (
     <div className="h-screen w-full bg-[color:var(--sr-app-bg)] text-slate-200 overflow-hidden flex flex-col">
+      <SosAlertBanner alerts={sosAlerts} />
       <div className="flex-1 flex flex-col p-4 sm:p-6 lg:p-8">
         
         {/* Header */}

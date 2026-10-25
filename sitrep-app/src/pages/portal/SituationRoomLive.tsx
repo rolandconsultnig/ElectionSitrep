@@ -4,6 +4,7 @@ import L from 'leaflet'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { apiJson } from '../../lib/api'
+import { SosAlertBanner, type WallSos } from '../../components/SosAlertBanner'
 
 type FieldOfficer = {
   userId: string
@@ -27,7 +28,7 @@ type WallPhoto = {
   photoGeo: { lat: number; lng: number; accuracy: number | null; capturedAt: string | null } | null
 }
 
-type LiveWall = { officers: FieldOfficer[]; photos: WallPhoto[] }
+type LiveWall = { officers: FieldOfficer[]; photos: WallPhoto[]; sos: WallSos[] }
 
 const C = {
   cyan: '#06b6d4',
@@ -45,26 +46,27 @@ function ago(iso: string | null): string {
   return `${Math.floor(s / 3600)}h ago`
 }
 
-function officerColor(o: FieldOfficer): string {
+function officerColor(o: FieldOfficer, sos = false): string {
+  if (sos) return C.red
   if (o.live && o.locationSource === 'gps') return C.green
   if (o.locationSource === 'gps') return C.cyan
   if (o.locationSource === 'assigned_pu') return C.amber
   return C.slate
 }
 
-function officerIcon(o: FieldOfficer) {
-  const color = officerColor(o)
+function officerIcon(o: FieldOfficer, sos = false) {
+  const color = officerColor(o, sos)
   const name = o.displayName.split(' ').slice(0, 2).join(' ')
   return L.divIcon({
     className: 'sr3-officer-icon',
     html: `
       <div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);">
         <span style="position:relative;display:flex;height:14px;width:14px;">
-          ${o.live ? `<span style="position:absolute;inset:-6px;border-radius:9999px;background:${color};opacity:.35;animation:sr3ping 1.6s ease-out infinite;"></span>` : ''}
-          <span style="display:block;height:14px;width:14px;border-radius:9999px;background:${color};border:2px solid #0f172a;box-shadow:0 0 8px ${color};"></span>
+          <span style="position:absolute;inset:-6px;border-radius:9999px;background:${color};opacity:.35;animation:sr3ping ${sos ? '0.8s' : '1.6s'} ease-out infinite;"></span>
+          <span style="display:block;height:14px;width:14px;border-radius:9999px;background:${color};border:2px solid ${sos ? '#fff' : '#0f172a'};box-shadow:0 0 8px ${color};"></span>
         </span>
-        <span style="margin-top:3px;white-space:nowrap;font:600 10px/1.2 ui-monospace,monospace;color:#e2e8f0;background:rgba(3,9,6,.82);border:1px solid ${color}55;border-radius:4px;padding:1px 5px;">
-          ${name.replace(/</g, '&lt;')}
+        <span style="margin-top:3px;white-space:nowrap;font:600 10px/1.2 ui-monospace,monospace;color:${sos ? '#fecaca' : '#e2e8f0'};background:${sos ? 'rgba(69,10,10,.9)' : 'rgba(3,9,6,.82)'};border:1px solid ${color}55;border-radius:4px;padding:1px 5px;">
+          ${sos ? '🆘 ' : ''}${name.replace(/</g, '&lt;')}
         </span>
       </div>`,
     iconSize: [0, 0],
@@ -110,6 +112,8 @@ export function SituationRoomLive() {
   }, [])
 
   const officers = useMemo(() => wallQuery.data?.officers ?? [], [wallQuery.data])
+  const sosAlerts = wallQuery.data?.sos ?? []
+  const sosUserIds = useMemo(() => new Set(sosAlerts.map((a) => a.userId)), [sosAlerts])
   const liveCount = officers.filter((o) => o.live).length
   const gpsCount = officers.filter((o) => o.locationSource === 'gps').length
   const geotaggedPhotos = (wallQuery.data?.photos ?? []).filter((f) => f.photoGeo)
@@ -117,6 +121,10 @@ export function SituationRoomLive() {
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden bg-[#030906] font-(--font-syne) text-slate-300">
       <style>{`@keyframes sr3ping{0%{transform:scale(.6);opacity:.5}80%,100%{transform:scale(2.2);opacity:0}}`}</style>
+      <SosAlertBanner
+        alerts={sosAlerts}
+        onSelect={(a) => a.lastFix && setFocus({ lat: a.lastFix.lat, lng: a.lastFix.lng })}
+      />
       {/* Header */}
       <header className="flex items-center justify-between border-b border-cyan-500/20 bg-[#04110c]/90 px-6 py-3">
         <div className="flex items-center gap-4">
@@ -167,7 +175,7 @@ export function SituationRoomLive() {
             />
             <FlyTo target={focus} />
             {officers.map((o) => (
-              <Marker key={o.userId} position={[o.lat, o.lng]} icon={officerIcon(o)}>
+              <Marker key={o.userId} position={[o.lat, o.lng]} icon={officerIcon(o, sosUserIds.has(o.userId))}>
                 <Popup>
                   <div style={{ fontFamily: 'ui-monospace,monospace', fontSize: 11, lineHeight: 1.5 }}>
                     <strong>{o.displayName}</strong> · {o.live ? 'LIVE' : 'offline'}<br />
@@ -211,19 +219,21 @@ export function SituationRoomLive() {
                 key={o.userId}
                 type="button"
                 onClick={() => setFocus({ lat: o.lat, lng: o.lng })}
-                className="block w-full border-b border-slate-800/60 px-4 py-3 text-left transition hover:bg-cyan-500/5"
+                className={`block w-full border-b px-4 py-3 text-left transition hover:bg-cyan-500/5 ${
+                  sosUserIds.has(o.userId) ? 'border-red-500/60 bg-red-950/40' : 'border-slate-800/60'
+                }`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-sm font-semibold text-slate-100">{o.displayName}</span>
                   <span
                     className="shrink-0 rounded px-1.5 py-0.5 font-(--font-mono) text-[9px] font-bold uppercase"
                     style={{
-                      background: `${officerColor(o)}22`,
-                      color: officerColor(o),
-                      border: `1px solid ${officerColor(o)}55`,
+                      background: `${officerColor(o, sosUserIds.has(o.userId))}22`,
+                      color: officerColor(o, sosUserIds.has(o.userId)),
+                      border: `1px solid ${officerColor(o, sosUserIds.has(o.userId))}55`,
                     }}
                   >
-                    {o.live ? 'live' : o.locationSource === 'gps' ? 'last fix' : o.locationSource === 'assigned_pu' ? 'at post' : 'no fix'}
+                    {sosUserIds.has(o.userId) ? '🆘 sos' : o.live ? 'live' : o.locationSource === 'gps' ? 'last fix' : o.locationSource === 'assigned_pu' ? 'at post' : 'no fix'}
                   </span>
                 </div>
                 <div className="mt-1 font-(--font-mono) text-[10px] text-slate-400">

@@ -7,6 +7,7 @@ import { ElectionSetupWizard } from '../../components/ElectionSetupWizard'
 import { OperationsMap } from '../../components/OperationsMap'
 import type { GeoFeatureCollection } from '../../components/operations-map-types'
 import { PartyLogo } from '../../components/PartyLogo'
+import { SosAlertBanner, useActiveSos } from '../../components/SosAlertBanner'
 import { chartColors, chartTooltipTheme } from '../../charts/register'
 import { apiFetch, apiJson } from '../../lib/api'
 
@@ -85,6 +86,7 @@ const td = 'border-t border-[color:var(--portal-border)] px-3 py-2 text-[13px] t
 export function AdminDashboard() {
   const navigate = useNavigate()
   const [calOpen, setCalOpen] = useState(false)
+  const sosAlerts = useActiveSos()
   const dash = useQuery({
     queryKey: ['admin-dashboard-summary'],
     queryFn: () => apiJson<DashboardSummary>('/api/admin/dashboard-summary'),
@@ -153,6 +155,10 @@ export function AdminDashboard() {
           electionType: e.electionType,
           status: e.status,
         }))}
+      />
+      <SosAlertBanner
+        alerts={sosAlerts}
+        onSelect={() => navigate('incident-command')}
       />
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
