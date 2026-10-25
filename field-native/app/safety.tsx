@@ -8,9 +8,10 @@ import {
   setDuressPinRequest,
   sosLocationRequest,
 } from '../lib/api'
+import { submitWithOffline } from '../lib/submit-with-offline'
 import { getCurrentPosition } from '../lib/location'
 import { colors, radii, space } from '../lib/theme'
-import { Card, FieldInput, FieldLabel, fmtTime, LocalSessionBlocked, PrimaryButton, SectionLabel, StatusNote, useFieldSession } from '../components/field-ui'
+import { Card, FieldInput, FieldLabel, fmtTime, PrimaryButton, SectionLabel, StatusNote, useFieldSession } from '../components/field-ui'
 import NetInfo from '@react-native-community/netinfo'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Redirect } from 'expo-router'
@@ -81,13 +82,6 @@ export default function SafetyScreen() {
   if (!ready) return null
   if (!token || !user) return <Redirect href="/login" />
   if (user.portalId !== 'field' || !user.onboardingComplete) return <Redirect href="/" />
-  if (localMode) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <LocalSessionBlocked feature="Safety & SOS" />
-      </SafeAreaView>
-    )
-  }
 
   async function onCheckIn() {
     if (!token || busy) return
@@ -95,12 +89,19 @@ export default function SafetyScreen() {
     setNote(null)
     try {
       const [pos, net] = await Promise.all([getCurrentPosition(), NetInfo.fetch()])
-      await safetyCheckinRequest(token, {
+      const body = {
         lat: pos?.lat ?? null,
         lng: pos?.lng ?? null,
         network: net.type ?? null,
+      }
+      const { outcome } = await submitWithOffline(token!, 'POST', '/api/safety/checkin', body, 'Safety check-in')
+      setNote({
+        text:
+          outcome === 'delivered'
+            ? 'Check-in recorded — Command can see you are OK.'
+            : 'Check-in queued on device — will sync automatically when back online.',
+        tone: outcome === 'delivered' ? 'success' : 'info',
       })
-      setNote({ text: 'Check-in recorded — Command can see you are OK.', tone: 'success' })
       await statusQ.refetch()
     } catch (e) {
       setNote({ text: e instanceof ApiError ? e.message : 'Check-in failed — retry when you have signal.', tone: 'error' })

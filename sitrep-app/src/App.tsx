@@ -4,6 +4,7 @@ import { useAuth } from './contexts/AuthContext'
 import { postLoginPath } from './lib/navigation'
 import { LandingPage } from './pages/LandingPage'
 import { DirectoryPage } from './pages/DirectoryPage'
+import { DownloadsPage } from './pages/DownloadsPage'
 import { LoginPage } from './pages/LoginPage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { ProfilePage } from './pages/ProfilePage'
@@ -110,6 +111,7 @@ export default function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/directory" element={<DirectoryPage />} />
       <Route path="/directory/:officeId" element={<DirectoryPage />} />
+      <Route path="/downloads" element={<DownloadsPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/onboarding" element={<OnboardingGate />} />
       <Route path="/situation-room" element={<SituationRoomDashboard />} />

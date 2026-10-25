@@ -7,7 +7,6 @@ import {
   ChipGroup,
   FieldInput,
   FieldLabel,
-  LocalSessionBlocked,
   PrimaryButton,
   SectionLabel,
   StatusNote,
@@ -52,13 +51,6 @@ export default function IncidentScreen() {
   if (!ready) return null
   if (!token || !user) return <Redirect href="/login" />
   if (user.portalId !== 'field' || !user.onboardingComplete) return <Redirect href="/" />
-  if (localMode) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <LocalSessionBlocked feature="Incident reporting" />
-      </SafeAreaView>
-    )
-  }
 
   async function send(isFlash: boolean) {
     if (!token || busy) return

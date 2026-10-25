@@ -1,26 +1,55 @@
 import { ErrorBoundary } from '../components/ErrorBoundary'
+import { CallOverlay } from '../components/tactical/CallOverlay'
 import { ApiBaseGate } from '../lib/api-base-gate'
 import { AuthProvider, useAuth } from '../lib/auth-context'
-import { colors } from '../lib/theme'
+import { SocketProvider } from '../lib/socket-context'
+import { colors, tactical } from '../lib/theme'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Stack } from 'expo-router'
 import * as SplashScreen from 'expo-splash-screen'
+import * as Updates from 'expo-updates'
 import { StatusBar } from 'expo-status-bar'
-import { useEffect } from 'react'
-import { ActivityIndicator, StyleSheet, View } from 'react-native'
+import { useEffect, useState } from 'react'
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 
 SplashScreen.preventAutoHideAsync()
 
 const queryClient = new QueryClient()
 
+function useOtaUpdates() {
+  const [status, setStatus] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    async function check() {
+      try {
+        const update = await Updates.checkForUpdateAsync()
+        if (cancelled) return
+        if (update.isAvailable) {
+          setStatus('downloading')
+          await Updates.fetchUpdateAsync()
+          if (cancelled) return
+          setStatus('reload')
+          await Updates.reloadAsync()
+        }
+      } catch {
+        // OTA check failed (offline, server down, no update) — silently continue
+      }
+    }
+    void check()
+    return () => { cancelled = true }
+  }, [])
+  return status
+}
+
 function NavStack() {
-  const { ready } = useAuth()
+  const { ready, token, user } = useAuth()
+  const otaStatus = useOtaUpdates()
   useEffect(() => {
     if (ready) SplashScreen.hideAsync().catch(() => {})
   }, [ready])
 
   return (
-    <>
+    <SocketProvider token={token} userId={user?.id ?? null} username={user?.username ?? null}>
       <StatusBar style="dark" />
       <Stack
         screenOptions={{
@@ -30,8 +59,11 @@ function NavStack() {
           contentStyle: { backgroundColor: colors.bg },
         }}
       >
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="login" options={{ headerShown: false, title: 'Sign in' }} />
+        <Stack.Screen name="index" options={{ headerShown: false, contentStyle: { backgroundColor: tactical.bg } }} />
+        <Stack.Screen
+          name="login"
+          options={{ headerShown: false, title: 'Sign in', contentStyle: { backgroundColor: tactical.bg } }}
+        />
         <Stack.Screen name="onboarding" options={{ headerShown: false, title: 'Profile' }} />
         <Stack.Screen name="network-settings" options={{ title: 'Network settings', headerShown: true }} />
         <Stack.Screen name="messages" options={{ title: 'Messages from Command', headerShown: true }} />
@@ -51,12 +83,21 @@ function NavStack() {
       </Stack>
       {!ready && (
         <View
-          style={[StyleSheet.absoluteFillObject, { justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg }]}
+          style={[StyleSheet.absoluteFillObject, { justifyContent: 'center', alignItems: 'center', backgroundColor: tactical.bg }]}
         >
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={tactical.cyan} />
         </View>
       )}
-    </>
+      {otaStatus ? (
+        <View style={styles.otaBanner}>
+          <ActivityIndicator size="small" color={tactical.cyan} />
+          <Text style={styles.otaText}>
+            {otaStatus === 'downloading' ? 'Downloading update…' : 'Applying update…'}
+          </Text>
+        </View>
+      ) : null}
+      <CallOverlay />
+    </SocketProvider>
   )
 }
 
@@ -73,3 +114,27 @@ export default function RootLayout() {
     </ErrorBoundary>
   )
 }
+
+const styles = StyleSheet.create({
+  otaBanner: {
+    position: 'absolute',
+    top: 50,
+    left: 14,
+    right: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(10,20,36,0.96)',
+    borderWidth: 1,
+    borderColor: tactical.borderStrong,
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  otaText: { fontSize: 13, fontWeight: '600', color: tactical.cyan, letterSpacing: 0.3 },
+})

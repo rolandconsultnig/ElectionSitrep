@@ -1,0 +1,40 @@
+{
+  "$schema": "https://expokit.in/schema.json",
+  "aliases": {
+    "components": "@/components",
+    "lib": "@/lib",
+    "hooks": "@/hooks"
+  },
+  "paths": {
+    "components": "components",
+    "lib": "lib",
+    "app": "app"
+  },
+  "installed": {
+    "button": "0.4.0",
+    "card": "0.4.0",
+    "badge": "0.4.0",
+    "avatar": "0.4.0",
+    "floating-input": "0.4.0",
+    "password-input": "0.4.0",
+    "textarea": "0.4.0",
+    "segmented-control": "0.4.0",
+    "chip-group": "0.4.0",
+    "stepper": "0.4.0",
+    "bottom-nav": "0.4.0",
+    "bottom-sheet": "0.4.0",
+    "dialog": "0.4.0",
+    "action-sheet": "0.4.0",
+    "alert": "0.4.0",
+    "toast": "0.4.0",
+    "skeleton": "0.4.0",
+    "progress": "0.4.0",
+    "progress-steps": "0.4.0",
+    "spinner": "0.4.0",
+    "list-item": "0.4.0",
+    "tabs": "0.4.0",
+    "stateful-button": "0.4.0",
+    "search-bar": "0.4.0",
+    "switch": "0.4.0"
+  }
+}

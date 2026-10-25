@@ -1,21 +1,35 @@
+import { Emblem } from '../components/tactical/Emblem'
+import {
+  Backdrop,
+  GhostButton,
+  GlowButton,
+  Kicker,
+  nativeDriver,
+  Notice,
+  StatusPill,
+  TacticalInput,
+} from '../components/tactical/primitives'
 import { ApiError } from '../lib/api'
 import { useAuth } from '../lib/auth-context'
 import { getApiBaseUrl } from '../lib/config'
 import { pingApiHealth } from '../lib/ping-api'
-import { colors, radii, space } from '../lib/theme'
+import { mono, tactical as t } from '../lib/theme'
+import { useLightStatusBar } from '../lib/use-light-status-bar'
+import { Ionicons } from '@expo/vector-icons'
 import NetInfo, { type NetInfoState } from '@react-native-community/netinfo'
 import Constants from 'expo-constants'
 import { Redirect, router } from 'expo-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -28,8 +42,29 @@ function defaultApiHint(): string {
   return 'Not configured — use Network settings'
 }
 
+function hostOf(url: string | null) {
+  return url ? url.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : 'No server'
+}
+
+/** Staggered rise-in for the hero and the form. */
+function useEntrance(count: number) {
+  const vals = useRef(Array.from({ length: count }, () => new Animated.Value(0))).current
+  useEffect(() => {
+    Animated.stagger(
+      90,
+      vals.map((v) =>
+        Animated.timing(v, { toValue: 1, duration: 520, easing: Easing.out(Easing.cubic), useNativeDriver: nativeDriver }),
+      ),
+    ).start()
+  }, [vals])
+  return (i: number) => ({
+    opacity: vals[i],
+    transform: [{ translateY: vals[i].interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
+  })
+}
+
 export default function LoginScreen() {
-  const { token, user, ready, signIn } = useAuth()
+  const { token, user, ready, signIn, signOut } = useAuth()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -38,7 +73,10 @@ export default function LoginScreen() {
   const [pingBusy, setPingBusy] = useState(false)
   const [pingLine, setPingLine] = useState<string | null>(null)
   const [pingOk, setPingOk] = useState<boolean | null>(null)
+  const [pingMs, setPingMs] = useState<number | null>(null)
   const [bootstrapTimeout, setBootstrapTimeout] = useState(false)
+  const enter = useEntrance(4)
+  useLightStatusBar()
 
   // Force show login after 3 seconds even if auth context is still loading
   useEffect(() => {
@@ -59,17 +97,17 @@ export default function LoginScreen() {
     if (u === CONFIG_DIAL_CODE) {
       setIdentifier('')
       setError(null)
-      router.push('/network-settings')
     }
   }, [identifier])
 
   // Show loading state during bootstrap, with timeout fallback
   if (!ready && !bootstrapTimeout) {
     return (
-      <SafeAreaView style={[styles.safe, styles.center]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading...</Text>
-      </SafeAreaView>
+      <View style={[styles.fill, styles.center]}>
+        <Backdrop />
+        <ActivityIndicator size="large" color={t.cyan} />
+        <Text style={styles.loadingText}>Establishing secure link…</Text>
+      </View>
     )
   }
   if (token && user?.portalId === 'field') {
@@ -78,12 +116,16 @@ export default function LoginScreen() {
   }
   if (token && user?.portalId !== 'field') {
     return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.card}>
-          <Text style={styles.title}>Wrong portal</Text>
-          <Text style={styles.body}>Use the Field officer account issued by Command.</Text>
+      <View style={[styles.fill, styles.center, { padding: 24 }]}>
+        <Backdrop />
+        <View style={[styles.card, { alignSelf: 'stretch' }]}>
+          <Notice tone="warning" icon="swap-horizontal-outline" title="Wrong portal">
+            Use the Field officer account issued by Command.
+          </Notice>
+          <View style={{ height: 16 }} />
+          <GhostButton title="Sign out" icon="log-out-outline" onPress={() => void signOut()} />
         </View>
-      </SafeAreaView>
+      </View>
     )
   }
 
@@ -91,12 +133,14 @@ export default function LoginScreen() {
     setPingBusy(true)
     setPingLine(null)
     setPingOk(null)
+    setPingMs(null)
     const base = getApiBaseUrl() ?? ''
     const r = await pingApiHealth(base)
     setPingBusy(false)
     setPingOk(r.ok)
     if (r.ok && r.latencyMs != null) {
-      setPingLine(`Ping OK — ${r.latencyMs} ms\n${base}`)
+      setPingMs(r.latencyMs)
+      setPingLine(base)
     } else {
       setPingLine(`${r.message}\n${base}`)
     }
@@ -124,146 +168,201 @@ export default function LoginScreen() {
     }
   }
 
+  const version = Constants.expoConfig?.version ?? '1.0.0'
+
   return (
-    <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={styles.scroll}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.kicker}>NPF Election SitRep</Text>
-          <Text style={styles.title}>Field officer sign-in</Text>
-          <Text style={styles.sub}>Use your issued username or service number.</Text>
-
+    <View style={styles.fill}>
+      <Backdrop />
+      <SafeAreaView style={styles.fill}>
+        <View style={styles.topBar}>
           {deviceOffline ? (
-            <View style={styles.offlineBanner}>
-              <Text style={styles.offlineText}>No internet connection. Connect Wi‑Fi or mobile data.</Text>
-            </View>
-          ) : null}
-
-          <View style={styles.card}>
-            <Text style={styles.label}>Username or service number</Text>
-            <TextInput
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!busy}
-              value={identifier}
-              onChangeText={setIdentifier}
-              placeholder="e.g. field.rank.ab12cd"
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-            />
-
-            <Text style={[styles.label, { marginTop: space.md }]}>Password</Text>
-            <TextInput
-              secureTextEntry
-              editable={!busy}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="••••••••"
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-            />
-
-            {error ? <Text style={styles.err}>{error}</Text> : null}
-
-            <Pressable
-              onPress={onSubmit}
-              disabled={busy || !identifier.trim() || !password}
-              style={({ pressed }) => [styles.btn, (pressed || busy) && { opacity: 0.85 }]}
-            >
-              <Text style={styles.btnText}>{busy ? 'Signing in…' : 'Sign in'}</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={onPing}
-              disabled={pingBusy || busy}
-              style={({ pressed }) => [styles.btnPing, (pressed || pingBusy) && { opacity: 0.88 }]}
-            >
-              <Text style={styles.btnPingText}>{pingBusy ? 'Pinging API…' : 'Ping API (test network)'}</Text>
-            </Pressable>
-
-            {pingLine ? (
-              <Text style={[styles.pingOut, pingOk ? styles.pingOk : styles.pingBad]}>{pingLine}</Text>
-            ) : null}
-          </View>
-
-          <Pressable onPress={() => router.push('/network-settings')} style={styles.linkNet}>
-            <Text style={styles.linkNetText}>Network settings (server IP / port)</Text>
+            <StatusPill tone="danger" label="No network" icon="cloud-offline-outline" />
+          ) : (
+            <StatusPill tone="success" label="Secure link" pulse />
+          )}
+          <Pressable onPress={() => router.push('/network-settings')} style={styles.hostChip} hitSlop={8}>
+            <Ionicons name="server-outline" size={12} color={t.muted} />
+            <Text style={styles.hostText} numberOfLines={1}>
+              {hostOf(getApiBaseUrl())}
+            </Text>
           </Pressable>
+        </View>
 
-          <Text style={styles.foot}>
-            Wrong server? Enter <Text style={styles.footMono}>*2435*009#</Text> as username to open Network settings. App
-            default API: <Text style={styles.footMono}>{defaultApiHint()}</Text>
-          </Text>
-          <Text style={[styles.foot, { marginTop: space.sm }]}>Need help? Contact your system administrator.</Text>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.fill}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.scroll}
+            showsVerticalScrollIndicator={false}
+          >
+            <Animated.View style={[styles.hero, enter(0)]}>
+              <Emblem size={140} />
+            </Animated.View>
+
+            <Animated.View style={[{ alignItems: 'center' }, enter(1)]}>
+              <Kicker>Nigeria Police Force</Kicker>
+              <Text style={styles.title}>
+                SitRep <Text style={{ color: t.cyan }}>Field</Text>
+              </Text>
+              <Text style={styles.sub}>Election security operations — polling-unit intelligence, straight to Force HQ.</Text>
+            </Animated.View>
+
+            {deviceOffline ? (
+              <Animated.View style={[{ marginBottom: 14 }, enter(2)]}>
+                <Notice tone="danger" icon="cloud-offline-outline" title="You're offline">
+                  Connect Wi‑Fi or mobile data to sign in.
+                </Notice>
+              </Animated.View>
+            ) : null}
+
+            <Animated.View style={[styles.card, enter(2)]}>
+              <View style={styles.cardHead}>
+                <Text style={styles.cardTitle}>Officer sign-in</Text>
+                <View style={styles.encrypted}>
+                  <Ionicons name="lock-closed" size={10} color={t.success} />
+                  <Text style={styles.encryptedText}>TLS</Text>
+                </View>
+              </View>
+
+              <TacticalInput
+                label="Username or service number"
+                icon="person-outline"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!busy}
+                value={identifier}
+                onChangeText={setIdentifier}
+                placeholder="e.g. field.rank.ab12cd"
+                returnKeyType="next"
+                error={!!error}
+              />
+              <View style={{ height: 16 }} />
+              <TacticalInput
+                label="Password"
+                icon="key-outline"
+                secure
+                editable={!busy}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="••••••••"
+                returnKeyType="go"
+                onSubmitEditing={() => void onSubmit()}
+                error={!!error}
+              />
+
+              {error ? (
+                <View style={{ marginTop: 16 }}>
+                  <Notice tone="danger" icon="alert-circle-outline">
+                    {error}
+                  </Notice>
+                </View>
+              ) : null}
+
+              <View style={{ height: 22 }} />
+              <GlowButton
+                title={busy ? 'Verifying…' : 'Sign in'}
+                onPress={() => void onSubmit()}
+                loading={busy}
+                disabled={!identifier.trim() || !password}
+              />
+
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>DIAGNOSTICS</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <GhostButton
+                title={pingBusy ? 'Pinging server…' : 'Test connection'}
+                icon="pulse-outline"
+                onPress={() => void onPing()}
+                loading={pingBusy}
+                disabled={busy}
+                trailing={
+                  pingOk != null ? (
+                    <View style={[styles.latency, { backgroundColor: pingOk ? t.successSoft : t.dangerSoft }]}>
+                      <Text style={[styles.latencyText, { color: pingOk ? t.success : t.danger }]}>
+                        {pingOk && pingMs != null ? `${pingMs} ms` : 'FAIL'}
+                      </Text>
+                    </View>
+                  ) : null
+                }
+              />
+              {pingLine ? (
+                <Text style={[styles.pingOut, { color: pingOk ? t.muted : t.danger }]}>{pingLine}</Text>
+              ) : null}
+            </Animated.View>
+
+            <Animated.View style={enter(3)}>
+              <Pressable onPress={() => router.push('/network-settings')} style={styles.linkNet} hitSlop={6}>
+                <Ionicons name="options-outline" size={15} color={t.cyan} />
+                <Text style={styles.linkNetText}>Network settings</Text>
+              </Pressable>
+
+              <Text style={styles.foot}>
+                Wrong server? Enter <Text style={styles.footMono}>{CONFIG_DIAL_CODE}</Text> as username to open Network
+                settings. App default API: <Text style={styles.footMono}>{defaultApiHint()}</Text>
+              </Text>
+              <Text style={styles.foot}>Need help? Contact your system administrator.</Text>
+              <Text style={styles.version}>v{version} · RESTRICTED · OFFICIAL USE ONLY</Text>
+            </Animated.View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: space.md, fontSize: 16, color: colors.muted },
-  scroll: { flexGrow: 1, padding: space.lg, paddingBottom: space.xl * 2, justifyContent: 'center' },
-  offlineBanner: {
-    backgroundColor: '#fde8e8',
-    borderRadius: radii.md,
-    padding: space.md,
-    marginBottom: space.md,
-    borderWidth: 1,
-    borderColor: colors.danger,
+  fill: { flex: 1, backgroundColor: 'transparent' },
+  center: { justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 16, fontSize: 13, color: t.muted, fontFamily: mono, letterSpacing: 1 },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    gap: 12,
   },
-  offlineText: { color: colors.danger, fontSize: 14, fontWeight: '600', lineHeight: 20 },
-  kicker: { fontSize: 13, color: colors.muted, marginBottom: space.xs, fontWeight: '600' },
-  title: { fontSize: 26, fontWeight: '700', color: colors.text, marginBottom: space.sm },
-  body: { fontSize: 15, color: colors.muted, lineHeight: 22 },
-  sub: { fontSize: 15, color: colors.muted, marginBottom: space.xl, lineHeight: 22 },
+  hostChip: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '55%' },
+  hostText: { fontFamily: mono, fontSize: 11, color: t.muted },
+  scroll: { flexGrow: 1, paddingHorizontal: 22, paddingBottom: 40, justifyContent: 'center' },
+  hero: { alignItems: 'center', marginTop: 12, marginBottom: 18 },
+  title: { fontSize: 36, fontWeight: '800', color: t.text, letterSpacing: -1.2, marginTop: 8 },
+  sub: { fontSize: 14.5, color: t.muted, lineHeight: 21, textAlign: 'center', marginTop: 8, marginBottom: 28, maxWidth: 320 },
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    padding: space.lg,
+    backgroundColor: 'rgba(11,21,36,0.82)',
+    borderRadius: 24,
+    padding: 20,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: t.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.5,
+    shadowRadius: 30,
+    shadowOffset: { width: 0, height: 20 },
+    elevation: 12,
   },
-  label: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: space.xs },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.sm,
-    paddingHorizontal: space.md,
-    paddingVertical: Platform.OS === 'ios' ? 14 : 10,
-    fontSize: 16,
-    color: colors.text,
-    backgroundColor: '#fafbfc',
-  },
-  err: { color: colors.danger, marginTop: space.md, fontSize: 14 },
-  btn: {
-    marginTop: space.lg,
-    backgroundColor: colors.primary,
-    borderRadius: radii.md,
-    paddingVertical: 14,
+  cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+  cardTitle: { fontSize: 18, fontWeight: '700', color: t.text, letterSpacing: -0.3 },
+  encrypted: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: t.successSoft,
   },
-  btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  btnPing: {
-    marginTop: space.md,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: radii.md,
-    paddingVertical: 12,
-    alignItems: 'center',
-    backgroundColor: colors.primaryMuted,
-  },
-  btnPingText: { color: colors.primary, fontSize: 15, fontWeight: '600' },
-  pingOut: { marginTop: space.sm, fontSize: 12, lineHeight: 18 },
-  pingOk: { color: colors.success },
-  pingBad: { color: colors.danger },
-  linkNet: { marginTop: space.md, alignItems: 'center', paddingVertical: space.sm },
-  linkNetText: { color: colors.primary, fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
-  foot: { marginTop: space.lg, fontSize: 12, color: colors.muted, textAlign: 'center', lineHeight: 18 },
-  footMono: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 11 },
+  encryptedText: { fontFamily: mono, fontSize: 9.5, fontWeight: '700', color: t.success, letterSpacing: 1 },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 18 },
+  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: t.borderStrong },
+  dividerText: { fontFamily: mono, fontSize: 9.5, color: t.dim, letterSpacing: 2 },
+  latency: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 7, marginLeft: 2 },
+  latencyText: { fontFamily: mono, fontSize: 11, fontWeight: '700' },
+  pingOut: { marginTop: 10, fontSize: 11.5, lineHeight: 17, fontFamily: mono, textAlign: 'center' },
+  linkNet: { flexDirection: 'row', gap: 6, alignSelf: 'center', alignItems: 'center', marginTop: 22, paddingVertical: 6 },
+  linkNetText: { color: t.cyan, fontSize: 14, fontWeight: '700' },
+  foot: { marginTop: 12, fontSize: 12, color: t.dim, textAlign: 'center', lineHeight: 18 },
+  footMono: { fontFamily: mono, fontSize: 11, color: t.muted },
+  version: { marginTop: 18, fontFamily: mono, fontSize: 9.5, color: t.dim, textAlign: 'center', letterSpacing: 1.6, opacity: 0.7 },
 })

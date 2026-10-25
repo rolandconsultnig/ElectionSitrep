@@ -323,14 +323,13 @@ export function LandingPage() {
                 </div>
               </div>
             </nav>
-            <a
-              href="/downloads/npf-sitrep-field-release.apk"
-              download
+            <Link
+              to="/downloads"
               className="sr-link-nav inline-flex items-center gap-1.5 rounded-full border border-[color:var(--portal-border)] bg-[color:var(--sr-btn-ghost-bg)] px-4 py-2 font-(--font-mono) text-[10px] font-bold uppercase tracking-wider transition hover:text-[#00c46a]"
-              title="Download the NPF SitRep field app for Android"
+              title="Downloads — APK, documentation, resources"
             >
-              <span aria-hidden>⬇</span> Field app
-            </a>
+              <span aria-hidden>⬇</span> Downloads
+            </Link>
             {!user ? (
               <Link
                 to="/login"
@@ -532,18 +531,23 @@ export function LandingPage() {
                     synced to Command the moment you have signal. Sign in with your issued field credentials.
                   </p>
                   <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <a
-                      href="/downloads/npf-sitrep-field-release.apk"
-                      download
+                    <Link
+                      to="/downloads"
                       className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#00c46a] to-[#00a35a] px-6 py-3.5 font-(--font-mono) text-[11px] font-bold uppercase tracking-wider text-[#04251f] shadow-[0_4px_24px_rgba(0,196,106,0.4)] transition hover:brightness-110 active:scale-[0.98]"
                     >
                       <span aria-hidden className="text-sm">⬇</span>
                       Download for Android
-                    </a>
-                    <p className="font-(--font-mono) text-[10px] uppercase tracking-wider text-[var(--portal-dim)]">
-                      ~158 MB · Android 10+ · Allow "install unknown apps"
-                    </p>
+                    </Link>
+                    <Link
+                      to="/downloads"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-[color:var(--portal-border)] px-4 py-3 font-(--font-mono) text-[11px] font-bold uppercase tracking-wider text-[var(--portal-fg)] transition hover:border-[#00c46a]/40"
+                    >
+                      View all downloads →
+                    </Link>
                   </div>
+                  <p className="mt-3 font-(--font-mono) text-[10px] uppercase tracking-wider text-[var(--portal-dim)]">
+                    ~196 MB · Android 10+ · Allow "install unknown apps"
+                  </p>
                 </div>
               </div>
             </div>

@@ -1,9 +1,9 @@
 import {
   ApiError,
-  createLogisticsRequest,
   fieldContextRequest,
   logisticsListRequest,
 } from '../lib/api'
+import { submitWithOffline } from '../lib/submit-with-offline'
 import { getCurrentPosition } from '../lib/location'
 import { colors, radii, space } from '../lib/theme'
 import {
@@ -12,7 +12,6 @@ import {
   FieldInput,
   FieldLabel,
   fmtTime,
-  LocalSessionBlocked,
   PrimaryButton,
   SectionLabel,
   StatusNote,
@@ -73,13 +72,6 @@ export default function LogisticsScreen() {
   if (!ready) return null
   if (!token || !user) return <Redirect href="/login" />
   if (user.portalId !== 'field' || !user.onboardingComplete) return <Redirect href="/" />
-  if (localMode) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <LocalSessionBlocked feature="Logistics requests" />
-      </SafeAreaView>
-    )
-  }
 
   async function onSubmit() {
     if (!token || busy) return
@@ -91,7 +83,7 @@ export default function LogisticsScreen() {
     setNote(null)
     try {
       const pos = await getCurrentPosition()
-      await createLogisticsRequest(token, {
+      const body = {
         electionSlug,
         category,
         priority,
@@ -99,8 +91,15 @@ export default function LogisticsScreen() {
         pollingUnitId: puId,
         lat: pos?.lat ?? null,
         lng: pos?.lng ?? null,
+      }
+      const { outcome } = await submitWithOffline(token!, 'POST', '/api/operations/logistics', body, 'Logistics request')
+      setNote({
+        text:
+          outcome === 'delivered'
+            ? 'Request sent — Command logistics desk will action it.'
+            : 'Request queued on device — will sync when back online.',
+        tone: outcome === 'delivered' ? 'success' : 'info',
       })
-      setNote({ text: 'Request sent — Command logistics desk will action it.', tone: 'success' })
       setDescription('')
       await listQ.refetch()
     } catch (e) {

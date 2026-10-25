@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mobile UI Templates — shortlist for NPF SitRep Field</title>
+<style>
+  :root{
+    --bg:#070d17; --card:#0e1a2b; --card2:#0b1524; --border:rgba(120,160,220,.14);
+    --fg:#eef4ff; --muted:#8fa3c0; --dim:#5d6f8a;
+    --green:#00c46a; --blue:#4f96ff; --gold:#d9b64a; --red:#ff5b5b;
+    --mono:ui-monospace,'Cascadia Code',Consolas,monospace; --sans:'Segoe UI',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0}
+  body{background:radial-gradient(1100px 500px at 85% -10%,rgba(0,196,106,.07),transparent),var(--bg);
+       color:var(--fg);font-family:var(--sans);padding:44px 24px 90px}
+  .wrap{max-width:1220px;margin:0 auto}
+  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--green)}
+  h1{font-size:30px;font-weight:800;margin:8px 0 6px;letter-spacing:-.5px}
+  .lead{color:var(--muted);font-size:14px;max-width:760px;line-height:1.65}
+  .note{margin-top:14px;border:1px solid rgba(217,182,74,.35);background:rgba(217,182,74,.07);border-radius:12px;
+        padding:12px 16px;font-size:12.5px;color:#e8d5a0;max-width:760px;line-height:1.6}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:22px;margin-top:34px}
+  .tpl{border:1px solid var(--border);border-radius:22px;overflow:hidden;
+       background:linear-gradient(165deg,var(--card),var(--card2));display:flex;flex-direction:column}
+  .tpl .shot{height:200px;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .tpl .body{padding:18px 20px 20px;flex:1;display:flex;flex-direction:column}
+  .tpl h2{font-size:18px;font-weight:800;display:flex;align-items:center;gap:10px}
+  .tag{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+       padding:4px 9px;border-radius:999px;border:1px solid}
+  .tpl .stack{font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:8px;letter-spacing:.04em}
+  .tpl p{font-size:12.5px;color:var(--muted);line-height:1.6;margin-top:10px}
+  .tpl ul{margin:12px 0 0;padding-left:18px;font-size:12px;color:var(--muted);line-height:1.75}
+  .tpl ul b{color:var(--fg);font-weight:700}
+  .foot{margin-top:auto;padding-top:16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .score{font-family:var(--mono);font-size:10px;letter-spacing:.1em}
+  .bar{width:110px;height:5px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:99px}
+  a.link{color:var(--blue);font-size:12px;font-weight:700;text-decoration:none}
+  a.link:hover{text-decoration:underline}
+  /* mini previews */
+  .mini{width:170px;height:340px;border-radius:26px;padding:8px;border:1px solid rgba(255,255,255,.15);
+        box-shadow:0 20px 50px rgba(0,0,0,.5);flex:none;transform:rotate(-2deg)}
+  .mini2{transform:rotate(3deg);margin-left:-46px}
+  .m-scr{border-radius:19px;height:100%;overflow:hidden;display:flex;flex-direction:column;padding:10px 10px 8px;gap:7px}
+  .m-bar{height:8px;border-radius:4px}
+  .m-card{border-radius:10px;padding:8px}
+  .m-pill{border-radius:999px;font-family:var(--mono);font-size:6px;padding:2px 7px;display:inline-flex;align-items:center;gap:4px}
+  .m-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .m-mod{border-radius:9px;padding:7px;font-size:7px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="kicker">Shortlist · 4 candidates</p>
+  <h1>UI kit / template options for the field app</h1>
+  <p class="lead">Four well-maintained React Native / Expo UI kits ranked for this project — all compatible with Expo SDK 54, all support dark themes. Click the link on each card to open the real template site/repo and browse actual screenshots.</p>
+  <div class="note"><b>Note:</b> these are starting points, not drop-ins — we keep all existing app logic (liveness, offline queue, cert pinning) and reskin with the chosen kit's components + tokens. Every option below works with a prebuild/APK workflow.</div>
+
+  <div class="grid">
+
+    <!-- 1 · React Native Reusables -->
+    <div class="tpl">
+      <div class="shot" style="background:linear-gradient(140deg,#0d0f14,#171b24)">
+        <div class="mini"><div class="m-scr" style="background:#0d1017">
+          <div class="m-bar" style="width:40%;background:#2a2f3a"></div>
+          <div class="m-card" style="background:#171b25;border:1px solid #262b38;height:44px"></div>
+          <div class="m-grid">
+            <div class="m-mod" style="background:#171b25;border:1px solid #262b38;color:#9fb0c9">Sitrep</div>
+            <div class="m-mod" style="background:#171b25;border:1px solid #262b38;color:#9fb0c9">EC8A</div>
+          </div>
+          <div class="m-card" style="background:#fff;border-radius:9px;height:30px;display:flex;align-items:center;justify-content:center"><span style="font-size:8px;color:#000;font-weight:700">Button</span></div>
+        </div></div>
+        <div class="mini mini2"><div class="m-scr" style="background:#0d1017">
+          <div class="m-grid">
+            <div class="m-mod" style="background:#171b25;border:1px solid #262b38;color:#9fb0c9">⚠ Incident</div>
+            <div class="m-mod" style="background:#171b25;border:1px solid #262b38;color:#9fb0c9">📦 Logistics</div>
+          </div>
+          <div class="m-card" style="background:#171b25;border:1px solid #262b38;height:60px"></div>
+        </div></div>
+      </div>
+      <div class="body">
+        <h2>React Native Reusables <span class="tag" style="border-color:rgba(0,196,106,.5);color:var(--green)">Free · MIT</span></h2>
+        <p class="stack">shadcn-style components · NativeWind (Tailwind) · expo-router · universal (iOS/Android/web)</p>
+        <p>The "shadcn/ui of React Native". Copy-paste components you own, Tailwind classes, first-class dark theme. Big community — most-aligned with the design board I showed you.</p>
+        <ul>
+          <li><b>40+ primitives</b> — buttons, cards, dialogs, form fields, segmented controls, sheets, toasts</li>
+          <li><b>Dark theme built in</b> — semantic tokens (background/card/primary/destructive) map 1:1 to our navy+emerald</li>
+          <li><b>No lock-in</b> — code lives in your repo; restyle per screen freely</li>
+        </ul>
+        <div class="foot">
+          <span class="score" style="color:var(--green)">FIT <span class="bar"><i style="width:95%;background:var(--green)"></i></span> 95%</span>
+          <a class="link" href="https://rnr-docs.vercel.app/getting-started/introduction/" target="_blank">rnr-docs.vercel.app →</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2 · PanelUI -->
+    <div class="tpl">
+      <div class="shot" style="background:linear-gradient(140deg,#101623,#0a0f18)">
+        <div class="mini"><div class="m-scr" style="background:#0f1420">
+          <div class="m-pill" style="background:rgba(79,150,255,.15);color:#7db4ff">Dashboard</div>
+          <div class="m-card" style="background:#161d2e;border:1px solid #233048;height:34px;display:flex;align-items:center"><div class="m-bar" style="width:60%;background:#2c3a55"></div></div>
+          <div class="m-grid">
+            <div class="m-mod" style="background:#161d2e;border:1px solid #233048;color:#8fa3c0">Tally</div>
+            <div class="m-mod" style="background:#161d2e;border:1px solid #233048;color:#8fa3c0">Safety</div>
+          </div>
+          <div class="m-card" style="background:linear-gradient(90deg,#4f96ff,#3b7de0);border-radius:9px;height:28px"></div>
+        </div></div>
+        <div class="mini mini2"><div class="m-scr" style="background:#f5f7fb">
+          <div class="m-card" style="background:#fff;border:1px solid #dde3ee;height:30px"></div>
+          <div class="m-card" style="background:#fff;border:1px solid #dde3ee;height:30px"></div>
+          <div class="m-card" style="background:#fff;border:1px solid #dde3ee;height:30px"></div>
+        </div></div>
+      </div>
+      <div class="body">
+        <h2>PanelUI <span class="tag" style="border-color:rgba(0,196,106,.5);color:var(--green)">Free · MIT</span></h2>
+        <p class="stack">138 typed components · Tailwind v4 (Uniwind) · Reanimated 4 · runs in Expo Go, no native modules</p>
+        <p>Newer open-source kit built for Expo — largest component surface (charts, calendars, bottom sheets, AI chat). Native dark-mode switching without re-renders; every animation runs on the UI thread.</p>
+        <ul>
+          <li><b>Biggest library</b> — 138 components incl. charts (national-pulse graphs) &amp; bottom sheets</li>
+          <li><b>True native dark mode</b> + semantic tokens; zero native deps keeps cert pinning untouched</li>
+          <li><b>Young project</b> — smaller community, docs still maturing</li>
+        </ul>
+        <div class="foot">
+          <span class="score" style="color:var(--green)">FIT <span class="bar"><i style="width:86%;background:var(--green)"></i></span> 86%</span>
+          <a class="link" href="https://www.panelui.dev/" target="_blank">panelui.dev →</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3 · ExpoKit -->
+    <div class="tpl">
+      <div class="shot" style="background:linear-gradient(140deg,#141024,#0c0818)">
+        <div class="mini"><div class="m-scr" style="background:#100c1d">
+          <div class="m-bar" style="width:55%;background:#3a3152"></div>
+          <div class="m-card" style="background:linear-gradient(135deg,#7c5cff,#4f8ef7);border-radius:12px;height:52px"></div>
+          <div class="m-grid">
+            <div class="m-mod" style="background:#1b1630;border:1px solid #2c2450;color:#a89fd4">KPI tile</div>
+            <div class="m-mod" style="background:#1b1630;border:1px solid #2c2450;color:#a89fd4">Sparkline</div>
+          </div>
+          <div class="m-card" style="background:#1b1630;border:1px solid #2c2450;height:36px"></div>
+        </div></div>
+        <div class="mini mini2"><div class="m-scr" style="background:#100c1d">
+          <div class="m-card" style="background:#1b1630;border:1px solid #2c2450;height:24px"></div>
+          <div class="m-card" style="background:#1b1630;border:1px solid #2c2450;height:24px"></div>
+          <div class="m-card" style="background:linear-gradient(90deg,#7c5cff,#b05cf0);border-radius:10px;height:30px"></div>
+        </div></div>
+      </div>
+      <div class="body">
+        <h2>ExpoKit <span class="tag" style="border-color:rgba(217,182,74,.55);color:var(--gold)">Paid · per-screen</span></h2>
+        <p class="stack">70 animated components · 347 variants · 23 chart types · copy-code delivery · Expo + RN</p>
+        <p>Polished, animated whole screens — Sign In Pro, Dashboard Pro (collapsing header, KPI sparklines, quick actions), Inbox Pro. Highest visual finish of the four; you buy and paste the code.</p>
+        <ul>
+          <li><b>Dashboard Pro ≈ our home screen</b> — greeting, KPIs, quick actions, pull-to-refresh</li>
+          <li><b>Best motion polish</b> — springs, rolling numbers, scrubbing charts</li>
+          <li><b>Costs money per screen</b>, finance-flavoured styling needs re-theming to NPF navy/green</li>
+        </ul>
+        <div class="foot">
+          <span class="score" style="color:var(--gold)">FIT <span class="bar"><i style="width:78%;background:var(--gold)"></i></span> 78%</span>
+          <a class="link" href="https://expokit.karandev.in/" target="_blank">expokit.karandev.in →</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4 · Nigeria Security App -->
+    <div class="tpl">
+      <div class="shot" style="background:linear-gradient(140deg,#0d1f14,#08120c)">
+        <div class="mini"><div class="m-scr" style="background:#0b1a10">
+          <div class="m-pill" style="background:rgba(0,196,106,.18);color:#4ade80">NPF portal</div>
+          <div class="m-card" style="background:#12241a;border:1px solid #1e3a2a;height:40px"></div>
+          <div class="m-grid">
+            <div class="m-mod" style="background:#12241a;border:1px solid #1e3a2a;color:#9ec9ad">Report</div>
+            <div class="m-mod" style="background:#12241a;border:1px solid #1e3a2a;color:#9ec9ad">Map</div>
+          </div>
+          <div class="m-card" style="background:#12352a;border:1px solid #1e4a34;height:30px"></div>
+        </div></div>
+        <div class="mini mini2"><div class="m-scr" style="background:#0b1a10">
+          <div class="m-card" style="background:#12241a;border:1px solid #1e3a2a;height:56px"></div>
+          <div class="m-card" style="background:#12241a;border:1px solid #1e3a2a;height:24px"></div>
+        </div></div>
+      </div>
+      <div class="body">
+        <h2>Nigeria Security App <span class="tag" style="border-color:rgba(0,196,106,.5);color:var(--green)">Free · GitHub</span></h2>
+        <p class="stack">Expo + NativeWind + TypeScript · incident reporting · agency workspaces · NPF-specific</p>
+        <p>Open-source Nigerian public-safety app — literally built around NPF/FRSC/NSCDC portals: badge-number login, incident reporting, map views, agency workspaces. Same domain as ours, worth mining for screen patterns.</p>
+        <ul>
+          <li><b>Domain-identical</b> — NPF login, incident reports, nearby alerts, safety assistant</li>
+          <li><b>Same stack</b> — Expo + TypeScript; components lift directly</li>
+          <li><b>Reference code</b>, not a polished kit — styling is plain; best as pattern source combined with RNR/PanelUI</li>
+        </ul>
+        <div class="foot">
+          <span class="score" style="color:var(--blue)">FIT <span class="bar"><i style="width:72%;background:var(--blue)"></i></span> 72%</span>
+          <a class="link" href="https://github.com/dangutdavid/Nigeria-Security-App" target="_blank">github.com/dangutdavid →</a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="note" style="margin-top:34px;max-width:none;border-color:var(--border);background:rgba(255,255,255,.03);color:var(--muted)">
+    <b style="color:var(--fg)">My recommendation:</b> <b style="color:var(--green)">React Native Reusables</b> — it's free, shadcn-style (same design language as modern ops consoles), gives us owned code with semantic dark tokens that map directly onto the navy/emerald board, and keeps the bundle light. PanelUI is the close second if you want the bigger ready-made component set (charts + sheets) out of the box.
+  </div>
+</div>
+</body>
+</html>

@@ -1,5 +1,5 @@
 import { hydrateApiBaseFromStorage } from './server-settings'
-import { colors } from './theme'
+import { tactical } from './theme'
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, StyleSheet, View } from 'react-native'
 
@@ -19,7 +19,7 @@ export function ApiBaseGate({ children }: { children: React.ReactNode }) {
   if (!ready) {
     return (
       <View style={[StyleSheet.absoluteFillObject, styles.center]}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={tactical.cyan} />
       </View>
     )
   }
@@ -27,5 +27,5 @@ export function ApiBaseGate({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  center: { justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg },
+  center: { justifyContent: 'center', alignItems: 'center', backgroundColor: tactical.bg },
 })

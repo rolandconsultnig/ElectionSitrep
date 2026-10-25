@@ -14,6 +14,10 @@ export default defineConfig({
         target: 'http://127.0.0.1:5530',
         changeOrigin: true,
       },
+      '/downloads': {
+        target: 'http://127.0.0.1:5530',
+        changeOrigin: true,
+      },
     },
   },
   preview: {
@@ -21,6 +25,10 @@ export default defineConfig({
     port: 5535,
     proxy: {
       '/api': {
+        target: 'http://127.0.0.1:5530',
+        changeOrigin: true,
+      },
+      '/downloads': {
         target: 'http://127.0.0.1:5530',
         changeOrigin: true,
       },

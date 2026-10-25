@@ -1,10 +1,9 @@
 import {
-  acknowledgeShiftRequest,
   ApiError,
   fieldContextRequest,
-  handoverShiftRequest,
   shiftsRequest,
 } from '../lib/api'
+import { submitWithOffline } from '../lib/submit-with-offline'
 import { colors, radii, space } from '../lib/theme'
 import {
   Card,
@@ -12,7 +11,6 @@ import {
   FieldInput,
   FieldLabel,
   fmtTime,
-  LocalSessionBlocked,
   PrimaryButton,
   SectionLabel,
   StatusNote,
@@ -75,13 +73,6 @@ export default function ShiftsScreen() {
   if (!ready) return null
   if (!token || !user) return <Redirect href="/login" />
   if (user.portalId !== 'field' || !user.onboardingComplete) return <Redirect href="/" />
-  if (localMode) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <LocalSessionBlocked feature="Relief & shift handover" />
-      </SafeAreaView>
-    )
-  }
 
   async function onHandover() {
     if (!token || busy) return
@@ -92,7 +83,7 @@ export default function ShiftsScreen() {
     setBusy(true)
     setNote(null)
     try {
-      await handoverShiftRequest(token, {
+      const body = {
         electionSlug,
         pollingUnitId: puId,
         shiftName,
@@ -101,8 +92,15 @@ export default function ShiftsScreen() {
         materialsStatus: materialsStatus.trim() || undefined,
         crowdAssessment: crowd,
         notes: notes.trim() || undefined,
+      }
+      const { outcome } = await submitWithOffline(token!, 'POST', '/api/operations/shifts/handover', body, 'Shift handover')
+      setNote({
+        text:
+          outcome === 'delivered'
+            ? 'Handover recorded and signed. Command has been notified.'
+            : 'Handover queued on device — will sync when back online.',
+        tone: outcome === 'delivered' ? 'success' : 'info',
       })
-      setNote({ text: 'Handover recorded and signed. Command has been notified.', tone: 'success' })
       setSituationLog('')
       setNotes('')
       setIncomingName('')
@@ -118,8 +116,14 @@ export default function ShiftsScreen() {
     if (!token || ackBusy) return
     setAckBusy(id)
     try {
-      await acknowledgeShiftRequest(token, id)
-      setNote({ text: 'Handover acknowledged — you are now the officer on record.', tone: 'success' })
+      const { outcome } = await submitWithOffline(token!, 'POST', `/api/operations/shifts/${id}/acknowledge`, {}, 'Shift acknowledge')
+      setNote({
+        text:
+          outcome === 'delivered'
+            ? 'Handover acknowledged — you are now the officer on record.'
+            : 'Acknowledgement queued — will sync when back online.',
+        tone: outcome === 'delivered' ? 'success' : 'info',
+      })
       await shiftsQ.refetch()
     } catch (e) {
       setNote({ text: e instanceof ApiError ? e.message : 'Acknowledge failed.', tone: 'error' })

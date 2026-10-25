@@ -7,7 +7,6 @@ import {
   ChipGroup,
   FieldInput,
   FieldLabel,
-  LocalSessionBlocked,
   PrimaryButton,
   SectionLabel,
   StatusNote,
@@ -45,13 +44,6 @@ export default function SitrepScreen() {
   if (!ready) return null
   if (!token || !user) return <Redirect href="/login" />
   if (user.portalId !== 'field' || !user.onboardingComplete) return <Redirect href="/" />
-  if (localMode) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <LocalSessionBlocked feature="SitRep" />
-      </SafeAreaView>
-    )
-  }
 
   const assignment = ctxQ.data?.assignment ?? null
 

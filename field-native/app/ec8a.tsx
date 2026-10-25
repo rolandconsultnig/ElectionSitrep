@@ -2,15 +2,14 @@ import {
   ApiError,
   candidatePartiesRequest,
   fieldContextRequest,
-  submitEc8aRequest,
 } from '../lib/api'
+import { submitWithOffline } from '../lib/submit-with-offline'
 import { getCurrentPosition } from '../lib/location'
 import { colors, radii, space } from '../lib/theme'
 import {
   Card,
   FieldInput,
   FieldLabel,
-  LocalSessionBlocked,
   PrimaryButton,
   SectionLabel,
   StatusNote,
@@ -62,13 +61,6 @@ export default function Ec8aScreen() {
   if (!ready) return null
   if (!token || !user) return <Redirect href="/login" />
   if (user.portalId !== 'field' || !user.onboardingComplete) return <Redirect href="/" />
-  if (localMode) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <LocalSessionBlocked feature="EC8A evidence & tally" />
-      </SafeAreaView>
-    )
-  }
 
   const parties = partiesQ.data?.parties ?? []
   const validVotes = parties.reduce((acc, p) => acc + toInt(partyVotes[p.abbreviation] ?? ''), 0)
@@ -105,7 +97,7 @@ export default function Ec8aScreen() {
         const v = toInt(partyVotes[p.abbreviation] ?? '')
         if (v > 0) votes[p.abbreviation] = v
       }
-      await submitEc8aRequest(token, {
+      const body = {
         electionSlug,
         pollingUnitId: puId,
         registeredVoters: toInt(registered),
@@ -121,10 +113,14 @@ export default function Ec8aScreen() {
         photoSource: 'police',
         lat: pos?.lat ?? null,
         lng: pos?.lng ?? null,
-      })
+      }
+      const { outcome } = await submitWithOffline(token!, 'POST', '/api/operations/results/ec8a', body, 'EC8A tally')
       setNote({
-        text: 'EC8A evidence submitted — mirrored to collation. Server-side anomaly checks (over-voting, arithmetic) run automatically.',
-        tone: 'success',
+        text:
+          outcome === 'delivered'
+            ? 'EC8A evidence submitted — mirrored to collation. Server-side anomaly checks (over-voting, arithmetic) run automatically.'
+            : 'EC8A queued on device — will sync automatically to the Situation Room when back online.',
+        tone: outcome === 'delivered' ? 'success' : 'info',
       })
     } catch (e) {
       setNote({ text: e instanceof ApiError ? e.message : 'EC8A submission failed.', tone: 'error' })

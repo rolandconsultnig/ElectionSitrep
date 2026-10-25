@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NPF SitRep Field — Mobile UI Concept</title>
+<style>
+  :root {
+    --bg: #060d18;
+    --bg2: #0a1628;
+    --card-a: #101f33;
+    --card-b: #0c1a2c;
+    --border: rgba(120, 160, 220, 0.14);
+    --border-strong: rgba(120, 160, 220, 0.28);
+    --fg: #eef4ff;
+    --muted: #8fa3c0;
+    --dim: #5d6f8a;
+    --green: #00c46a;
+    --green-deep: #00a35a;
+    --gold: #d9b64a;
+    --blue: #4f96ff;
+    --red: #ff5b5b;
+    --amber: #e8a43c;
+    --mono: ui-monospace, 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+    --sans: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 80% -10%, rgba(0,196,106,.07), transparent),
+                radial-gradient(1000px 500px at 10% 110%, rgba(79,150,255,.06), transparent), var(--bg);
+    color: var(--fg); font-family: var(--sans); padding: 40px 24px 80px;
+  }
+  .board-head { max-width: 1300px; margin: 0 auto 36px; }
+  .board-head .kicker { font-family: var(--mono); font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: var(--green); }
+  .board-head h1 { font-size: 30px; font-weight: 800; margin: 8px 0 6px; letter-spacing: -0.5px; }
+  .board-head p { color: var(--muted); font-size: 14px; max-width: 720px; line-height: 1.6; }
+
+  .tokens { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; }
+  .token { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 10px; color: var(--muted);
+           border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; background: rgba(255,255,255,.02); }
+  .token i { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
+
+  .grid { max-width: 1300px; margin: 0 auto; display: grid; gap: 28px;
+          grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); align-items: start; }
+  .phone {
+    width: 360px; margin: 0 auto; background: var(--bg2); border-radius: 40px; padding: 12px;
+    border: 1px solid var(--border-strong); box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.03) inset;
+  }
+  .screen { border-radius: 30px; overflow: hidden; background: var(--bg); min-height: 640px; display: flex; flex-direction: column; position: relative; }
+  .screen .statusbar { display: flex; justify-content: space-between; padding: 12px 22px 4px; font-size: 11px; color: var(--dim); font-family: var(--mono); }
+  .caption { text-align: center; margin-top: 12px; font-family: var(--mono); font-size: 10px; letter-spacing: .18em;
+             text-transform: uppercase; color: var(--dim); }
+
+  /* shared app components */
+  .app-body { flex: 1; padding: 8px 18px 18px; overflow: hidden; }
+  .h-kicker { font-family: var(--mono); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--green); font-weight: 600; }
+  .h-title { font-size: 21px; font-weight: 800; letter-spacing: -0.3px; }
+  .h-sub { color: var(--muted); font-size: 12px; margin-top: 4px; line-height: 1.5; }
+  .card {
+    background: linear-gradient(165deg, var(--card-a), var(--card-b));
+    border: 1px solid var(--border); border-radius: 20px; padding: 16px;
+  }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 9px; font-weight: 700;
+          letter-spacing: .1em; text-transform: uppercase; padding: 5px 10px; border-radius: 999px; border: 1px solid; }
+  .dot { width: 6px; height: 6px; border-radius: 999px; }
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 15px; border-radius: 16px;
+    background: linear-gradient(180deg, var(--green), var(--green-deep)); color: #04251f;
+    font-weight: 800; font-size: 14px; letter-spacing: .02em; box-shadow: 0 8px 28px rgba(0,196,106,.35);
+  }
+  .btn-ghost {
+    display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 13px; border-radius: 16px;
+    background: rgba(255,255,255,.04); border: 1px solid var(--border-strong); color: var(--fg); font-weight: 700; font-size: 13px;
+  }
+  .field label { display: block; font-family: var(--mono); font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--dim); margin: 12px 0 6px; }
+  .field input {
+    width: 100%; background: rgba(255,255,255,.04); border: 1px solid var(--border); border-radius: 14px;
+    padding: 13px 14px; color: var(--fg); font-size: 14px; outline: none;
+  }
+  .field input:focus { border-color: rgba(0,196,106,.5); }
+  .input-static { padding: 13px 14px; background: rgba(255,255,255,.04); border: 1px solid var(--border); border-radius: 14px; font-size: 14px; }
+
+  /* login */
+  .login-hero { padding: 22px 8px 8px; text-align: center; }
+  .crest { width: 74px; height: 74px; margin: 0 auto 14px; border-radius: 22px;
+           background: radial-gradient(circle at 30% 25%, rgba(0,196,106,.35), transparent 60%),
+                       linear-gradient(150deg, #122a45, #0b1a2e);
+           border: 1px solid var(--border-strong); display: flex; align-items: center; justify-content: center;
+           font-size: 34px; box-shadow: 0 12px 40px rgba(0,196,106,.15); position: relative; }
+  .crest::after { content:''; position:absolute; inset:-6px; border-radius:26px; border:1px solid rgba(0,196,106,.15); }
+
+  /* dashboard */
+  .statstrip { display: flex; gap: 8px; margin: 12px 0; }
+  .stat { flex: 1; border-radius: 14px; padding: 8px 10px; border: 1px solid var(--border); background: rgba(255,255,255,.03);
+          font-family: var(--mono); font-size: 8.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .stat b { display: block; color: var(--fg); font-size: 11px; margin-top: 2px; font-family: var(--sans); }
+  .modules { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .mod {
+    border-radius: 18px; padding: 13px 12px; border: 1px solid var(--border); position: relative; overflow: hidden;
+    background: linear-gradient(160deg, var(--card-a), var(--card-b)); min-height: 84px;
+  }
+  .mod::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background: var(--acc, var(--green)); opacity:.8; }
+  .mod .ico { width: 34px; height: 34px; border-radius: 11px; display:flex; align-items:center; justify-content:center;
+              font-size: 16px; background: color-mix(in srgb, var(--acc, var(--green)) 14%, transparent); border: 1px solid color-mix(in srgb, var(--acc, var(--green)) 35%, transparent); }
+  .mod h4 { font-size: 12.5px; font-weight: 700; margin-top: 9px; }
+  .mod p { font-size: 9.5px; color: var(--muted); margin-top: 2px; line-height: 1.35; }
+  .mod.wide { grid-column: 1 / -1; min-height: 0; display:flex; align-items:center; gap: 12px; }
+  .mod.wide .txt { flex: 1; }
+  .mod.wide h4, .mod.wide p { margin: 0; }
+  .tabbar { display: flex; border-top: 1px solid var(--border); background: rgba(10,22,40,.92); padding: 10px 6px 16px; }
+  .tab { flex: 1; text-align: center; font-size: 9px; color: var(--dim); font-family: var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+  .tab .t-ico { font-size: 17px; display: block; margin-bottom: 3px; filter: grayscale(1); opacity: .6; }
+  .tab.on { color: var(--green); }
+  .tab.on .t-ico { filter: none; opacity: 1; }
+
+  /* SOS screen */
+  .sos-ring { width: 190px; height: 190px; margin: 26px auto 14px; border-radius: 999px; position: relative;
+              background: radial-gradient(circle, #3d1215 0%, #20090b 70%);
+              border: 1px solid rgba(255,91,91,.4); display: flex; align-items: center; justify-content: center; }
+  .sos-ring::before { content:''; position:absolute; inset:-12px; border-radius:999px; border:1px dashed rgba(255,91,91,.35); animation: spin 14s linear infinite; }
+  .sos-ring::after { content:''; position:absolute; inset:-26px; border-radius:999px; border:1px solid rgba(255,91,91,.12); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .sos-core { text-align: center; }
+  .sos-core b { display: block; font-size: 26px; letter-spacing: .06em; color: var(--red); }
+  .sos-core span { font-family: var(--mono); font-size: 9px; color: #ffb0b0; letter-spacing: .12em; text-transform: uppercase; }
+  .hold { height: 6px; border-radius: 99px; background: rgba(255,255,255,.08); margin: 18px 30px 0; overflow: hidden; }
+  .hold i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, var(--red), #ff9d5b); border-radius: 99px; }
+
+  /* liveness */
+  .camview { flex: 1; position: relative; background: radial-gradient(140% 100% at 50% 0%, #1b2c42 0%, #0a1420 60%); }
+  .face-oval { position: absolute; left: 50%; top: 38%; transform: translate(-50%,-50%); width: 190px; height: 240px;
+               border-radius: 50%; border: 2px dashed rgba(0,196,106,.7); box-shadow: 0 0 60px rgba(0,196,106,.12) inset; }
+  .face-oval::after { content: '🧑🏾‍✈️'; position: absolute; inset: 0; display:flex; align-items:center; justify-content:center; font-size: 90px; opacity:.5; }
+  .steps-row { position: absolute; left: 14px; right: 14px; bottom: 118px; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+  .step-chip { font-family: var(--mono); font-size: 8.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+               padding: 5px 9px; border-radius: 999px; background: rgba(255,255,255,.08); color: #cfd9e6; }
+  .step-chip.done { background: rgba(0,196,106,.85); color: #04251f; }
+  .speak-bar { position:absolute; left: 14px; right: 14px; bottom: 70px; display:flex; gap: 8px; align-items:center;
+               background: rgba(12,24,42,.9); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; }
+  .wave { display:flex; align-items:flex-end; gap:2px; height: 18px; }
+  .wave i { width:3px; background: var(--green); border-radius: 2px; animation: w 1s ease-in-out infinite; }
+  .wave i:nth-child(2){animation-delay:.15s}.wave i:nth-child(3){animation-delay:.3s}.wave i:nth-child(4){animation-delay:.45s}
+  @keyframes w { 0%,100%{height:5px} 50%{height:16px} }
+
+  /* forms */
+  .seg { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-top: 8px; }
+  .seg div { border: 1px solid var(--border); border-radius: 14px; padding: 12px 6px; text-align: center; font-size: 11px; font-weight: 700; color: var(--muted); }
+  .seg .on-calm { border-color: rgba(0,196,106,.6); background: rgba(0,196,106,.12); color: var(--green); }
+  .chip-flow { display:flex; gap:6px; }
+  .vote-row { display:flex; align-items:center; gap:10px; padding: 10px 0; border-bottom: 1px solid rgba(120,160,220,.08); }
+  .vote-row:last-child { border-bottom: 0; }
+  .pty { width: 38px; height: 38px; border-radius: 11px; display:flex; align-items:center; justify-content:center;
+         font-weight: 800; font-size: 11px; }
+  .stepper { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .stepper button { width: 30px; height: 30px; border-radius: 10px; border: 1px solid var(--border-strong); background: rgba(255,255,255,.05); color: var(--fg); font-size: 15px; }
+  .stepper b { min-width: 34px; text-align: center; font-size: 15px; }
+  .rec { display:flex; align-items:center; gap:10px; border:1px dashed rgba(0,196,106,.4); border-radius:14px; padding:12px; margin-top: 12px; }
+  .fab { position:absolute; right: 16px; bottom: 84px; width: 56px; height: 56px; border-radius: 18px;
+         background: linear-gradient(180deg, #ff5b5b, #d63c3c); display:flex; align-items:center; justify-content:center;
+         font-size: 22px; box-shadow: 0 12px 32px rgba(255,91,91,.4); border: 1px solid rgba(255,91,91,.5); }
+  .msg { display:flex; gap: 8px; padding: 10px 12px; border-radius: 14px; font-size: 11px; }
+  .msg.cmd { background: rgba(79,150,255,.1); border: 1px solid rgba(79,150,255,.25); }
+  .feed-item { padding: 12px; border-radius: 16px; border: 1px solid var(--border); background: linear-gradient(160deg,var(--card-a),var(--card-b)); }
+  .avatar { width: 40px; height: 40px; border-radius: 14px; flex:none;
+            background: linear-gradient(150deg,#123a5e,#0b1a2e); border:1px solid var(--border-strong);
+            display:flex; align-items:center; justify-content:center; font-weight:800; font-size: 14px; color: var(--green); }
+</style>
+</head>
+<body>
+<header class="board-head">
+  <p class="kicker">Design concept · NPF SitRep Field</p>
+  <h1>Mobile app — dark command theme</h1>
+  <p>Moves the app from light boxy cards to a deep-navy command surface that matches the web portal: glass cards, emerald accent, big touch targets, live status everywhere. Every pattern below is plain React Native views — no exotic libs needed.</p>
+  <div class="tokens">
+    <span class="token"><i style="background:#060d18;border:1px solid #333"></i> #060d18 bg</span>
+    <span class="token"><i style="background:#101f33"></i> #101f33 card</span>
+    <span class="token"><i style="background:#00c46a"></i> #00c46a primary</span>
+    <span class="token"><i style="background:#d9b64a"></i> #d9b64a alert</span>
+    <span class="token"><i style="background:#4f96ff"></i> #4f96ff info</span>
+    <span class="token"><i style="background:#ff5b5b"></i> #ff5b5b SOS</span>
+    <span class="token">radii 14–24px</span>
+    <span class="token">mono labels / sans body</span>
+  </div>
+</header>
+
+<div class="grid">
+
+  <!-- ══════════════ 1 · LOGIN ══════════════ -->
+  <div>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>09:41</span><span>📶 🔋</span></div>
+      <div class="app-body">
+        <div class="login-hero">
+          <div class="crest">🛡️</div>
+          <p class="h-kicker">Nigeria Police Force</p>
+          <h2 class="h-title" style="margin-top:6px">SitRep Field</h2>
+          <p class="h-sub">Election security operations — polling-unit feed to Force HQ.</p>
+        </div>
+        <div class="card" style="margin-top:18px">
+          <div class="field"><label>Username or service number</label><div class="input-static" style="color:var(--fg)">officer</div></div>
+          <div class="field"><label>Password</label><div class="input-static" style="color:var(--dim)">••••••••</div></div>
+          <div style="margin-top:16px" class="btn">Sign in →</div>
+          <div style="margin-top:10px" class="btn-ghost">📡 Ping API — test network</div>
+        </div>
+        <p style="text-align:center;margin-top:16px;font-family:var(--mono);font-size:10px;color:var(--dim)">Network settings (server IP / port)</p>
+        <div style="display:flex;justify-content:center;margin-top:14px">
+          <span class="pill" style="border-color:rgba(0,196,106,.4);color:var(--green)"><i class="dot" style="background:var(--green)"></i> API · 66.45.231.142:6634</span>
+        </div>
+      </div>
+    </div></div>
+    <p class="caption">01 · Login</p>
+  </div>
+
+  <!-- ══════════════ 2 · ONBOARDING / LIVENESS ══════════════ -->
+  <div>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>09:41</span><span>📶 🔋</span></div>
+      <div class="camview">
+        <span class="pill" style="position:absolute;top:12px;left:14px;border-color:rgba(0,196,106,.5);background:rgba(0,196,106,.15);color:var(--green)">
+          <i class="dot" style="background:var(--green)"></i> Face detected</span>
+        <span class="pill" style="position:absolute;top:12px;right:14px;border-color:var(--border);color:var(--muted)">Liveness check</span>
+        <div class="face-oval"></div>
+        <div class="steps-row">
+          <span class="step-chip done">✓ Face centred</span>
+          <span class="step-chip done">✓ Blink once</span>
+          <span class="step-chip">Turn your head</span>
+          <span class="step-chip">Hold still</span>
+        </div>
+        <div class="speak-bar">
+          <div class="wave"><i></i><i></i><i></i><i></i></div>
+          <div style="flex:1">
+            <p style="font-size:12px;font-weight:700">Turn your head to either side.</p>
+            <p style="font-family:var(--mono);font-size:8.5px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase">🔊 spoken instruction · step 3 of 4</p>
+          </div>
+        </div>
+        <div style="position:absolute;left:14px;right:14px;bottom:16px;display:flex;gap:10px">
+          <div class="btn-ghost" style="width:auto;flex:1">Cancel</div>
+          <div class="btn" style="width:auto;flex:2;background:linear-gradient(180deg,#4f96ff,#3b7de0);box-shadow:0 8px 28px rgba(79,150,255,.35)">Verifying…</div>
+        </div>
+      </div>
+    </div></div>
+    <p class="caption">02 · Liveness — guided</p>
+  </div>
+
+  <!-- ══════════════ 3 · HOME DASHBOARD ══════════════ -->
+  <div>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>09:41</span><span>📶 🔋</span></div>
+      <div class="app-body" style="padding-bottom:0">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="avatar">GE</div>
+          <div style="flex:1">
+            <p class="h-kicker">On duty · Field</p>
+            <h2 class="h-title" style="font-size:17px">Garba Ejeke God'swill</h2>
+          </div>
+          <span class="pill" style="border-color:rgba(0,196,106,.4);color:var(--green)"><i class="dot" style="background:var(--green)"></i> LIVE</span>
+        </div>
+
+        <div class="statstrip">
+          <div class="stat">Network<b style="color:var(--green)">Online</b></div>
+          <div class="stat">Queued<b>0</b></div>
+          <div class="stat">Check-in<b>09:12</b></div>
+        </div>
+
+        <div class="card" style="display:flex;align-items:center;gap:12px;padding:14px 16px">
+          <span style="font-size:22px">📍</span>
+          <div style="flex:1">
+            <p style="font-size:13px;font-weight:700">St. Luke's Primary School</p>
+            <p style="font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:.08em">EK-001-W01-001 · Ado-Ekiti · Ekiti</p>
+          </div>
+          <span class="pill" style="border-color:var(--border);color:var(--muted);font-size:8px">PU</span>
+        </div>
+
+        <div class="msg cmd" style="margin-top:10px;align-items:center">
+          <span>📨</span>
+          <div style="flex:1"><b style="font-size:11px">Command</b><span style="color:var(--muted)"> — hold positions until 14:00 briefing</span></div>
+          <span class="pill" style="border-color:var(--blue);color:var(--blue);font-size:8px">2</span>
+        </div>
+
+        <p class="h-kicker" style="margin:16px 0 2px">Active elections</p>
+        <div class="feed-item" style="display:flex;align-items:center;gap:10px;margin-top:8px">
+          <span style="font-size:18px">🗳️</span>
+          <div style="flex:1"><b style="font-size:12.5px">Ekiti Governorship 2026</b><p style="font-size:10px;color:var(--muted)">Jun 20 · closed · official results</p></div>
+          <span style="color:var(--dim)">›</span>
+        </div>
+
+        <p class="h-kicker" style="margin:16px 0 2px">Field modules</p>
+        <div class="modules">
+          <div class="mod wide" style="--acc:var(--green)">
+            <div class="ico">📝</div>
+            <div class="txt"><h4>File a Situation Report</h4><p>Status, summary, audio &amp; photo — syncs to Command</p></div>
+            <span style="color:var(--dim)">›</span>
+          </div>
+          <div class="mod" style="--acc:var(--blue)"><div class="ico">📷</div><h4>EC8A Result</h4><p>Photo + votes</p></div>
+          <div class="mod" style="--acc:var(--blue)"><div class="ico">🔢</div><h4>Vote tally</h4><p>Quick counts</p></div>
+          <div class="mod" style="--acc:var(--amber)"><div class="ico">⚠️</div><h4>Incident</h4><p>Report event</p></div>
+          <div class="mod" style="--acc:var(--amber)"><div class="ico">👥</div><h4>Turnout</h4><p>Queue levels</p></div>
+          <div class="mod" style="--acc:var(--gold)"><div class="ico">📦</div><h4>Logistics</h4><p>Materials</p></div>
+          <div class="mod" style="--acc:var(--gold)"><div class="ico">🕐</div><h4>Shifts</h4><p>Duty roster</p></div>
+        </div>
+        <div style="height:10px"></div>
+      </div>
+      <div class="fab">🆘</div>
+      <div class="tabbar">
+        <div class="tab on"><span class="t-ico">🏠</span>Home</div>
+        <div class="tab"><span class="t-ico">📋</span>History</div>
+        <div class="tab"><span class="t-ico">🗺️</span>Timeline</div>
+        <div class="tab"><span class="t-ico">🛡️</span>Safety</div>
+      </div>
+    </div></div>
+    <p class="caption">03 · Home dashboard</p>
+  </div>
+
+  <!-- ══════════════ 4 · SITREP FORM ══════════════ -->
+  <div>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>09:41</span><span>📶 🔋</span></div>
+      <div class="app-body">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="color:var(--muted);font-size:18px">‹</span>
+          <div><p class="h-kicker">Situation report</p><h2 class="h-title" style="font-size:18px">Current status at PU</h2></div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <label class="field" style="display:block"><span style="font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)">Situation</span></label>
+          <div class="seg">
+            <div class="on-calm">😌<br>Calm</div>
+            <div>😟<br>Tense</div>
+            <div>🔥<br>Violent</div>
+          </div>
+          <div class="field"><label>Summary for Command</label><div class="input-static" style="min-height:64px;color:var(--muted)">Voting proceeding normally. ~340 accredited so far, no queue…</div></div>
+          <div class="rec">
+            <div class="wave"><i></i><i></i><i></i><i></i></div>
+            <div style="flex:1"><b style="font-size:12px">00:14 audio note</b><p style="font-size:9.5px;color:var(--muted)">Recorded — attach or re-record</p></div>
+            <span>🎙️</span>
+          </div>
+          <div class="rec" style="border-style:solid;border-color:var(--border);margin-top:8px">
+            <span>🖼️</span>
+            <div style="flex:1"><b style="font-size:12px">Attach photo</b><p style="font-size:9.5px;color:var(--muted)">Optional — scene evidence</p></div>
+            <span style="color:var(--dim)">+</span>
+          </div>
+        </div>
+        <div style="margin-top:14px" class="btn">Submit SitRep ↗</div>
+        <p style="text-align:center;margin-top:10px;font-family:var(--mono);font-size:9px;color:var(--dim)">Sends now · queues automatically if offline</p>
+      </div>
+      <div class="tabbar">
+        <div class="tab"><span class="t-ico">🏠</span>Home</div>
+        <div class="tab"><span class="t-ico">📋</span>History</div>
+        <div class="tab"><span class="t-ico">🗺️</span>Timeline</div>
+        <div class="tab"><span class="t-ico">🛡️</span>Safety</div>
+      </div>
+    </div></div>
+    <p class="caption">04 · SitRep form</p>
+  </div>
+
+  <!-- ══════════════ 5 · SAFETY / SOS ══════════════ -->
+  <div>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>09:41</span><span>📶 🔋</span></div>
+      <div class="app-body">
+        <p class="h-kicker">Officer safety</p>
+        <h2 class="h-title" style="font-size:19px;margin-top:4px">Emergency &amp; check-in</h2>
+        <div class="sos-ring"><div class="sos-core"><b>SOS</b><span>hold 2s to alert</span></div></div>
+        <div class="hold"><i></i></div>
+        <p style="text-align:center;font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:10px">Press &amp; hold — raises silent alert + live GPS to Command</p>
+        <div class="card" style="margin-top:18px;display:flex;align-items:center;gap:12px">
+          <span style="font-size:20px">✅</span>
+          <div style="flex:1"><b style="font-size:13px">Safety check-in</b><p style="font-size:10px;color:var(--muted)">Last: 09:12 · due every 2h</p></div>
+          <div class="btn-ghost" style="width:auto;padding:9px 14px">Check in</div>
+        </div>
+        <div class="card" style="margin-top:10px;display:flex;align-items:center;gap:12px">
+          <span style="font-size:20px">🔢</span>
+          <div style="flex:1"><b style="font-size:13px">Duress PIN</b><p style="font-size:10px;color:var(--muted)">Unlock code that silently raises SOS</p></div>
+          <div class="btn-ghost" style="width:auto;padding:9px 14px">Set</div>
+        </div>
+      </div>
+      <div class="tabbar">
+        <div class="tab"><span class="t-ico">🏠</span>Home</div>
+        <div class="tab"><span class="t-ico">📋</span>History</div>
+        <div class="tab"><span class="t-ico">🗺️</span>Timeline</div>
+        <div class="tab on"><span class="t-ico">🛡️</span>Safety</div>
+      </div>
+    </div></div>
+    <p class="caption">05 · Safety / SOS</p>
+  </div>
+
+  <!-- ══════════════ 6 · EC8A / TALLY ══════════════ -->
+  <div>
+    <div class="phone"><div class="screen">
+      <div class="statusbar"><span>09:41</span><span>📶 🔋</span></div>
+      <div class="app-body">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="color:var(--muted);font-size:18px">‹</span>
+          <div><p class="h-kicker">EC8A result sheet</p><h2 class="h-title" style="font-size:18px">Ekiti Governorship 2026</h2></div>
+        </div>
+        <div class="card" style="margin-top:14px;padding:12px;display:flex;gap:10px;align-items:center">
+          <div style="width:56px;height:70px;border-radius:12px;background:rgba(255,255,255,.05);border:1px dashed var(--border-strong);display:flex;align-items:center;justify-content:center;font-size:22px">📷</div>
+          <div style="flex:1"><b style="font-size:12px">Result form photo</b><p style="font-size:10px;color:var(--muted)">Captured ✓ — retap to retake</p></div>
+          <span class="pill" style="border-color:rgba(0,196,106,.4);color:var(--green)">✓</span>
+        </div>
+        <div class="card" style="margin-top:10px">
+          <div class="vote-row"><div class="pty" style="background:rgba(0,196,106,.14);color:var(--green)">APC</div><div><b style="font-size:12.5px">All Progressives</b><p style="font-size:9.5px;color:var(--muted)">Congress</p></div><div class="stepper"><button>−</button><b>214</b><button>+</button></div></div>
+          <div class="vote-row"><div class="pty" style="background:rgba(79,150,255,.14);color:var(--blue)">PDP</div><div><b style="font-size:12.5px">People's Dem.</b><p style="font-size:9.5px;color:var(--muted)">Party</p></div><div class="stepper"><button>−</button><b>56</b><button>+</button></div></div>
+          <div class="vote-row"><div class="pty" style="background:rgba(217,182,74,.14);color:var(--gold)">ADC</div><div><b style="font-size:12.5px">African Dem.</b><p style="font-size:9.5px;color:var(--muted)">Congress</p></div><div class="stepper"><button>−</button><b>12</b><button>+</button></div></div>
+          <div class="vote-row"><div class="pty" style="background:rgba(255,255,255,.06);color:var(--muted)">LP</div><div><b style="font-size:12.5px">Labour Party</b><p style="font-size:9.5px;color:var(--muted)">&nbsp;</p></div><div class="stepper"><button>−</button><b>1</b><button>+</button></div></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;font-family:var(--mono);font-size:9px;color:var(--muted);justify-content:center">
+          <span class="pill" style="border-color:var(--border)">VALID 283</span>
+          <span class="pill" style="border-color:var(--border)">REJECTED 7</span>
+          <span class="pill" style="border-color:var(--border)">CAST 290</span>
+        </div>
+        <div style="margin-top:12px" class="btn">Upload result ↗</div>
+      </div>
+      <div class="tabbar">
+        <div class="tab"><span class="t-ico">🏠</span>Home</div>
+        <div class="tab"><span class="t-ico">📋</span>History</div>
+        <div class="tab"><span class="t-ico">🗺️</span>Timeline</div>
+        <div class="tab"><span class="t-ico">🛡️</span>Safety</div>
+      </div>
+    </div></div>
+    <p class="caption">06 · EC8A tally</p>
+  </div>
+
+</div>
+</body>
+</html>

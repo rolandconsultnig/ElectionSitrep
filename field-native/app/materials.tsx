@@ -2,9 +2,8 @@ import {
   ApiError,
   fieldContextRequest,
   materialsRequest,
-  registerMaterialRequest,
-  scanMaterialRequest,
 } from '../lib/api'
+import { submitWithOffline } from '../lib/submit-with-offline'
 import { getCurrentPosition } from '../lib/location'
 import { colors, radii, space } from '../lib/theme'
 import {
@@ -13,7 +12,6 @@ import {
   FieldInput,
   FieldLabel,
   fmtTime,
-  LocalSessionBlocked,
   PrimaryButton,
   SectionLabel,
   StatusNote,
@@ -76,13 +74,6 @@ export default function MaterialsScreen() {
   if (!ready) return null
   if (!token || !user) return <Redirect href="/login" />
   if (user.portalId !== 'field' || !user.onboardingComplete) return <Redirect href="/" />
-  if (localMode) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <LocalSessionBlocked feature="Sensitive materials log" />
-      </SafeAreaView>
-    )
-  }
 
   const myMaterials = (listQ.data?.materials ?? []).filter(
     (m) => puId == null || m.pu_id == null || String(m.pu_id) === String(puId),
@@ -98,7 +89,7 @@ export default function MaterialsScreen() {
     setNote(null)
     try {
       if (mode === 'register') {
-        await registerMaterialRequest(token, {
+        const body = {
           electionSlug,
           materialType,
           serialOrBarcode: serial.trim(),
@@ -106,19 +97,33 @@ export default function MaterialsScreen() {
           status: 'issued',
           tamperSealIntact: sealIntact,
           notes: notes.trim() || undefined,
+        }
+        const { outcome } = await submitWithOffline(token!, 'POST', '/api/operations/materials', body, 'Material register')
+        setNote({
+          text:
+            outcome === 'delivered'
+              ? 'Material registered — custody now tracked under your name.'
+              : 'Material registration queued — will sync when back online.',
+          tone: outcome === 'delivered' ? 'success' : 'info',
         })
-        setNote({ text: 'Material registered — custody now tracked under your name.', tone: 'success' })
       } else {
         const pos = await getCurrentPosition()
-        await scanMaterialRequest(token, {
+        const body = {
           serialOrBarcode: serial.trim(),
           status: scanStatus,
           tamperSealIntact: sealIntact,
           lat: pos?.lat ?? null,
           lng: pos?.lng ?? null,
           notes: notes.trim() || undefined,
+        }
+        const { outcome } = await submitWithOffline(token!, 'POST', '/api/operations/materials/scan', body, 'Material scan')
+        setNote({
+          text:
+            outcome === 'delivered'
+              ? 'Custody scan recorded with your GPS position.'
+              : 'Custody scan queued — will sync when back online.',
+          tone: outcome === 'delivered' ? 'success' : 'info',
         })
-        setNote({ text: 'Custody scan recorded with your GPS position.', tone: 'success' })
       }
       setSerial('')
       setNotes('')

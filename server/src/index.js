@@ -110,6 +110,16 @@ app.use('/api/analytics', createAnalyticsRouter({ pool, authMiddleware, requireA
 app.use('/api/operations/results', createEc8aOcrRouter({ pool, authMiddleware, requireAnyPortal }))
 app.use('/api/ota', createOtaRouter(process.env.OTA_DIR || path.join(__dirname, '../../ota')))
 
+// Serve the field app APK for the web portal download link.
+const downloadsDir = process.env.DOWNLOADS_DIR || path.join(__dirname, '../../downloads')
+app.get('/downloads/:filename', (req, res, next) => {
+  const filename = path.basename(String(req.params.filename))
+  if (!/^[\w.-]+\.apk$/i.test(filename)) return res.status(400).json({ error: 'Invalid file' })
+  res.sendFile(path.join(downloadsDir, filename), (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: 'File not found' })
+  })
+})
+
 // Simple in-memory rate limiter for auth endpoints
 const loginAttempts = new Map()
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000 // 15 minutes

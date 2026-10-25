@@ -2,7 +2,7 @@ import { fieldContextRequest } from '../lib/api'
 import { submitOrQueue } from '../lib/field-actions'
 import { getCurrentPosition } from '../lib/location'
 import { colors, radii, space } from '../lib/theme'
-import { LocalSessionBlocked, StatusNote, useFieldSession } from '../components/field-ui'
+import { StatusNote, useFieldSession } from '../components/field-ui'
 import { useQuery } from '@tanstack/react-query'
 import { Redirect } from 'expo-router'
 import { useState } from 'react'
@@ -24,13 +24,6 @@ export default function ViolenceScreen() {
   if (!ready) return null
   if (!token || !user) return <Redirect href="/login" />
   if (user.portalId !== 'field' || !user.onboardingComplete) return <Redirect href="/" />
-  if (localMode) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <LocalSessionBlocked feature="Violence & disturbance log" />
-      </SafeAreaView>
-    )
-  }
 
   function onUrgent() {
     Alert.alert(
