@@ -1,21 +1,32 @@
 import { colors, radii, space } from '../lib/theme'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import * as ImageManipulator from 'expo-image-manipulator'
+import * as Location from 'expo-location'
 import { useRef, useState } from 'react'
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native'
+
+export type PhotoGeo = {
+  lat: number
+  lng: number
+  accuracy: number | null
+  capturedAt: string
+}
 
 /**
  * Evidence photo capture. Renders either a trigger button, a live camera, or a
  * preview of the captured JPEG. Calls onChange with a `data:image/jpeg;base64,…`
  * URL (or null when cleared) — the same payload shape the web portal sends.
+ * Every capture is geotagged: GPS is read at shutter time and reported via onGeo.
  */
 export function PhotoCapture({
   value,
   onChange,
+  onGeo,
   label = 'Attach photo evidence',
 }: {
   value: string | null
   onChange: (dataUrl: string | null) => void
+  onGeo?: (geo: PhotoGeo | null) => void
   label?: string
 }) {
   const cameraRef = useRef<CameraView>(null)
@@ -23,6 +34,7 @@ export function PhotoCapture({
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [geo, setGeo] = useState<PhotoGeo | null>(null)
 
   async function openCamera() {
     setError(null)
@@ -48,7 +60,23 @@ export function PhotoCapture({
         base64: true,
       })
       if (!manip.base64) throw new Error('Could not encode photo.')
+      // Geotag: read GPS at shutter time; a denied/failed fix still attaches the photo.
+      let g: PhotoGeo | null = null
+      try {
+        const perm = await Location.getForegroundPermissionsAsync()
+        if (perm.granted) {
+          const fix = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
+          g = {
+            lat: fix.coords.latitude,
+            lng: fix.coords.longitude,
+            accuracy: fix.coords.accuracy ?? null,
+            capturedAt: new Date(fix.timestamp).toISOString(),
+          }
+        }
+      } catch { /* geotag optional — never block the photo */ }
+      setGeo(g)
       onChange(`data:image/jpeg;base64,${manip.base64}`)
+      onGeo?.(g)
       setOpen(false)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Photo capture failed.')
@@ -78,11 +106,18 @@ export function PhotoCapture({
     return (
       <View style={{ marginTop: space.sm }}>
         <Image source={{ uri: value }} style={styles.preview} resizeMode="cover" />
+        {geo ? (
+          <Text style={styles.geoTag}>
+            📍 {geo.lat.toFixed(5)}, {geo.lng.toFixed(5)}{geo.accuracy != null ? ` · ±${Math.round(geo.accuracy)}m` : ''}
+          </Text>
+        ) : (
+          <Text style={[styles.geoTag, { color: colors.danger }]}>No GPS fix — photo not geotagged</Text>
+        )}
         <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.sm }}>
           <Pressable onPress={openCamera} style={styles.smallBtn}>
             <Text style={styles.smallBtnText}>Retake</Text>
           </Pressable>
-          <Pressable onPress={() => onChange(null)} style={styles.smallBtn}>
+          <Pressable onPress={() => { onChange(null); onGeo?.(null); setGeo(null) }} style={styles.smallBtn}>
             <Text style={styles.smallBtnText}>Remove</Text>
           </Pressable>
         </View>
@@ -134,4 +169,5 @@ const styles = StyleSheet.create({
   },
   attachBtnText: { color: colors.primary, fontWeight: '700', fontSize: 15 },
   error: { color: colors.danger, marginTop: space.sm, fontSize: 13 },
+  geoTag: { color: colors.success, marginTop: 6, fontSize: 12, fontWeight: '600' },
 })

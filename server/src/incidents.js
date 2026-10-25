@@ -114,6 +114,30 @@ const INCIDENT_SELECT = `
   LEFT JOIN geo_wards gw ON gw.id = i.ward_id
   LEFT JOIN geo_polling_units gp ON gp.id = i.pu_id`
 
+// Photo-geotag columns (migration_032). Retried as a legacy SELECT if the
+// database hasn't applied the migration yet.
+const PHOTO_GEO_COLS = `, i.photo_lat, i.photo_lng, i.photo_accuracy, i.photo_captured_at`
+let hasPhotoGeoCols = true
+
+function incidentSelectSql(withGeo) {
+  return INCIDENT_SELECT.replace(
+    ' au.username AS acknowledged_by_username',
+    ` au.username AS acknowledged_by_username${withGeo ? PHOTO_GEO_COLS : ''}`,
+  )
+}
+
+async function runIncidentQuery(db, tail, params = []) {
+  try {
+    return await db.query(`${incidentSelectSql(hasPhotoGeoCols)} ${tail}`, params)
+  } catch (e) {
+    if (e && String(e.code) === '42703' && hasPhotoGeoCols) {
+      hasPhotoGeoCols = false
+      return await db.query(`${incidentSelectSql(false)} ${tail}`, params)
+    }
+    throw e
+  }
+}
+
 function incidentDto(r) {
   return {
     id: Number(r.id),
@@ -149,6 +173,9 @@ function incidentDto(r) {
     deviceCreatedAt: r.device_created_at,
     hasPhoto: r.has_photo,
     photoSha256: r.photo_sha256,
+    photoGeo: r.photo_lat != null && r.photo_lng != null
+      ? { lat: r.photo_lat, lng: r.photo_lng, accuracy: r.photo_accuracy ?? null, capturedAt: r.photo_captured_at ?? null }
+      : null,
     reporter: {
       username: r.reporter_username,
       name: r.reporter_name,
@@ -158,7 +185,7 @@ function incidentDto(r) {
 }
 
 async function loadIncident(db, id) {
-  const r = await db.query(`${INCIDENT_SELECT} WHERE i.id = $1`, [id])
+  const r = await runIncidentQuery(db, `WHERE i.id = $1`, [id])
   return r.rows[0] ? incidentDto(r.rows[0]) : null
 }
 
@@ -208,38 +235,62 @@ export async function createIncident(db, io, userId, body, { clientId = null, de
   let photo = null
   if (body?.photoDataUrl) photo = parseDataUrl(body.photoDataUrl)
   const photoSha = photo ? createHash('sha256').update(photo.buffer).digest('hex') : null
+  const photoLat = num(body?.photoLat)
+  const photoLng = num(body?.photoLng)
+  const photoAccuracy = num(body?.photoAccuracy)
+  const photoCapturedAt = body?.photoCapturedAt ? new Date(body.photoCapturedAt) : null
 
   const now = new Date()
-  const ins = await db.query(
-    `INSERT INTO incidents (reporter_user_id, client_id, type_code, severity, is_flash, title, description, details,
-       state_id, lga_id, ward_id, pu_id, lat, lng, escalation_level, sla_due_at, photo_data, photo_mime, photo_sha256,
-       device_created_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
-     ON CONFLICT (reporter_user_id, client_id) DO NOTHING
-     RETURNING id`,
-    [
-      userId,
-      clientId,
-      type.code,
-      severity,
-      isFlash,
-      title,
-      description,
-      JSON.stringify(details),
-      geo?.state_id ?? null,
-      geo?.lga_id ?? null,
-      geo?.ward_id ?? null,
-      geo?.pu_id ?? null,
-      lat,
-      lng,
-      level,
-      slaDue(severity, now),
-      photo?.buffer ?? null,
-      photo?.mime ?? null,
-      photoSha,
-      deviceCreatedAt,
-    ],
-  )
+  const params = [
+    userId,
+    clientId,
+    type.code,
+    severity,
+    isFlash,
+    title,
+    description,
+    JSON.stringify(details),
+    geo?.state_id ?? null,
+    geo?.lga_id ?? null,
+    geo?.ward_id ?? null,
+    geo?.pu_id ?? null,
+    lat,
+    lng,
+    level,
+    slaDue(severity, now),
+    photo?.buffer ?? null,
+    photo?.mime ?? null,
+    photoSha,
+    deviceCreatedAt,
+    photoLat,
+    photoLng,
+    photoAccuracy,
+    Number.isNaN(photoCapturedAt?.getTime() ?? 0) ? null : photoCapturedAt,
+  ]
+  let ins
+  try {
+    ins = await db.query(
+      `INSERT INTO incidents (reporter_user_id, client_id, type_code, severity, is_flash, title, description, details,
+         state_id, lga_id, ward_id, pu_id, lat, lng, escalation_level, sla_due_at, photo_data, photo_mime, photo_sha256,
+         device_created_at, photo_lat, photo_lng, photo_accuracy, photo_captured_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+       ON CONFLICT (reporter_user_id, client_id) DO NOTHING
+       RETURNING id`,
+      params,
+    )
+  } catch (e) {
+    if (!(e && String(e.code) === '42703')) throw e
+    // migration_032 not applied — insert without photo geotag columns
+    ins = await db.query(
+      `INSERT INTO incidents (reporter_user_id, client_id, type_code, severity, is_flash, title, description, details,
+         state_id, lga_id, ward_id, pu_id, lat, lng, escalation_level, sla_due_at, photo_data, photo_mime, photo_sha256,
+         device_created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+       ON CONFLICT (reporter_user_id, client_id) DO NOTHING
+       RETURNING id`,
+      params.slice(0, 20),
+    )
+  }
   if (!ins.rows.length) return { ok: true, duplicate: true, incident: null }
   const id = ins.rows[0].id
   await addEvent(db, id, userId, isFlash ? 'flash' : 'reported', `Routed to ${LEVEL_LABEL[level]}`)
@@ -427,7 +478,7 @@ export function createIncidentRouter({ pool, authMiddleware, requireAnyPortal, g
   })
 
   r.get('/incidents/mine', authMiddleware, requireAnyPortal('field'), async (req, res) => {
-    const q = await pool.query(`${INCIDENT_SELECT} WHERE i.reporter_user_id = $1 ORDER BY i.created_at DESC LIMIT 50`, [
+    const q = await runIncidentQuery(pool, `WHERE i.reporter_user_id = $1 ORDER BY i.created_at DESC LIMIT 50`, [
       req.auth.sub,
     ])
     res.json({ incidents: q.rows.map(incidentDto) })
@@ -458,8 +509,9 @@ export function createIncidentRouter({ pool, authMiddleware, requireAnyPortal, g
       }
       const limit = Math.min(500, Math.max(1, num(req.query.limit) ?? 200))
       params.push(limit)
-      const q = await pool.query(
-        `${INCIDENT_SELECT}${where}
+      const q = await runIncidentQuery(
+        pool,
+        `${where}
          ORDER BY (i.status = 'resolved'), i.is_flash DESC,
                   array_position(ARRAY['critical','high','medium','low']::text[], i.severity::text), i.created_at DESC
          LIMIT $${params.length}`,

@@ -52,7 +52,8 @@ export const PORTALS: Record<PortalId, PortalMeta> = {
             icon: '📺', 
             subItems: [
               { id: 'situation-room', moduleCode: 'EXT-1', label: 'Situation Room 1', path: '/situation-room' },
-              { id: 'svg-monitor', moduleCode: 'EXT-2', label: 'Situation Room (Large Screen)', path: '/svg-monitor' }
+              { id: 'svg-monitor', moduleCode: 'EXT-2', label: 'Situation Room (Large Screen)', path: '/svg-monitor' },
+              { id: 'situation-room-3', moduleCode: 'EXT-3', label: 'Situation Room 3 (Live)', path: '/situation-room-3' }
             ]
           },
           { id: 'operations-map', moduleCode: 'M05b', label: 'Operations map', icon: '🗺', path: 'operations-map' },
@@ -195,7 +196,8 @@ export const PORTALS: Record<PortalId, PortalMeta> = {
             icon: '📺', 
             subItems: [
               { id: 'situation-room', moduleCode: 'EXT-1', label: 'Situation Room 1', path: '/situation-room' },
-              { id: 'svg-monitor', moduleCode: 'EXT-2', label: 'Situation Room (Large Screen)', path: '/svg-monitor' }
+              { id: 'svg-monitor', moduleCode: 'EXT-2', label: 'Situation Room (Large Screen)', path: '/svg-monitor' },
+              { id: 'situation-room-3', moduleCode: 'EXT-3', label: 'Situation Room 3 (Live)', path: '/situation-room-3' }
             ]
           },
           { id: 'sitrep', moduleCode: 'M20', label: 'Live SitRep Feed', icon: '📡', path: 'sitrep' },
@@ -284,7 +286,8 @@ export const PORTALS: Record<PortalId, PortalMeta> = {
             icon: '📺', 
             subItems: [
               { id: 'situation-room', moduleCode: 'EXT-1', label: 'Situation Room 1', path: '/situation-room' },
-              { id: 'svg-monitor', moduleCode: 'EXT-2', label: 'Situation Room (Large Screen)', path: '/svg-monitor' }
+              { id: 'svg-monitor', moduleCode: 'EXT-2', label: 'Situation Room (Large Screen)', path: '/svg-monitor' },
+              { id: 'situation-room-3', moduleCode: 'EXT-3', label: 'Situation Room 3 (Live)', path: '/situation-room-3' }
             ]
           },
           { id: 'incident-command', moduleCode: 'M27a', label: 'Incident command', icon: '🚨', path: 'incident-command' },

@@ -747,6 +747,17 @@ function parseDataUrl(dataUrl) {
   }
 }
 
+function numOrNull(v) {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+function dateOrNull(v) {
+  if (!v) return null
+  const d = new Date(v)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
 async function loadUserPayload(userId) {
   const u = await pool.query(
     `SELECT u.id, u.username, u.portal, u.onboarding_complete, u.password_must_change,
@@ -1834,13 +1845,35 @@ app.post('/api/field/sync', authMiddleware, requireAnyPortal('field'), async (re
         delete payload.audioDataUrl
       }
 
-      const ins = await pool.query(
-        `INSERT INTO field_capture_outbox (client_id, user_id, kind, payload, device_created_at, photo_data, photo_mime, audio_data, audio_mime)
-         VALUES ($1, $2::uuid, $3, $4::jsonb, $5, $6, $7, $8, $9)
-         ON CONFLICT (user_id, client_id) DO NOTHING
-         RETURNING id`,
-        [clientId, userId, kind, JSON.stringify(payload), devAt, photoBuf, photoMime, audioBuf, audioMime],
-      )
+      // Photo geotag stays in the payload JSON as well, so it survives even on
+      // environments that haven't applied migration_032 yet.
+      const photoLat = numOrNull(payload?.photoLat)
+      const photoLng = numOrNull(payload?.photoLng)
+      const photoAccuracy = numOrNull(payload?.photoAccuracy)
+      const photoCapturedAt = dateOrNull(payload?.photoCapturedAt)
+      const params = [clientId, userId, kind, JSON.stringify(payload), devAt, photoBuf, photoMime, audioBuf, audioMime,
+        photoLat, photoLng, photoAccuracy, photoCapturedAt]
+      let ins
+      try {
+        ins = await pool.query(
+          `INSERT INTO field_capture_outbox (client_id, user_id, kind, payload, device_created_at, photo_data, photo_mime, audio_data, audio_mime,
+            photo_lat, photo_lng, photo_accuracy, photo_captured_at)
+           VALUES ($1, $2::uuid, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+           ON CONFLICT (user_id, client_id) DO NOTHING
+           RETURNING id`,
+          params,
+        )
+      } catch (geoErr) {
+        if (!(geoErr && typeof geoErr === 'object' && 'code' in geoErr && geoErr.code === '42703')) throw geoErr
+        // migration_032 not applied — fall back to the pre-geotag column list
+        ins = await pool.query(
+          `INSERT INTO field_capture_outbox (client_id, user_id, kind, payload, device_created_at, photo_data, photo_mime, audio_data, audio_mime)
+           VALUES ($1, $2::uuid, $3, $4::jsonb, $5, $6, $7, $8, $9)
+           ON CONFLICT (user_id, client_id) DO NOTHING
+           RETURNING id`,
+          params.slice(0, 9),
+        )
+      }
       results.push({ clientId, ok: true, duplicate: ins.rows.length === 0 })
     } catch (e) {
       console.error(e)
@@ -2735,11 +2768,29 @@ async function loadFieldOperationsMapPayload(pool) {
       rows: [{ id: 0, code: 'NG', name: 'Nigeria', center_lat: 9.082, center_lng: 8.675 }],
     }
   }
+  // Real GPS telemetry lives in officer_safety (persisted from gps_update socket
+  // events); officer_profiles carries the assigned polling unit, which is the
+  // next-best fix when a device has never reported a position.
+  let safetyByUser = new Map()
+  try {
+    const { rows } = await pool.query(
+      `SELECT os.user_id, os.last_lat, os.last_lng, os.telemetry_at, os.position_source,
+              os.battery_pct, os.network
+       FROM officer_safety os`,
+    )
+    safetyByUser = new Map(rows.map((r) => [r.user_id, r]))
+  } catch (e) {
+    const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : ''
+    if (code !== '42P01' && code !== '42703') throw e
+  }
   const users = await pool.query(
     `SELECT u.id, u.username, u.onboarding_complete,
-            p.full_name AS profile_name, p.service_number
+            p.full_name AS profile_name, p.service_number,
+            pu.id AS pu_id, pu.code AS pu_code, pu.name AS pu_name,
+            pu.lat AS pu_lat, pu.lng AS pu_lng
      FROM app_users u
      LEFT JOIN officer_profiles p ON p.user_id = u.id
+     LEFT JOIN geo_polling_units pu ON pu.id = p.assigned_polling_unit_id
      WHERE u.portal = 'field'
      ORDER BY u.created_at ASC`,
   )
@@ -2749,7 +2800,14 @@ async function loadFieldOperationsMapPayload(pool) {
   for (const u of users.rows) {
     const st = states.rows[si % states.rows.length]
     si += 1
-    const { lat, lng } = deterministicOffset(u.username, Number(st.center_lat), Number(st.center_lng))
+    const safety = safetyByUser.get(u.id)
+    const hasLiveFix = safety && safety.last_lat != null && safety.last_lng != null
+    const hasPuFix = u.pu_lat != null && u.pu_lng != null
+    const { lat, lng } = hasLiveFix
+      ? { lat: Number(safety.last_lat), lng: Number(safety.last_lng) }
+      : hasPuFix
+        ? { lat: Number(u.pu_lat), lng: Number(u.pu_lng) }
+        : deterministicOffset(u.username, Number(st.center_lat), Number(st.center_lng))
     const displayName = u.profile_name || u.username
     const row = {
       userId: u.id,
@@ -2759,6 +2817,16 @@ async function loadFieldOperationsMapPayload(pool) {
       lat,
       lng,
       stateHint: st.name,
+      locationSource: hasLiveFix ? 'gps' : hasPuFix ? 'assigned_pu' : 'estimate',
+      // gps_update persists telemetry every ~20 s while the app is connected —
+      // a fix fresher than 5 minutes means the device is effectively live.
+      live: Boolean(safety?.telemetry_at && Date.now() - new Date(safety.telemetry_at).getTime() < 5 * 60 * 1000),
+      lastLocationAt: safety?.telemetry_at ?? null,
+      batteryPct: safety?.battery_pct ?? null,
+      network: safety?.network ?? null,
+      assignedPu: u.pu_id
+        ? { id: u.pu_id, code: u.pu_code, name: u.pu_name, lat: u.pu_lat != null ? Number(u.pu_lat) : null, lng: u.pu_lng != null ? Number(u.pu_lng) : null }
+        : null,
     }
     if (u.onboarding_complete) active.push(row)
     else inactive.push({ ...row, reason: 'Pending onboarding / not deployed' })
@@ -2860,7 +2928,9 @@ const SITREP_FEED_SQL = `
            au.portal AS author_portal,
            cs.state_id, gs.name AS state_name, cs.lga_id, gl.name AS lga_name,
            cs.pu_id, pu.code AS pu_code,
-           false AS has_audio
+           false AS has_audio, false AS has_photo,
+           NULL::float AS photo_lat, NULL::float AS photo_lng,
+           NULL::float AS photo_accuracy, NULL::text AS photo_captured_at
     FROM command_sitreps cs
     JOIN app_users au ON au.id = cs.author_user_id
     LEFT JOIN officer_profiles op ON op.user_id = cs.author_user_id
@@ -2878,12 +2948,18 @@ const SITREP_FEED_SQL = `
            END AS title,
            coalesce(f.payload->>'narrative', f.payload->>'detail', '') AS body,
            'new' AS status, f.device_created_at AS created_at,
-           NULL::float AS lat, NULL::float AS lng,
+           CASE WHEN f.payload->>'lat' ~ '^-?[0-9]+(\.[0-9]+)?$' THEN (f.payload->>'lat')::float END AS lat,
+           CASE WHEN f.payload->>'lng' ~ '^-?[0-9]+(\.[0-9]+)?$' THEN (f.payload->>'lng')::float END AS lng,
            u2.username AS author_username, coalesce(op2.full_name, u2.username) AS author_name,
            'field' AS author_portal,
            gs2.id AS state_id, gs2.name AS state_name, gl2.id AS lga_id, gl2.name AS lga_name,
            op2.assigned_polling_unit_id AS pu_id, pu2.code AS pu_code,
-           (f.audio_data IS NOT NULL) AS has_audio
+           (f.audio_data IS NOT NULL) AS has_audio,
+           (f.photo_data IS NOT NULL) AS has_photo,
+           CASE WHEN f.payload->>'photoLat' ~ '^-?[0-9]+(\.[0-9]+)?$' THEN (f.payload->>'photoLat')::float END AS photo_lat,
+           CASE WHEN f.payload->>'photoLng' ~ '^-?[0-9]+(\.[0-9]+)?$' THEN (f.payload->>'photoLng')::float END AS photo_lng,
+           CASE WHEN f.payload->>'photoAccuracy' ~ '^[0-9]+(\.[0-9]+)?$' THEN (f.payload->>'photoAccuracy')::float END AS photo_accuracy,
+           f.payload->>'photoCapturedAt' AS photo_captured_at
     FROM field_capture_outbox f
     JOIN app_users u2 ON u2.id = f.user_id
     LEFT JOIN officer_profiles op2 ON op2.user_id = f.user_id
@@ -2941,6 +3017,10 @@ app.get('/api/sitreps', authMiddleware, requireAnyPortal('management', 'igp', 'a
         lga: r.lga_name,
         puCode: r.pu_code,
         hasAudio: Boolean(r.has_audio),
+        hasPhoto: Boolean(r.has_photo),
+        photoGeo: r.photo_lat != null && r.photo_lng != null
+          ? { lat: r.photo_lat, lng: r.photo_lng, accuracy: r.photo_accuracy ?? null, capturedAt: r.photo_captured_at ?? null }
+          : null,
       })),
     })
   } catch (e) {
@@ -2967,6 +3047,23 @@ app.get('/api/sitreps/field/:id/audio', authMiddleware, requireAnyPortal('manage
     const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : ''
     if (code === '42703') return res.status(503).json({ error: 'Run migration_029_field_sitrep_audio.sql' })
     return res.status(500).json({ error: 'Failed to load audio note' })
+  }
+})
+
+/** GET /api/sitreps/field/:id/photo — stream a photo attached to a field capture (command portals) */
+app.get('/api/sitreps/field/:id/photo', authMiddleware, requireAnyPortal('management', 'igp', 'admin'), async (req, res) => {
+  try {
+    const id = parseInt(String(req.params.id).replace(/^fc-/i, ''), 10)
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid field capture id' })
+    const { rows } = await pool.query(`SELECT photo_data, photo_mime FROM field_capture_outbox WHERE id = $1`, [id])
+    const p = rows[0]
+    if (!p?.photo_data) return res.status(404).json({ error: 'No photo on this report' })
+    res.setHeader('Content-Type', p.photo_mime || 'image/jpeg')
+    res.setHeader('Cache-Control', 'private, max-age=300')
+    return res.send(p.photo_data)
+  } catch (e) {
+    console.error(e)
+    return res.status(500).json({ error: 'Failed to load photo' })
   }
 })
 
@@ -3502,6 +3599,7 @@ app.post('/api/operations/results/ec8a', authMiddleware, async (req, res) => {
       partyVotes = {},
       photoUrl = '',
       photoHashSha256 = '',
+      photoCapturedAt = null,
       photoSource = 'police',
       observerName = '',
       observerOrganization = '',
@@ -3547,7 +3645,8 @@ app.post('/api/operations/results/ec8a', authMiddleware, async (req, res) => {
         photo_url, photo_hash_sha256, photo_captured_at, photo_source,
         observer_name, observer_organization, recorded_by, lat, lng,
         anomaly_flags, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now(), $14, $15, $16, $17, $18, $19, $20, now())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+        COALESCE($21::timestamptz, now()), $14, $15, $16, $17, $18, $19, $20, now())
       ON CONFLICT (election_id, polling_unit_id, photo_source)
       DO UPDATE SET
         registered_voters = EXCLUDED.registered_voters,
@@ -3561,6 +3660,7 @@ app.post('/api/operations/results/ec8a', authMiddleware, async (req, res) => {
         party_votes = EXCLUDED.party_votes,
         photo_url = COALESCE(NULLIF(EXCLUDED.photo_url, ''), ec8a_results_evidence.photo_url),
         photo_hash_sha256 = EXCLUDED.photo_hash_sha256,
+        photo_captured_at = COALESCE(EXCLUDED.photo_captured_at, ec8a_results_evidence.photo_captured_at),
         observer_name = EXCLUDED.observer_name,
         observer_organization = EXCLUDED.observer_organization,
         recorded_by = EXCLUDED.recorded_by,
@@ -3589,7 +3689,8 @@ app.post('/api/operations/results/ec8a', authMiddleware, async (req, res) => {
         req.auth.sub,
         lat || null,
         lng || null,
-        JSON.stringify(anomalies)
+        JSON.stringify(anomalies),
+        dateOrNull(photoCapturedAt)
       ]
     )
 

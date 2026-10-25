@@ -38,6 +38,7 @@ export type Incident = {
   createdAt: string
   hasPhoto: boolean
   photoSha256: string | null
+  photoGeo: { lat: number; lng: number; accuracy: number | null; capturedAt: string | null } | null
   reporter: { username: string; name: string | null; serviceNumber: string | null }
 }
 

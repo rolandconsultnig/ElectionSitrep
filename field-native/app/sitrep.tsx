@@ -31,6 +31,7 @@ export default function SitrepScreen() {
   const [accredited, setAccredited] = useState('')
   const [narrative, setNarrative] = useState('')
   const [photo, setPhoto] = useState<string | null>(null)
+  const [photoGeo, setPhotoGeo] = useState<import('../components/PhotoCapture').PhotoGeo | null>(null)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<{ text: string; tone: 'info' | 'error' | 'success' } | null>(null)
 
@@ -70,6 +71,10 @@ export default function SitrepScreen() {
         accredited: accredited.trim() === '' ? null : Math.max(0, Math.floor(Number(accredited))),
         narrative: narrative.trim() || undefined,
         photoDataUrl: photo ?? undefined,
+        photoLat: photoGeo?.lat ?? null,
+        photoLng: photoGeo?.lng ?? null,
+        photoAccuracy: photoGeo?.accuracy ?? null,
+        photoCapturedAt: photoGeo?.capturedAt ?? null,
         gpsVerified,
         distanceMeters: dist,
         puCode: assignment?.pollingUnit.code ?? null,
@@ -93,6 +98,7 @@ export default function SitrepScreen() {
       })
       setNarrative('')
       setPhoto(null)
+      setPhotoGeo(null)
       setAccredited('')
     } finally {
       setBusy(false)
@@ -159,7 +165,7 @@ export default function SitrepScreen() {
             multiline
           />
 
-          <PhotoCapture value={photo} onChange={setPhoto} label="Attach SitRep photo" />
+          <PhotoCapture value={photo} onChange={setPhoto} onGeo={setPhotoGeo} label="Attach SitRep photo" />
 
           <PrimaryButton label="Submit SitRep" onPress={() => void onSubmit()} busy={busy} />
         </Card>

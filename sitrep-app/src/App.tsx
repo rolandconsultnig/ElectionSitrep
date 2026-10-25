@@ -55,6 +55,7 @@ import {
 } from './pages/portal/IGPPortalPages'
 import { AdminCredentialBatches } from './pages/portal/AdminCredentialBatches'
 import { SituationRoomDashboard } from './pages/portal/SituationRoomDashboard'
+import { SituationRoomLive } from './pages/portal/SituationRoomLive'
 import { SvgMonitorDashboard } from './pages/portal/SvgMonitorDashboard'
 import {
   FieldTimelinePage,
@@ -115,6 +116,7 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/onboarding" element={<OnboardingGate />} />
       <Route path="/situation-room" element={<SituationRoomDashboard />} />
+      <Route path="/situation-room-3" element={<SituationRoomLive />} />
       <Route path="/svg-monitor" element={<SvgMonitorDashboard />} />
 
       <Route path="/admin" element={<PortalGate portalId="admin" />}>

@@ -38,6 +38,7 @@ export default function Ec8aScreen() {
   const [rejected, setRejected] = useState('')
   const [partyVotes, setPartyVotes] = useState<Record<string, string>>({})
   const [photo, setPhoto] = useState<string | null>(null)
+  const [photoGeo, setPhotoGeo] = useState<import('../components/PhotoCapture').PhotoGeo | null>(null)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<{ text: string; tone: 'info' | 'error' | 'success' } | null>(null)
 
@@ -111,8 +112,9 @@ export default function Ec8aScreen() {
         partyVotes: votes,
         photoHashSha256: photoHashSha256 || undefined,
         photoSource: 'police',
-        lat: pos?.lat ?? null,
-        lng: pos?.lng ?? null,
+        photoCapturedAt: photoGeo?.capturedAt ?? null,
+        lat: photoGeo?.lat ?? pos?.lat ?? null,
+        lng: photoGeo?.lng ?? pos?.lng ?? null,
       }
       const { outcome } = await submitWithOffline(token!, 'POST', '/api/operations/results/ec8a', body, 'EC8A tally')
       setNote({
@@ -189,7 +191,7 @@ export default function Ec8aScreen() {
 
             <Card>
               <SectionLabel>Photo of the signed EC8A</SectionLabel>
-              <PhotoCapture value={photo} onChange={setPhoto} label="Photograph the EC8A form" />
+              <PhotoCapture value={photo} onChange={setPhoto} onGeo={setPhotoGeo} label="Photograph the EC8A form" />
               {photo ? (
                 <Text style={styles.mutedSmall}>Photo attached — its SHA-256 hash will be stored as tamper evidence.</Text>
               ) : null}

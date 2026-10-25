@@ -110,6 +110,13 @@ function IncidentDetail({ id, onClose }: { id: number; onClose: () => void }) {
         <div>
           <img src={photo} alt="Evidence" className="max-h-64 rounded-md" />
           <p className="mt-1 break-all font-(--font-mono) text-[10px] text-[var(--portal-dim)]">SHA-256 {inc.photoSha256}</p>
+          {inc.photoGeo && (
+            <p className="mt-0.5 font-(--font-mono) text-[10px] text-emerald-400">
+              📍 {inc.photoGeo.lat.toFixed(5)}, {inc.photoGeo.lng.toFixed(5)}
+              {inc.photoGeo.accuracy != null ? ` · ±${Math.round(inc.photoGeo.accuracy)}m` : ''}
+              {inc.photoGeo.capturedAt ? ` · ${new Date(inc.photoGeo.capturedAt).toLocaleString()}` : ''}
+            </p>
+          )}
         </div>
       )}
       {inc.status !== 'resolved' && (

@@ -34,6 +34,7 @@ export default function IncidentScreen() {
   const [severity, setSeverity] = useState<Severity | ''>('')
   const [description, setDescription] = useState('')
   const [photo, setPhoto] = useState<string | null>(null)
+  const [photoGeo, setPhotoGeo] = useState<import('../components/PhotoCapture').PhotoGeo | null>(null)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<{ text: string; tone: 'info' | 'error' | 'success' } | null>(null)
 
@@ -75,6 +76,10 @@ export default function IncidentScreen() {
         lat: pos?.lat ?? null,
         lng: pos?.lng ?? null,
         photoDataUrl: photo ?? undefined,
+        photoLat: photoGeo?.lat ?? null,
+        photoLng: photoGeo?.lng ?? null,
+        photoAccuracy: photoGeo?.accuracy ?? null,
+        photoCapturedAt: photoGeo?.capturedAt ?? null,
       })
       if (isFlash) {
         setNote({
@@ -95,6 +100,7 @@ export default function IncidentScreen() {
       }
       setDescription('')
       setPhoto(null)
+      setPhotoGeo(null)
     } finally {
       setBusy(false)
     }
@@ -153,7 +159,7 @@ export default function IncidentScreen() {
                 multiline
               />
 
-              <PhotoCapture value={photo} onChange={setPhoto} />
+              <PhotoCapture value={photo} onChange={setPhoto} onGeo={setPhotoGeo} />
 
               <PrimaryButton label="Submit incident & escalate" onPress={() => void send(false)} busy={busy} />
             </Card>

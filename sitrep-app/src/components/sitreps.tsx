@@ -28,6 +28,8 @@ export type SitRepItem = {
   lga: string | null
   puCode: string | null
   hasAudio?: boolean
+  hasPhoto?: boolean
+  photoGeo?: { lat: number; lng: number; accuracy: number | null; capturedAt: string | null } | null
 }
 
 export type SitRepFeedResponse = {
@@ -254,6 +256,18 @@ export function SitRepFeedList({
             {item.body ? <p className={`mt-1 text-xs leading-relaxed ${palette.muted}`}>{item.body}</p> : null}
             {item.hasAudio && item.id.startsWith('fc-') ? (
               <FieldAudioPlayer captureId={item.id} palette={palette} />
+            ) : null}
+            {item.photoGeo ? (
+              <p className={`mt-1.5 font-(--font-mono) text-[10px] ${palette.accentText}`}>
+                📍 photo geotag: {item.photoGeo.lat.toFixed(5)}, {item.photoGeo.lng.toFixed(5)}
+                {item.photoGeo.accuracy != null ? ` · ±${Math.round(item.photoGeo.accuracy)}m` : ''}
+                {item.photoGeo.capturedAt ? ` · ${new Date(item.photoGeo.capturedAt).toLocaleString()}` : ''}
+              </p>
+            ) : null}
+            {item.lat != null && item.lng != null ? (
+              <p className={`mt-1 font-(--font-mono) text-[10px] ${palette.dim}`}>
+                ⌖ report location: {item.lat.toFixed(5)}, {item.lng.toFixed(5)}
+              </p>
             ) : null}
             <div className={`mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-(--font-mono) text-[10px] uppercase tracking-wider ${palette.dim}`}>
               <span>
