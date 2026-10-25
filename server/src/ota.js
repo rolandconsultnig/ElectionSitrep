@@ -31,9 +31,10 @@ export function createOtaRouter(otaDir) {
   }
 
   function assetEntry(req, runtimeVersion, updateId, dir, relPath, ext, isLaunch) {
-    const file = path.join(dir, relPath)
+    const rel = String(relPath).replace(/\\/g, '/')
+    const file = path.join(dir, rel)
     const origin = `${req.headers['x-forwarded-proto'] || req.protocol}://${req.get('host')}`
-    const q = new URLSearchParams({ runtime: runtimeVersion, update: updateId, path: relPath })
+    const q = new URLSearchParams({ runtime: runtimeVersion, update: updateId, path: rel })
     return {
       hash: hashFile(file, 'sha256', 'base64url'),
       key: hashFile(file, 'md5', 'hex'),
@@ -93,7 +94,7 @@ export function createOtaRouter(otaDir) {
       return res.status(400).json({ error: 'Invalid parameters' })
     }
     const dir = path.join(otaDir, runtime, update)
-    const file = path.resolve(dir, relPath)
+    const file = path.resolve(dir, String(relPath).replace(/\\/g, '/'))
     if (!file.startsWith(dir + path.sep) || !fs.existsSync(file)) {
       return res.status(404).json({ error: 'Asset not found' })
     }
