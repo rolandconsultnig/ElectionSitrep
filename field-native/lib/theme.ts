@@ -27,7 +27,7 @@ export const space = {
   xl: 32,
 }
 
-/** Obsidian + cyan command theme used by the redesigned screens (login, duty dashboard). */
+/** Obsidian + NPF command theme — deep navy glass, police gold/blue/green accents. */
 export const tactical = {
   bg: '#050B14',
   bgRaised: '#0A1628',
@@ -40,19 +40,31 @@ export const tactical = {
   text: '#E6EDF7',
   muted: '#8A97AD',
   dim: '#5B6880',
-  cyan: '#22D3EE',
-  cyanDeep: '#0891B2',
-  cyanInk: '#03222C',
-  cyanSoft: 'rgba(34,211,238,0.12)',
-  cyanLine: 'rgba(34,211,238,0.35)',
-  success: '#10B981',
-  successSoft: 'rgba(16,185,129,0.14)',
+  // NPF tricolour accents (force flag: blue / yellow / green)
+  gold: '#F5C518',
+  goldDeep: '#C9A227',
+  goldInk: '#241A02',
+  blue: '#3B82F6',
+  blueDeep: '#1D4ED8',
+  blueSoft: 'rgba(59,130,246,0.14)',
+  blueLine: 'rgba(59,130,246,0.38)',
+  green: '#00C46A',
+  greenDeep: '#009B55',
+  greenSoft: 'rgba(0,196,106,0.14)',
+  // Primary accent = police gold (cyan* keys kept for compatibility across screens)
+  cyan: '#F5C518',
+  cyanDeep: '#C9A227',
+  cyanInk: '#241A02',
+  cyanSoft: 'rgba(245,197,24,0.13)',
+  cyanLine: 'rgba(245,197,24,0.38)',
+  success: '#00C46A',
+  successSoft: 'rgba(0,196,106,0.14)',
   warning: '#F59E0B',
   warningSoft: 'rgba(245,158,11,0.14)',
   danger: '#F43F5E',
   dangerSoft: 'rgba(244,63,94,0.14)',
-  violet: '#A78BFA',
-  violetSoft: 'rgba(167,139,250,0.14)',
+  violet: '#3B82F6',
+  violetSoft: 'rgba(59,130,246,0.14)',
 }
 
 export const mono = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'ui-monospace, SFMono-Regular, Menlo, monospace' })

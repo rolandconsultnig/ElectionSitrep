@@ -2,11 +2,12 @@ import { tactical as t } from '../../lib/theme'
 import { nativeDriver } from './primitives'
 import { Ionicons } from '@expo/vector-icons'
 import { useEffect, useRef } from 'react'
-import { Animated, Easing, StyleSheet, View } from 'react-native'
+import { Animated, Easing, Image, StyleSheet, View, type ImageSourcePropType } from 'react-native'
 import Svg, { Circle, Defs, G, Line, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg'
 
-/** Radar crest: concentric range rings, a slow rotating sweep and a shield badge at the centre. */
-export function Emblem({ size = 148 }: { size?: number }) {
+/** Radar crest: concentric range rings, a slow rotating sweep and a badge at the centre.
+ *  Pass `badgeSource` (e.g. the NPF crest) to replace the default shield glyph. */
+export function Emblem({ size = 148, badgeSource }: { size?: number; badgeSource?: ImageSourcePropType }) {
   const spin = useRef(new Animated.Value(0)).current
   const ring = useRef(new Animated.Value(0)).current
   useEffect(() => {
@@ -76,8 +77,12 @@ export function Emblem({ size = 148 }: { size?: number }) {
         </Svg>
       </Animated.View>
 
-      <View style={[styles.badge, { width: badge, height: badge, borderRadius: badge * 0.3, left: c - badge / 2, top: c - badge / 2 }]}>
-        <Ionicons name="shield-checkmark" size={badge * 0.5} color={t.cyan} />
+      <View style={[styles.badge, { width: badge, height: badge, borderRadius: badge * 0.5, left: c - badge / 2, top: c - badge / 2 }]}>
+        {badgeSource ? (
+          <Image source={badgeSource} style={{ width: badge * 0.88, height: badge * 0.88 }} resizeMode="contain" />
+        ) : (
+          <Ionicons name="shield-checkmark" size={badge * 0.5} color={t.cyan} />
+        )}
       </View>
     </View>
   )

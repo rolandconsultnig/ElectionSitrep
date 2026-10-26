@@ -166,7 +166,7 @@ export function GlowButton({
   tone?: 'cyan' | 'danger'
 }) {
   const press = usePressScale()
-  const [from, to, ink] = tone === 'danger' ? ['#FB7185', '#E11D48', '#ffffff'] : ['#67E8F9', t.cyanDeep, t.cyanInk]
+  const [from, to, ink] = tone === 'danger' ? ['#FB7185', '#E11D48', '#ffffff'] : ['#FDE047', t.cyanDeep, t.cyanInk]
   const inactive = disabled && !loading
   return (
     <Pressable

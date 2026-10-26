@@ -4,7 +4,7 @@ import { BrandLogo } from '../components/BrandLogo'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { useAuth } from '../contexts/AuthContext'
 
-const APK_URL = '/downloads/npf-sitrep-field-release.apk'
+const APK_URL = '/downloads/new-v.apk'
 
 export function DownloadsPage() {
   const { user } = useAuth()
@@ -71,7 +71,7 @@ export function DownloadsPage() {
                 NPF SitRep Field — Release
               </h2>
               <div className="mt-1 flex flex-wrap items-center gap-3 font-(--font-mono) text-[10px] uppercase tracking-wider text-[var(--portal-dim)]">
-                <span>v1.1.0</span>
+                <span>v1.2.0</span>
                 <span>·</span>
                 <span>Android 10+</span>
                 <span>·</span>

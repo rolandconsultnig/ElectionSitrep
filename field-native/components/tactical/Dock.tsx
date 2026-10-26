@@ -62,7 +62,7 @@ export function Dock({
               <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
                 <Defs>
                   <LinearGradient id="dockFab" x1="0" y1="0" x2="1" y2="1">
-                    <Stop offset="0" stopColor="#67E8F9" />
+                    <Stop offset="0" stopColor="#FDE047" />
                     <Stop offset="1" stopColor={t.cyanDeep} />
                   </LinearGradient>
                 </Defs>

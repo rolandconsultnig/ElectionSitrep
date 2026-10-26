@@ -195,14 +195,19 @@ export default function LoginScreen() {
             showsVerticalScrollIndicator={false}
           >
             <Animated.View style={[styles.hero, enter(0)]}>
-              <Emblem size={140} />
+              <Emblem size={150} badgeSource={require('../assets/images/police.png')} />
             </Animated.View>
 
             <Animated.View style={[{ alignItems: 'center' }, enter(1)]}>
               <Kicker>Nigeria Police Force</Kicker>
               <Text style={styles.title}>
-                SitRep <Text style={{ color: t.cyan }}>Field</Text>
+                SitRep <Text style={{ color: t.gold }}>Field</Text>
               </Text>
+              <View style={styles.flagBar} accessibilityLabel="Nigeria Police Force colours">
+                <View style={[styles.flagSeg, { backgroundColor: '#003DA5' }]} />
+                <View style={[styles.flagSeg, { backgroundColor: t.gold }]} />
+                <View style={[styles.flagSeg, { backgroundColor: '#007A3D' }]} />
+              </View>
               <Text style={styles.sub}>Election security operations — polling-unit intelligence, straight to Force HQ.</Text>
             </Animated.View>
 
@@ -329,6 +334,18 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1, paddingHorizontal: 22, paddingBottom: 40, justifyContent: 'center' },
   hero: { alignItems: 'center', marginTop: 12, marginBottom: 18 },
   title: { fontSize: 36, fontWeight: '800', color: t.text, letterSpacing: -1.2, marginTop: 8 },
+  flagBar: {
+    flexDirection: 'row',
+    marginTop: 12,
+    borderRadius: 3,
+    overflow: 'hidden',
+    shadowColor: t.gold,
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
+  },
+  flagSeg: { width: 40, height: 4 },
   sub: { fontSize: 14.5, color: t.muted, lineHeight: 21, textAlign: 'center', marginTop: 8, marginBottom: 28, maxWidth: 320 },
   card: {
     backgroundColor: 'rgba(11,21,36,0.82)',
