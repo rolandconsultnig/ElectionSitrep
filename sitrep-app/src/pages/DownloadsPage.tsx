@@ -5,6 +5,7 @@ import { ThemeToggle } from '../components/ThemeToggle'
 import { useAuth } from '../contexts/AuthContext'
 
 const APK_URL = '/downloads/new-v.apk'
+const APK_LITE_URL = '/downloads/new-v-lite.apk'
 
 export function DownloadsPage() {
   const { user } = useAuth()
@@ -109,15 +110,24 @@ export function DownloadsPage() {
             </div>
           </div>
           <div className="mt-6 flex flex-col gap-3 border-t border-[color:var(--portal-border)] pt-6 sm:flex-row sm:items-center sm:justify-between">
-            <a
-              href={APK_URL}
-              download
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#00c46a] to-[#00a35a] px-6 py-3.5 font-(--font-mono) text-[12px] font-bold uppercase tracking-wider text-[#04251f] shadow-[0_4px_24px_rgba(0,196,106,0.4)] transition hover:brightness-110 active:scale-[0.98]"
-            >
-              <span aria-hidden>⬇</span> Download APK
-            </a>
+            <div className="flex flex-col gap-2">
+              <a
+                href={APK_URL}
+                download
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#00c46a] to-[#00a35a] px-6 py-3.5 font-(--font-mono) text-[12px] font-bold uppercase tracking-wider text-[#04251f] shadow-[0_4px_24px_rgba(0,196,106,0.4)] transition hover:brightness-110 active:scale-[0.98]"
+              >
+                <span aria-hidden>⬇</span> Download APK
+              </a>
+              <a
+                href={APK_LITE_URL}
+                download
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#00c46a]/40 bg-transparent px-6 py-2.5 font-(--font-mono) text-[11px] font-bold uppercase tracking-wider text-[#00c46a] transition hover:bg-[#00c46a]/10 active:scale-[0.98]"
+              >
+                <span aria-hidden>⬇</span> Lite APK — low-end phones (76 MB)
+              </a>
+            </div>
             <p className="font-(--font-mono) text-[10px] uppercase tracking-wider text-[var(--portal-dim)]">
-              Allow "install unknown apps" when prompted
+              Allow "install unknown apps" when prompted · Lite build for Tecno/Itel/Infinix &amp; low-storage devices
             </p>
           </div>
         </div>
