@@ -27,9 +27,15 @@ function useOtaUpdates() {
         if (update.isAvailable) {
           setStatus('downloading')
           await Updates.fetchUpdateAsync()
+          // Never force-reload mid-session: a hard reloadAsync() here restarts
+          // the app out from under the officer (losing form state) and, when a
+          // staged update fails to apply, loops launch → check → reload every
+          // few seconds. The downloaded update applies on the next cold start.
           if (cancelled) return
-          setStatus('reload')
-          await Updates.reloadAsync()
+          setStatus('ready')
+          setTimeout(() => {
+            if (!cancelled) setStatus(null)
+          }, 8000)
         }
       } catch {
         // OTA check failed (offline, server down, no update) — silently continue
@@ -99,7 +105,7 @@ function NavStack() {
         <View style={styles.otaBanner}>
           <ActivityIndicator size="small" color={tactical.cyan} />
           <Text style={styles.otaText}>
-            {otaStatus === 'downloading' ? 'Downloading update…' : 'Applying update…'}
+            {otaStatus === 'downloading' ? 'Downloading update…' : 'Update ready — applies on next restart'}
           </Text>
         </View>
       ) : null}
