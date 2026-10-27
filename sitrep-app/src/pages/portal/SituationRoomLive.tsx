@@ -17,6 +17,9 @@ type FieldOfficer = {
   batteryPct: number | null
   puCode: string | null
   puName: string | null
+  clockedInAt: string | null
+  clockInVerified: boolean | null
+  clockInDistanceM: number | null
 }
 
 type WallPhoto = {
@@ -56,6 +59,16 @@ type OfficerDetail = {
     lastLocationAt: string | null
     batteryPct: number | null
     network: string | null
+    clockIn: {
+      at: string
+      clockedInAt: string
+      lat: number | null
+      lng: number | null
+      accuracy: number | null
+      puCode: string | null
+      distanceM: number | null
+      gpsVerified: boolean
+    } | null
   }
   reports: OfficerReport[]
 }
@@ -158,6 +171,17 @@ function OfficerModal({ userId, onClose }: { userId: string; onClose: () => void
                 <div className="text-slate-500">
                   {o.batteryPct != null ? `🔋 ${o.batteryPct}%` : ''}{o.network ? ` · ${o.network}` : ''}
                 </div>
+                {o.clockIn && (
+                  <div className={o.clockIn.gpsVerified ? 'text-emerald-400' : 'text-amber-400'}>
+                    🕐 Clocked in {new Date(o.clockIn.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {o.clockIn.distanceM != null
+                      ? ` · ${o.clockIn.distanceM} m ${o.clockIn.gpsVerified ? 'at post ✓' : 'from post — flagged'}`
+                      : ' · no GPS fix — unverified'}
+                    {o.clockIn.lat != null && o.clockIn.lng != null
+                      ? ` · ${o.clockIn.lat.toFixed(5)}, ${o.clockIn.lng.toFixed(5)}`
+                      : ''}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -380,7 +404,15 @@ export function SituationRoomLive() {
                 </div>
                 <div className="mt-0.5 flex justify-between font-(--font-mono) text-[10px] text-slate-600">
                   <span>{o.puCode ?? o.puName ?? 'unassigned'}</span>
-                  <span>{o.batteryPct != null ? `🔋${o.batteryPct}%` : ''}</span>
+                  <span>
+                    {o.clockedInAt ? (
+                      <span className={o.clockInVerified ? 'text-emerald-400' : 'text-amber-400'}>
+                        🕐 {new Date(o.clockedInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {o.clockInDistanceM != null ? ` ${o.clockInDistanceM}m` : ''}
+                      </span>
+                    ) : null}
+                    {o.batteryPct != null ? ` 🔋${o.batteryPct}%` : ''}
+                  </span>
                 </div>
               </button>
             ))}

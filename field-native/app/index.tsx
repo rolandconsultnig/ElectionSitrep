@@ -18,7 +18,9 @@ import { apiFetch, fieldContextRequest } from '../lib/api'
 import { useAuth } from '../lib/auth-context'
 import { getApiBaseUrl } from '../lib/config'
 import { isLocalSessionToken } from '../lib/local-session'
+import { distanceMeters, getCurrentPosition } from '../lib/location'
 import { listPending } from '../lib/pending-queue'
+import { submitWithOffline } from '../lib/submit-with-offline'
 import { countQueuedRequests, autoFlushOnReconnect, flushQueuedRequests } from '../lib/offline-queue'
 import { flushPendingVoteSync } from '../lib/sync-pending'
 import { apiFetch as _apiFetch } from '../lib/api'
@@ -33,7 +35,7 @@ import NetInfo from '@react-native-community/netinfo'
 import Constants from 'expo-constants'
 import { Redirect, router } from 'expo-router'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { ActivityIndicator, Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Alert, Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Circle, Defs, G, LinearGradient, Rect, Stop } from 'react-native-svg'
 
@@ -217,6 +219,7 @@ export default function HomeScreen() {
       ctx={ctx}
       localMode={localMode}
       officer={officer}
+      token={token}
       online={online}
       pendingCount={pendingCount}
       syncStatus={syncStatus}
@@ -237,6 +240,7 @@ function Dashboard({
   ctx,
   localMode,
   officer,
+  token,
   online,
   pendingCount,
   syncStatus,
@@ -250,6 +254,7 @@ function Dashboard({
   ctx: FieldContext | null
   localMode: boolean
   officer: Officer
+  token: string | null
   online: boolean
   pendingCount: number
   syncStatus: string | null
@@ -390,7 +395,7 @@ function Dashboard({
             </View>
           ) : null}
 
-          <PostCard ctx={ctx} localMode={localMode} host={host} />
+          <PostCard ctx={ctx} localMode={localMode} host={host} token={token} online={online} />
 
           {!localMode ? (
             <>
@@ -472,7 +477,19 @@ function Telemetry({ label, value, color, live }: { label: string; value: string
 }
 
 /** Hero card: the officer's polling-unit post, with a radar-arc ornament. */
-function PostCard({ ctx, localMode, host }: { ctx: FieldContext | null; localMode: boolean; host: string }) {
+function PostCard({
+  ctx,
+  localMode,
+  host,
+  token,
+  online,
+}: {
+  ctx: FieldContext | null
+  localMode: boolean
+  host: string
+  token: string | null
+  online: boolean
+}) {
   const a = ctx?.assignment ?? null
   return (
     <View style={styles.post}>
@@ -534,12 +551,222 @@ function PostCard({ ctx, localMode, host }: { ctx: FieldContext | null; localMod
               </Text>
             </View>
           ) : null}
+          <ClockInSection token={token} online={online} assignment={a} />
         </>
       ) : (
         <>
           <Kicker color={t.warning}>Your post</Kicker>
           <Text style={styles.postName}>Awaiting assignment</Text>
           <Text style={styles.postMeta}>No polling unit assigned yet. Ask Command to assign your PU in Admin.</Text>
+        </>
+      )}
+    </View>
+  )
+}
+
+const CLOCKIN_KEY = '@field_clockin'
+
+type ClockInRecord = {
+  at: string
+  distanceM: number | null
+  gpsVerified: boolean
+  puCode: string | null
+  pending?: boolean
+}
+
+function isToday(iso: string) {
+  const d = new Date(iso)
+  const now = new Date()
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  )
+}
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+/** Duty clock-in: officer confirms arrival at the assigned PU with a GPS fix. */
+function ClockInSection({
+  token,
+  online,
+  assignment,
+}: {
+  token: string | null
+  online: boolean
+  assignment: NonNullable<FieldContext['assignment']>
+}) {
+  const pu = assignment.pollingUnit
+  const [clockIn, setClockIn] = useState<ClockInRecord | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  // Restore last clock-in locally, then refresh from the server when online.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const raw = await AsyncStorage.getItem(CLOCKIN_KEY)
+        if (raw && !cancelled) {
+          const saved = JSON.parse(raw) as ClockInRecord
+          if (isToday(saved.at) && saved.puCode === pu.code) setClockIn(saved)
+        }
+      } catch {
+        /* storage unavailable */
+      }
+      if (!token || !online) return
+      try {
+        const res = await apiFetch<{ clockIn: (ClockInRecord & { clockedInAt: string; deviceRecordedAt: string | null }) | null }>(
+          '/api/field/clock-in',
+          { token },
+        )
+        if (cancelled || !res.clockIn) return
+        const srv: ClockInRecord = {
+          at: res.clockIn.deviceRecordedAt ?? res.clockIn.clockedInAt,
+          distanceM: res.clockIn.distanceM,
+          gpsVerified: res.clockIn.gpsVerified,
+          puCode: res.clockIn.puCode,
+        }
+        if (srv.puCode === pu.code) {
+          setClockIn((cur) => (!cur || new Date(srv.at) > new Date(cur.at) ? srv : cur))
+          await AsyncStorage.setItem(CLOCKIN_KEY, JSON.stringify(srv)).catch(() => {})
+        }
+      } catch {
+        /* offline or endpoint pending */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [token, online, pu.code])
+
+  async function onClockIn() {
+    if (!token || busy) return
+    setBusy(true)
+    try {
+      const pos = await getCurrentPosition()
+      const dist =
+        pos && pu.lat != null && pu.lng != null
+          ? Math.round(distanceMeters(pos.lat, pos.lng, pu.lat, pu.lng))
+          : null
+
+      const fixLine = pos
+        ? `Your position: ${pos.lat.toFixed(5)}°, ${pos.lng.toFixed(5)}°${pos.accuracy != null ? ` (±${Math.round(pos.accuracy)} m)` : ''}`
+        : 'No GPS fix available.'
+      const distLine =
+        dist == null
+          ? 'Distance to polling unit: unknown'
+          : dist <= 100
+            ? `Distance to polling unit: ${dist} m — at post ✓`
+            : `Distance to polling unit: ${dist} m — you are NOT at post. This clock-in will be flagged for Command.`
+
+      Alert.alert('Confirm clock-in', `${pu.code} · ${pu.name}\n\n${fixLine}\n${distLine}`, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: pos ? 'Clock in' : 'Clock in anyway',
+          onPress: () => void doSubmit(pos),
+        },
+      ])
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function doSubmit(pos: { lat: number; lng: number; accuracy: number | null } | null) {
+    const at = new Date().toISOString()
+    const local: ClockInRecord = {
+      at,
+      distanceM:
+        pos && pu.lat != null && pu.lng != null
+          ? Math.round(distanceMeters(pos.lat, pos.lng, pu.lat, pu.lng))
+          : null,
+      gpsVerified:
+        pos && pu.lat != null && pu.lng != null
+          ? distanceMeters(pos.lat, pos.lng, pu.lat, pu.lng) <= 100
+          : false,
+      puCode: pu.code,
+      pending: true,
+    }
+    try {
+      const { outcome, data } = await submitWithOffline<{ clockIn: ClockInRecord & { clockedInAt: string; deviceRecordedAt: string | null } }>(
+        token!,
+        'POST',
+        '/api/field/clock-in',
+        {
+          lat: pos?.lat ?? null,
+          lng: pos?.lng ?? null,
+          accuracy: pos?.accuracy ?? null,
+          deviceRecordedAt: at,
+        },
+        'PU clock-in',
+      )
+      const saved: ClockInRecord =
+        outcome === 'delivered' && data?.clockIn
+          ? {
+              at: data.clockIn.deviceRecordedAt ?? data.clockIn.clockedInAt,
+              distanceM: data.clockIn.distanceM,
+              gpsVerified: data.clockIn.gpsVerified,
+              puCode: data.clockIn.puCode ?? pu.code,
+            }
+          : local
+      setClockIn(saved)
+      await AsyncStorage.setItem(CLOCKIN_KEY, JSON.stringify(saved)).catch(() => {})
+    } catch (e) {
+      Alert.alert('Clock-in failed', e instanceof Error ? e.message : 'Could not record clock-in. Try again.')
+    }
+  }
+
+  const today = clockIn && isToday(clockIn.at)
+
+  return (
+    <View style={styles.clockIn}>
+      {today ? (
+        <>
+          <View style={styles.clockInDone}>
+            <View style={[styles.clockInIcon, { backgroundColor: clockIn!.gpsVerified ? t.success : t.warning }]}>
+              <Ionicons name="checkmark" size={14} color="#04101E" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.clockInTitle}>
+                Clocked in {fmtTime(clockIn!.at)}
+                {clockIn!.pending ? ' · queued' : ''}
+              </Text>
+              <Text style={styles.clockInSub}>
+                {clockIn!.distanceM == null
+                  ? 'No GPS fix — unverified'
+                  : clockIn!.gpsVerified
+                    ? `At post · GPS verified (${clockIn!.distanceM} m)`
+                    : `${clockIn!.distanceM} m from post — flagged`}
+              </Text>
+            </View>
+            <Pressable onPress={() => void onClockIn()} disabled={busy} hitSlop={8} style={({ pressed }) => pressed && { opacity: 0.6 }}>
+              {busy ? <ActivityIndicator size="small" color={t.gold} /> : <Text style={styles.clockInRetry}>Re-verify</Text>}
+            </Pressable>
+          </View>
+        </>
+      ) : (
+        <>
+          <View style={styles.clockInHintRow}>
+            <Ionicons name="time-outline" size={13} color={t.gold} />
+            <Text style={styles.clockInHint}>Arrived at your post? Confirm your GPS position and clock in.</Text>
+          </View>
+          <Pressable
+            onPress={() => void onClockIn()}
+            disabled={busy}
+            style={({ pressed }) => [styles.clockInBtn, pressed && { opacity: 0.85 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Clock in at post"
+          >
+            {busy ? (
+              <ActivityIndicator size="small" color="#04101E" />
+            ) : (
+              <>
+                <Ionicons name="location" size={16} color="#04101E" />
+                <Text style={styles.clockInBtnText}>CLOCK IN AT POST</Text>
+              </>
+            )}
+          </Pressable>
         </>
       )}
     </View>
@@ -840,6 +1067,35 @@ const styles = StyleSheet.create({
   geoValue: { fontSize: 13.5, fontWeight: '700', color: t.text, marginTop: 3 },
   coords: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14 },
   coordsText: { fontFamily: mono, fontSize: 11, color: t.dim },
+  clockIn: {
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: t.border,
+    paddingTop: 14,
+  },
+  clockInHintRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 10 },
+  clockInHint: { fontSize: 11.5, color: t.muted, flex: 1, lineHeight: 16 },
+  clockInBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: t.gold,
+    borderRadius: 12,
+    paddingVertical: 13,
+  },
+  clockInBtnText: { color: '#04101E', fontWeight: '800', fontSize: 13, letterSpacing: 1.2 },
+  clockInDone: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  clockInIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clockInTitle: { color: t.text, fontWeight: '700', fontSize: 13 },
+  clockInSub: { color: t.muted, fontSize: 11, marginTop: 1 },
+  clockInRetry: { color: t.gold, fontSize: 12, fontWeight: '700' },
   hScroll: { marginHorizontal: -18, paddingHorizontal: 18 },
   election: {
     width: 248,

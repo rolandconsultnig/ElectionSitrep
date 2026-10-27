@@ -1906,6 +1906,139 @@ app.get('/api/field/context', authMiddleware, requireAnyPortal('field'), async (
   }
 })
 
+function haversineMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000
+  const toRad = (d) => (d * Math.PI) / 180
+  const dLat = toRad(lat2 - lat1)
+  const dLng = toRad(lng2 - lng1)
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(a))
+}
+
+const CLOCK_IN_RADIUS_M = 100
+
+function clockInDto(r) {
+  return {
+    id: r.id,
+    clockedInAt: r.clocked_in_at,
+    deviceRecordedAt: r.device_recorded_at,
+    lat: r.lat != null ? Number(r.lat) : null,
+    lng: r.lng != null ? Number(r.lng) : null,
+    accuracy: r.accuracy != null ? Number(r.accuracy) : null,
+    puId: r.pu_id != null ? Number(r.pu_id) : null,
+    puCode: r.pu_code,
+    distanceM: r.distance_m != null ? Math.round(Number(r.distance_m)) : null,
+    gpsVerified: Boolean(r.gps_verified),
+  }
+}
+
+/** GET /api/field/clock-in — the officer's latest clock-in */
+app.get('/api/field/clock-in', authMiddleware, requireAnyPortal('field'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM officer_attendance WHERE user_id = $1 ORDER BY clocked_in_at DESC LIMIT 1`,
+      [req.auth.sub],
+    )
+    return res.json({ clockIn: rows[0] ? clockInDto(rows[0]) : null })
+  } catch (e) {
+    const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : ''
+    if (code === '42P01' || code === '42703') return res.json({ clockIn: null })
+    console.error(e)
+    return res.status(500).json({ error: 'Failed to load clock-in' })
+  }
+})
+
+/** POST /api/field/clock-in — officer confirms arrival at their assigned PU.
+ *  Distance to the assigned PU is computed server-side; client claims are not trusted. */
+app.post('/api/field/clock-in', authMiddleware, requireAnyPortal('field'), async (req, res) => {
+  try {
+    const { rows: officer } = await pool.query(
+      `SELECT op.assigned_polling_unit_id, pu.code AS pu_code, pu.lat AS pu_lat, pu.lng AS pu_lng
+       FROM officer_profiles op
+       JOIN geo_polling_units pu ON pu.id = op.assigned_polling_unit_id
+       WHERE op.user_id = $1`,
+      [req.auth.sub],
+    )
+    const assigned = officer[0]
+    if (!assigned) {
+      return res.status(400).json({ error: 'No polling unit assigned. Ask Command to assign your PU first.' })
+    }
+
+    const num = (v) => {
+      const n = Number(v)
+      return Number.isFinite(n) ? n : null
+    }
+    const lat = num(req.body?.lat)
+    const lng = num(req.body?.lng)
+    const accuracy = num(req.body?.accuracy)
+    const deviceRecordedAtRaw = req.body?.deviceRecordedAt
+    const deviceRecordedAt =
+      deviceRecordedAtRaw && !Number.isNaN(Date.parse(String(deviceRecordedAtRaw)))
+        ? new Date(String(deviceRecordedAtRaw))
+        : null
+
+    const puLat = assigned.pu_lat != null ? Number(assigned.pu_lat) : null
+    const puLng = assigned.pu_lng != null ? Number(assigned.pu_lng) : null
+    const distanceM =
+      lat != null && lng != null && puLat != null && puLng != null
+        ? haversineMeters(lat, lng, puLat, puLng)
+        : null
+    const gpsVerified = distanceM != null && distanceM <= CLOCK_IN_RADIUS_M
+
+    let row
+    try {
+      const { rows } = await pool.query(
+        `INSERT INTO officer_attendance
+           (user_id, device_recorded_at, lat, lng, accuracy, pu_id, pu_code, distance_m, gps_verified, network)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         RETURNING *`,
+        [
+          req.auth.sub,
+          deviceRecordedAt,
+          lat,
+          lng,
+          accuracy,
+          assigned.assigned_polling_unit_id,
+          assigned.pu_code,
+          distanceM,
+          gpsVerified,
+          req.body?.network ? String(req.body.network).slice(0, 32) : null,
+        ],
+      )
+      row = rows[0]
+    } catch (e) {
+      const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : ''
+      if (code === '42P01' || code === '42703') {
+        return res.status(503).json({ error: 'Server update pending. Your clock-in has been queued — it will sync automatically.' })
+      }
+      throw e
+    }
+
+    // Clock-in also refreshes live position so command sees the officer at post.
+    if (lat != null && lng != null) {
+      try {
+        await pool.query(
+          `INSERT INTO officer_safety (user_id, last_lat, last_lng, telemetry_at, position_source)
+           VALUES ($1, $2, $3, now(), 'clock_in')
+           ON CONFLICT (user_id) DO UPDATE SET
+             last_lat = $2, last_lng = $3, telemetry_at = now(), position_source = 'clock_in'`,
+          [req.auth.sub, lat, lng],
+        )
+      } catch (e) {
+        const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : ''
+        if (code !== '42P01' && code !== '42703') throw e
+      }
+    }
+
+    return res.json({ clockIn: clockInDto(row) })
+  } catch (e) {
+    console.error(e)
+    return res.status(500).json({ error: 'Failed to record clock-in' })
+  }
+})
+
 /** GET /api/admin/elections */
 app.get('/api/admin/elections', authMiddleware, requireAdmin, async (req, res) => {
   try {
@@ -2783,6 +2916,18 @@ async function loadFieldOperationsMapPayload(pool) {
     const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : ''
     if (code !== '42P01' && code !== '42703') throw e
   }
+  // Latest duty clock-in per officer — command sees who is confirmed at post.
+  let clockInByUser = new Map()
+  try {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT ON (user_id) user_id, clocked_in_at, device_recorded_at, distance_m, gps_verified, pu_code
+       FROM officer_attendance ORDER BY user_id, clocked_in_at DESC`,
+    )
+    clockInByUser = new Map(rows.map((r) => [r.user_id, r]))
+  } catch (e) {
+    const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : ''
+    if (code !== '42P01' && code !== '42703') throw e
+  }
   const users = await pool.query(
     `SELECT u.id, u.username, u.onboarding_complete,
             p.full_name AS profile_name, p.service_number,
@@ -2827,6 +2972,16 @@ async function loadFieldOperationsMapPayload(pool) {
       assignedPu: u.pu_id
         ? { id: u.pu_id, code: u.pu_code, name: u.pu_name, lat: u.pu_lat != null ? Number(u.pu_lat) : null, lng: u.pu_lng != null ? Number(u.pu_lng) : null }
         : null,
+    }
+    const ci = clockInByUser.get(u.id)
+    if (ci) {
+      row.clockIn = {
+        at: ci.device_recorded_at ?? ci.clocked_in_at,
+        clockedInAt: ci.clocked_in_at,
+        distanceM: ci.distance_m != null ? Math.round(Number(ci.distance_m)) : null,
+        gpsVerified: Boolean(ci.gps_verified),
+        puCode: ci.pu_code,
+      }
     }
     if (u.onboarding_complete) active.push(row)
     else inactive.push({ ...row, reason: 'Pending onboarding / not deployed' })
@@ -2884,6 +3039,9 @@ app.get('/api/public/situation-room/live', async (req, res) => {
       batteryPct: o.batteryPct,
       puCode: o.assignedPu?.code ?? null,
       puName: o.assignedPu?.name ?? null,
+      clockedInAt: o.clockIn?.at ?? null,
+      clockInVerified: o.clockIn?.gpsVerified ?? null,
+      clockInDistanceM: o.clockIn?.distanceM ?? null,
     }))
     const { rows: photos } = await pool.query(
       `SELECT f.id, f.kind, f.device_created_at AS created_at,
@@ -2991,6 +3149,31 @@ app.get('/api/public/situation-room/officer/:userId', async (req, res) => {
       if (code !== '42P01' && code !== '42703') throw e
     }
 
+    let clockIn = null
+    try {
+      const { rows } = await pool.query(
+        `SELECT clocked_in_at, device_recorded_at, lat, lng, accuracy, pu_code, distance_m, gps_verified
+         FROM officer_attendance WHERE user_id = $1 ORDER BY clocked_in_at DESC LIMIT 1`,
+        [userId],
+      )
+      if (rows[0]) {
+        const r = rows[0]
+        clockIn = {
+          at: r.device_recorded_at ?? r.clocked_in_at,
+          clockedInAt: r.clocked_in_at,
+          lat: r.lat != null ? Number(r.lat) : null,
+          lng: r.lng != null ? Number(r.lng) : null,
+          accuracy: r.accuracy != null ? Number(r.accuracy) : null,
+          puCode: r.pu_code,
+          distanceM: r.distance_m != null ? Math.round(Number(r.distance_m)) : null,
+          gpsVerified: Boolean(r.gps_verified),
+        }
+      }
+    } catch (e) {
+      const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : ''
+      if (code !== '42P01' && code !== '42703') throw e
+    }
+
     // Unified per-officer reports: structured incidents + field captures.
     const reportsSql = (withGeoCols) => `SELECT * FROM (
          SELECT 'inc-' || i.id AS id, 'incident' AS kind, i.severity, i.title,
@@ -3048,6 +3231,7 @@ app.get('/api/public/situation-room/officer/:userId', async (req, res) => {
         lastLocationAt: safety?.telemetry_at ?? null,
         batteryPct: safety?.battery_pct ?? null,
         network: safety?.network ?? null,
+        clockIn,
       },
       reports: reports.map((r) => ({
         id: r.id,
