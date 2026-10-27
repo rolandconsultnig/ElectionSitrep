@@ -11,8 +11,6 @@ import {
 } from '../components/tactical/primitives'
 import { ApiError } from '../lib/api'
 import { useAuth } from '../lib/auth-context'
-import { getApiBaseUrl } from '../lib/config'
-import { pingApiHealth } from '../lib/ping-api'
 import { mono, tactical as t } from '../lib/theme'
 import { useLightStatusBar } from '../lib/use-light-status-bar'
 import { Ionicons } from '@expo/vector-icons'
@@ -26,7 +24,6 @@ import {
   Easing,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -35,16 +32,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 const CONFIG_DIAL_CODE = '*2435*009#'
-
-function defaultApiHint(): string {
-  const raw = (Constants.expoConfig?.extra as { apiBaseUrl?: string } | undefined)?.apiBaseUrl
-  if (raw && String(raw).trim()) return String(raw).trim()
-  return 'Not configured — use Network settings'
-}
-
-function hostOf(url: string | null) {
-  return url ? url.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : 'No server'
-}
 
 /** Staggered rise-in for the hero and the form. */
 function useEntrance(count: number) {
@@ -70,10 +57,6 @@ export default function LoginScreen() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deviceOffline, setDeviceOffline] = useState(false)
-  const [pingBusy, setPingBusy] = useState(false)
-  const [pingLine, setPingLine] = useState<string | null>(null)
-  const [pingOk, setPingOk] = useState<boolean | null>(null)
-  const [pingMs, setPingMs] = useState<number | null>(null)
   const [bootstrapTimeout, setBootstrapTimeout] = useState(false)
   const enter = useEntrance(4)
   useLightStatusBar()
@@ -129,23 +112,6 @@ export default function LoginScreen() {
     )
   }
 
-  async function onPing() {
-    setPingBusy(true)
-    setPingLine(null)
-    setPingOk(null)
-    setPingMs(null)
-    const base = getApiBaseUrl() ?? ''
-    const r = await pingApiHealth(base)
-    setPingBusy(false)
-    setPingOk(r.ok)
-    if (r.ok && r.latencyMs != null) {
-      setPingMs(r.latencyMs)
-      setPingLine(base)
-    } else {
-      setPingLine(`${r.message}\n${base}`)
-    }
-  }
-
   async function onSubmit() {
     setError(null)
     if (identifier.trim() === CONFIG_DIAL_CODE) {
@@ -180,12 +146,6 @@ export default function LoginScreen() {
           ) : (
             <StatusPill tone="success" label="Secure link" pulse />
           )}
-          <Pressable onPress={() => router.push('/network-settings')} style={styles.hostChip} hitSlop={8}>
-            <Ionicons name="server-outline" size={12} color={t.muted} />
-            <Text style={styles.hostText} numberOfLines={1}>
-              {hostOf(getApiBaseUrl())}
-            </Text>
-          </Pressable>
         </View>
 
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.fill}>
@@ -270,43 +230,9 @@ export default function LoginScreen() {
                 disabled={!identifier.trim() || !password}
               />
 
-              <View style={styles.divider}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>DIAGNOSTICS</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              <GhostButton
-                title={pingBusy ? 'Pinging server…' : 'Test connection'}
-                icon="pulse-outline"
-                onPress={() => void onPing()}
-                loading={pingBusy}
-                disabled={busy}
-                trailing={
-                  pingOk != null ? (
-                    <View style={[styles.latency, { backgroundColor: pingOk ? t.successSoft : t.dangerSoft }]}>
-                      <Text style={[styles.latencyText, { color: pingOk ? t.success : t.danger }]}>
-                        {pingOk && pingMs != null ? `${pingMs} ms` : 'FAIL'}
-                      </Text>
-                    </View>
-                  ) : null
-                }
-              />
-              {pingLine ? (
-                <Text style={[styles.pingOut, { color: pingOk ? t.muted : t.danger }]}>{pingLine}</Text>
-              ) : null}
             </Animated.View>
 
             <Animated.View style={enter(3)}>
-              <Pressable onPress={() => router.push('/network-settings')} style={styles.linkNet} hitSlop={6}>
-                <Ionicons name="options-outline" size={15} color={t.cyan} />
-                <Text style={styles.linkNetText}>Network settings</Text>
-              </Pressable>
-
-              <Text style={styles.foot}>
-                Wrong server? Enter <Text style={styles.footMono}>{CONFIG_DIAL_CODE}</Text> as username to open Network
-                settings. App default API: <Text style={styles.footMono}>{defaultApiHint()}</Text>
-              </Text>
               <Text style={styles.foot}>Need help? Contact your system administrator.</Text>
               <Text style={styles.version}>v{version} · RESTRICTED · OFFICIAL USE ONLY</Text>
             </Animated.View>
@@ -324,13 +250,11 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingHorizontal: 20,
     paddingTop: 8,
     gap: 12,
   },
-  hostChip: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '55%' },
-  hostText: { fontFamily: mono, fontSize: 11, color: t.muted },
   scroll: { flexGrow: 1, paddingHorizontal: 22, paddingBottom: 40, justifyContent: 'center' },
   hero: { alignItems: 'center', marginTop: 12, marginBottom: 18 },
   title: { fontSize: 36, fontWeight: '800', color: t.text, letterSpacing: -1.2, marginTop: 8 },
@@ -371,15 +295,6 @@ const styles = StyleSheet.create({
     backgroundColor: t.successSoft,
   },
   encryptedText: { fontFamily: mono, fontSize: 9.5, fontWeight: '700', color: t.success, letterSpacing: 1 },
-  divider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 18 },
-  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: t.borderStrong },
-  dividerText: { fontFamily: mono, fontSize: 9.5, color: t.dim, letterSpacing: 2 },
-  latency: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 7, marginLeft: 2 },
-  latencyText: { fontFamily: mono, fontSize: 11, fontWeight: '700' },
-  pingOut: { marginTop: 10, fontSize: 11.5, lineHeight: 17, fontFamily: mono, textAlign: 'center' },
-  linkNet: { flexDirection: 'row', gap: 6, alignSelf: 'center', alignItems: 'center', marginTop: 22, paddingVertical: 6 },
-  linkNetText: { color: t.cyan, fontSize: 14, fontWeight: '700' },
   foot: { marginTop: 12, fontSize: 12, color: t.dim, textAlign: 'center', lineHeight: 18 },
-  footMono: { fontFamily: mono, fontSize: 11, color: t.muted },
   version: { marginTop: 18, fontFamily: mono, fontSize: 9.5, color: t.dim, textAlign: 'center', letterSpacing: 1.6, opacity: 0.7 },
 })
